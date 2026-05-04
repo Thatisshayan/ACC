@@ -1,0 +1,16 @@
+{
+  "connectors": [
+    {
+      "name": "kijiji",
+      "file": "kijiji.js",
+      "enabled": true,
+      "sandbox": true
+    },
+    {
+      "name": "facebookMarketplace",
+      "file": "facebookMarketplace.js",
+      "enabled": false,
+      "sandbox": true
+    }
+  ]
+}

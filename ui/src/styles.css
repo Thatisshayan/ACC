@@ -1,0 +1,5 @@
+body { margin: 0; padding: 0; background: #0f0f0f; color: #e5e5e5; }
+button { padding: 6px 12px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #e5e5e5; cursor: pointer; font-size: 13px; }
+button:hover { background: #2a2a2a; border-color: #444; }
+pre { font-size: 12px; line-height: 1.5; }
+* { box-sizing: border-box; }

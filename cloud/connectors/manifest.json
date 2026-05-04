@@ -1,0 +1,11 @@
+{
+  "connectors": [
+    { "name": "notion",   "file": "notion.js",   "version": "1.0.0", "enabled": true, "apiKeyEnv": "NOTION_API_KEY"  },
+    { "name": "clickup",  "file": "clickup.js",  "version": "1.0.0", "enabled": true, "apiKeyEnv": "CLICKUP_API_KEY" },
+    { "name": "linkedin", "file": "linkedin.js", "version": "1.0.0", "enabled": true  },
+    { "name": "indeed",   "file": "indeed.js",   "version": "1.0.0", "enabled": true  },
+    { "name": "gmail",    "file": "gmail.js",    "version": "1.0.0", "enabled": true  },
+    { "name": "stripe",   "file": "stripe.js",   "version": "1.0.0", "enabled": true, "apiKeyEnv": "STRIPE_API_KEY"  },
+    { "name": "shopify",  "file": "shopify.js",  "version": "1.0.0", "enabled": true, "apiKeyEnv": "SHOPIFY_API_KEY" }
+  ]
+}
