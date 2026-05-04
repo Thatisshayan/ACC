@@ -1,0 +1,86 @@
+{
+  "dashboard": {
+    "sections": [
+      {
+        "id": "users",
+        "title": "Users",
+        "description": "List of all users, roles, limits, and activity.",
+        "fields": [
+          "userId",
+          "role",
+          "createdAt",
+          "lastActive",
+          "tasksRun",
+          "limits"
+        ],
+        "actions": [
+          "promoteUser",
+          "demoteUser",
+          "banUser",
+          "setLimits"
+        ]
+      },
+      {
+        "id": "agents",
+        "title": "Agents",
+        "description": "All available agents and their status.",
+        "fields": [
+          "agentType",
+          "engine",
+          "status",
+          "lastUsed",
+          "successRate",
+          "avgLatency"
+        ]
+      },
+      {
+        "id": "graphs",
+        "title": "Running Graphs",
+        "description": "All active workflows.",
+        "fields": [
+          "snapshotId",
+          "userId",
+          "autoMode",
+          "createdAt",
+          "updatedAt",
+          "progress",
+          "failedNodes",
+          "completedNodes",
+          "pendingNodes"
+        ],
+        "actions": [
+          "pauseGraph",
+          "resumeGraph",
+          "cancelGraph"
+        ]
+      },
+      {
+        "id": "tasks",
+        "title": "Task Queue",
+        "description": "All queued and running tasks.",
+        "fields": [
+          "taskId",
+          "agentType",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "result",
+          "error"
+        ]
+      },
+      {
+        "id": "system",
+        "title": "System Health",
+        "description": "Bot status, queue health, DeepSeek/OpenAI connectivity.",
+        "fields": [
+          "activeBot",
+          "queueLength",
+          "workerStatus",
+          "deepseekStatus",
+          "openaiStatus",
+          "whisperStatus"
+        ]
+      }
+    ]
+  }
+}

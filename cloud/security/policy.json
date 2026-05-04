@@ -1,0 +1,24 @@
+{
+  "globalRules": {
+    "requireSnapshotApprovalBy": "Shayan",
+    "noUnsolicitedContact":      true,
+    "sensitiveDataNeverPersisted": true,
+    "revokeAccessAfterTask":     true,
+    "defaultSandboxMode":        true
+  },
+  "actionPolicies": {
+    "marketplace.postItem":    { "requiresApproval": true,  "allowedRoles": ["Admin","Operator","SalesBot"],     "sandboxDefault": true },
+    "marketplace.messageBuyer":{ "requiresApproval": false, "allowedRoles": ["SalesBot"],                       "rateLimitPerDay": 50 },
+    "outreach.sendBatch":      { "requiresApproval": true,  "allowedRoles": ["Operator","Marketing"],           "optInRequired": true },
+    "evidence.export":         { "requiresApproval": true,  "allowedRoles": ["Admin","LegalAssistant"],         "encryptionRequired": true },
+    "deploy.netlify":          { "requiresApproval": true,  "allowedRoles": ["Admin","Operator"] }
+  },
+  "tokenPolicy": {
+    "ephemeralTokenTTLSeconds": 300,
+    "revokeOnTaskEnd":          true
+  },
+  "audit": {
+    "logAllActions": true,
+    "storeIn":       "LTM_pendingApproval"
+  }
+}

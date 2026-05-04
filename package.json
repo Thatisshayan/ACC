@@ -1,0 +1,40 @@
+{
+  "name": "agent-command-center",
+  "version": "1.0.0",
+  "description": "",
+  "main": "acc.js",
+  "bin": {
+    "acc": "./acc.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "telegram": "node telegram.js",
+    "bridge": "node server.js",
+    "cloud:api": "node cloud/server.js",
+    "cloud:worker": "node cloud/worker.js",
+    "cloud:telegram": "set TELEGRAM_BOT_TOKEN=8758615737:AAG4wOZbJhOfMWZmLogQv0DwsolKk3GnJoQ && node cloud/telegram/bot.js",
+    "start": "node scripts/start.js",
+    "server": "node scripts/start.js",
+    "smoke": "node scripts/smokeTest_sandbox.js",
+    "canary:enable": "node scripts/toggleCanary.js enable",
+    "canary:disable": "node scripts/toggleCanary.js disable",
+    "ui": "cd ui && npm run dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
+    "@aws-sdk/client-s3": "^3.1041.0",
+    "@aws-sdk/s3-request-presigner": "^3.1041.0",
+    "@supabase/supabase-js": "^2.105.1",
+    "axios": "^1.16.0",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "formdata-node": "^6.0.3",
+    "node-fetch": "^2.7.0",
+    "node-telegram-bot-api": "^0.67.0"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "projects": [
+    {
+      "id": "blazely",
+      "name": "Blazely",
+      "description": "Commission-based marketing and sales system.",
+      "status": "active",
+      "priority": "critical",
+      "tags": ["sales", "automation", "agency"]
+    }
+  ],
+  "agents": [
+    { "id": "architect", "name": "Architect Agent", "role": "architect", "capabilities": ["system_design","workflow_design","data_modeling"], "type": "ai", "cost_level": "free" },
+    { "id": "writer",    "name": "Writer Agent",    "role": "writer",    "capabilities": ["copywriting","scripts","emails"],                 "type": "ai", "cost_level": "free" },
+    { "id": "engineer",  "name": "Engineer Agent",  "role": "engineer",  "capabilities": ["code","configs","integration"],                  "type": "ai", "cost_level": "free" }
+  ],
+  "notionMemoryPageId":  "REPLACE_NOTION_MEMORY_PAGE_ID",
+  "resumePageId":        "REPLACE_RESUME_PAGE_ID",
+  "tailoredResumesDb":   "REPLACE_TAILORED_RESUMES_DB",
+  "clickupJobListId":    "REPLACE_CLICKUP_JOB_LIST",
+  "defaultDatabaseId":   "REPLACE_DB_ID",
+
+  "roles": {
+    "Admin":          { "level": 100, "humanInLoop": false, "rateLimit": null },
+    "Operator":       { "level": 80,  "humanInLoop": true,  "rateLimit": 500  },
+    "Agent":          { "level": 60,  "humanInLoop": false, "rateLimit": 200  },
+    "LegalAssistant": { "level": 70,  "humanInLoop": true,  "rateLimit": 100  },
+    "Marketing":      { "level": 60,  "humanInLoop": false, "rateLimit": 300  },
+    "SalesBot":       { "level": 50,  "humanInLoop": true,  "rateLimit": 100  },
+    "Viewer":         { "level": 10,  "humanInLoop": false, "rateLimit": 0, "readOnly": true }
+  },
+
+  "negotiationPolicy": {
+    "minAcceptPrice":        0.80,
+    "maxCounterRounds":      3,
+    "autoCounterWithin":     0.10,
+    "requireApprovalAbove":  1000
+  },
+
+  "humanInLoopThresholds": {
+    "marketplacePostsBeforeAutoApprove": 3,
+    "outreachBatchesBeforeAutoApprove":  1,
+    "maxAutoNegotiationRounds":          3
+  },
+
+  "security": {
+    "requireSnapshotApproval":  true,
+    "sandboxDefault":           true,
+    "ephemeralTokenTTLSeconds": 300,
+    "humanInLoop": {
+      "marketplacePostsBeforeAuto": 3,
+      "outreachBatchesBeforeAuto":  1
+    }
+  }
+}
