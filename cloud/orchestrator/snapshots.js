@@ -1,37 +1,60 @@
 // cloud/orchestrator/snapshots.js
-// In-memory snapshot store. Swap to Redis/Postgres later without changing callers.
+// In-memory snapshot store with disk persistence.
+// Survives restarts — swappable to Redis later without changing callers.
+'use strict';
 
+const fs   = require('fs');
+const path = require('path');
+
+const CACHE_FILE = path.join(__dirname, '.snapshots_cache.json');
+
+// ── Load from disk on startup ─────────────────────────────────────────────────
 const snapshots = new Map();
 
-/**
- * saveSnapshot
- * @param {string} snapshotId
- * @param {Object} data - { graph, nodes, meta }
- */
+function _loadFromDisk() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      const raw  = fs.readFileSync(CACHE_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      for (const [k, v] of Object.entries(data)) {
+        snapshots.set(k, v);
+      }
+      console.log(`[snapshots] Restored ${snapshots.size} snapshots from disk.`);
+    }
+  } catch (e) {
+    console.warn('[snapshots] Could not load cache:', e.message);
+  }
+}
+
+function _saveToDisk() {
+  try {
+    const obj = {};
+    for (const [k, v] of snapshots.entries()) obj[k] = v;
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('[snapshots] Could not persist cache:', e.message);
+  }
+}
+
+// Load immediately on require
+_loadFromDisk();
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
 function saveSnapshot(snapshotId, data) {
-  if (!snapshotId) throw new Error("snapshotId is required");
+  if (!snapshotId) throw new Error('snapshotId is required');
   snapshots.set(snapshotId, {
     ...data,
     updatedAt: new Date().toISOString(),
   });
+  _saveToDisk();
 }
 
-/**
- * loadSnapshot
- * @param {string} snapshotId
- * @returns {Object|null}
- */
 function loadSnapshot(snapshotId) {
   if (!snapshotId) return null;
   return snapshots.get(snapshotId) || null;
 }
 
-/**
- * updateNodeInSnapshot
- * @param {string} snapshotId
- * @param {string} nodeId
- * @param {Object} patch - partial node fields to merge
- */
 function updateNodeInSnapshot(snapshotId, nodeId, patch) {
   const snap = snapshots.get(snapshotId);
   if (!snap) return;
@@ -51,16 +74,9 @@ function updateNodeInSnapshot(snapshotId, nodeId, patch) {
     nodes,
     updatedAt: new Date().toISOString(),
   });
+  _saveToDisk();
 }
 
-/**
- * getNodeOutputs
- * Given a snapshotId and an array of node IDs,
- * returns the result objects of those nodes (for use in merge engine).
- * @param {string}   snapshotId
- * @param {string[]} nodeIds
- * @returns {Array}
- */
 function getNodeOutputs(snapshotId, nodeIds) {
   const snap = snapshots.get(snapshotId);
   if (!snap) return [];
@@ -69,10 +85,16 @@ function getNodeOutputs(snapshotId, nodeIds) {
     .map(n => n.result);
 }
 
+function deleteSnapshot(snapshotId) {
+  snapshots.delete(snapshotId);
+  _saveToDisk();
+}
+
 module.exports = {
   saveSnapshot,
   loadSnapshot,
   updateNodeInSnapshot,
   getNodeOutputs,
+  deleteSnapshot,
   snapshots,
 };
