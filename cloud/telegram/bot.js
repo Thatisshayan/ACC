@@ -53,7 +53,17 @@ function tgPost(method, data) {
     .then(function(r) { if (r.data.ok) return r.data.result; throw new Error(r.data.description); });
 }
 function sendMsg(chatId, text, extra) {
-  return tgPost('sendMessage', Object.assign({ chat_id: chatId, text: String(text), parse_mode: 'Markdown' }, extra || {}));
+  // Primary: try with Markdown parse_mode
+  var payload = Object.assign({ chat_id: chatId, text: String(text), parse_mode: 'Markdown' }, extra || {});
+  return tgPost('sendMessage', payload).catch(function(err) {
+    // Fallback: Telegram rejected Markdown (400) — retry as plain text
+    if (err.message && (err.message.includes('400') || err.message.toLowerCase().includes('parse'))) {
+      var plain = Object.assign({ chat_id: chatId, text: String(text) }, extra || {});
+      delete plain.parse_mode;
+      return tgPost('sendMessage', plain);
+    }
+    throw err;
+  });
 }
 function sendButtons(chatId, text, buttons) {
   return tgPost('sendMessage', { chat_id: chatId, text: String(text), parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
@@ -347,7 +357,13 @@ async function handleMessage(msg) {
   var state = getState(userId);
   if (state) { await handleStateInput(chatId, userId, text, state); return; }
 
-  // Free text → AI task
+  // ── task: / tell claude: prefix — route to Task Bus BEFORE generic handler ──
+  if (/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm)\b/i.test(text)) {
+    var tbCreated = await taskbus.createTaskFromMessage(userId, text, 'claude', sendMsg, chatId);
+    if (tbCreated) return;
+  }
+
+  // Free text → generic AI task via ACC server
   await sendMsg(chatId, t(userId, 'processing', { task: text.slice(0,80) }));
   try {
     var u2 = users.getUserProfile(userId) || {};
