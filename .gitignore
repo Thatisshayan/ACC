@@ -8,6 +8,7 @@ cloud/security/.vault/
 # Runtime/private data
 data/users/
 data/taskbus/
+cloud/dlq/items/
 *.log
 bot.log
 

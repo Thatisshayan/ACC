@@ -4,9 +4,11 @@ const cors         = require("cors");
 const { enqueueTask, getTask } = require("./queue.js");
 const { startWorker }          = require("./worker.js");
 const { adminRouter }          = require("./admin/api.js");
+const dlqRoutes                = require("./admin/dlqRoutes.js");
 const securityApproval         = require("./api/securityApproval.js");
 const telegramWebhook          = require("./api/telegramWebhook.js");
 const uiRoutes                 = require("./api/uiRoutes.js");
+const taskbusRoutes            = require("./taskbus/routes.js");
 const { startWSServer }        = require("./ws/server.js");
 const orchestrator = require("./orchestrator.js");
 const cloudRouter  = require("./router.js");
@@ -76,6 +78,10 @@ app.post("/orchestrate", (req, res) => {
 
 // ---------- Admin Dashboard ----------
 app.use("/admin", adminRouter);
+app.use("/admin/dlq", dlqRoutes);
+
+// ---------- Agent Task Bus ----------
+app.use("/api/taskbus", taskbusRoutes);
 
 // ---------- Security Approval + Telegram Webhook ----------
 app.use("/api", securityApproval);
@@ -90,7 +96,14 @@ const httpServer = app.listen(PORT, () => {
   console.log(`[server] Admin:  GET /admin/users  /admin/graphs  /admin/tasks  /admin/system`);
   console.log(`[server] UI:     GET /api/ui/dashboard  /api/ui/snapshots  /api/ui/approvals`);
   console.log(`[server] WS:     ws://localhost:${PORT}/ws`);
+  startWSServer(httpServer);
 });
 
-// Start WebSocket server on same HTTP server
-startWSServer(httpServer);
+httpServer.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`[server] Port ${PORT} already in use. Kill the existing process or change PORT in .env`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
