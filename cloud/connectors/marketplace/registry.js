@@ -43,13 +43,12 @@ function loadMarketplaceAdapters(manifestPath = MANIFEST_PATH) {
 function getMarketplaceAdapter(name) { return registry.get(name) || null; }
 function listMarketplaceAdapters()   { return [...registry.keys()]; }
 
-// Hot reload
-fs.watch(MARKETPLACE_DIR, { recursive: false }, (eventType, filename) => {
-  if (!filename) return;
-  if (!filename.endsWith(".js") && filename !== "manifest.marketplace.json") return;
-  console.log(`[marketplace] Change detected in ${filename}, reloading...`);
-  loadMarketplaceAdapters();
-});
+// Hot reload disabled — uncomment for dev
+// fs.watch(MARKETPLACE_DIR, { recursive: false }, (eventType, filename) => {
+//   if (!filename) return;
+//   if (!filename.endsWith(".js") && filename !== "manifest.marketplace.json") return;
+//   loadMarketplaceAdapters();
+// });
 
 // Initial load
 loadMarketplaceAdapters();

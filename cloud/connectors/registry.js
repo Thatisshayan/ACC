@@ -91,14 +91,14 @@ function listConnectors() {
   }));
 }
 
-// ── Hot reload ─────────────────────────────────────────────────────────────────
-// Watch the connectors directory; reload when manifest or .js files change.
-fs.watch(CONNECTORS_DIR, { recursive: false }, (eventType, filename) => {
-  if (!filename) return;
-  if (!filename.endsWith(".js") && filename !== "manifest.json") return;
-  console.log(`[connectors] Change detected in ${filename}, reloading...`);
-  loadConnectors();
-});
+// ── Hot reload (disabled — causes noise in production) ────────────────────────
+// Uncomment to re-enable during development:
+// fs.watch(CONNECTORS_DIR, { recursive: false }, (eventType, filename) => {
+//   if (!filename) return;
+//   if (!filename.endsWith(".js") && filename !== "manifest.json") return;
+//   console.log(`[connectors] Change detected in ${filename}, reloading...`);
+//   loadConnectors();
+// });
 
 // ── Initial load ───────────────────────────────────────────────────────────────
 loadConnectors();
