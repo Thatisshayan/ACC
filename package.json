@@ -12,7 +12,7 @@
     "bridge": "node server.js",
     "cloud:api": "node cloud/server.js",
     "cloud:worker": "node cloud/worker.js",
-    "cloud:telegram": "set TELEGRAM_BOT_TOKEN=8758615737:AAG4wOZbJhOfMWZmLogQv0DwsolKk3GnJoQ && node cloud/telegram/bot.js",
+    "cloud:telegram": "node cloud/telegram/bot.js",
     "start": "node scripts/start.js",
     "server": "node scripts/start.js",
     "smoke": "node scripts/smokeTest_sandbox.js",
@@ -35,6 +35,7 @@
     "express": "^5.2.1",
     "formdata-node": "^6.0.3",
     "node-fetch": "^2.7.0",
-    "node-telegram-bot-api": "^0.67.0"
+    "node-telegram-bot-api": "^0.67.0",
+    "uuid": "8.3.2"
   }
 }
