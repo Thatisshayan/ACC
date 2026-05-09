@@ -1,0 +1,3 @@
+﻿# Project-specific Codex configuration can live here.
+# Keep this file minimal and safe unless ACC v2 needs explicit supported settings.
+# Do not store secrets, tokens, passwords, or environment values in this file.
