@@ -1,0 +1,27 @@
+{
+  "name": "acc-desktop",
+  "version": "2.0.0",
+  "description": "ACC v2 Agent Command Center Desktop App",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-updater": "^6.1.7"
+  },
+  "build": {
+    "appId": "com.acc.v2",
+    "productName": "ACC v2",
+    "directories": { "output": "dist" },
+    "win": { "target": "portable", "icon": "assets/icon.png" },
+    "nsis": {
+      "oneClick": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "ACC v2"
+    }
+  }
+}

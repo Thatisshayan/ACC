@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 
 export function useSocket() {
-  const [lastMsg,  setLast]  = useState(null);
+  const [lastMsg,   setLast] = useState(null);
   const [connected, setConn] = useState(false);
 
   useEffect(() => {
     let ws, retry;
     function connect() {
       try {
+        // Always use absolute WS URL (works in browser and Electron file://)
         ws = new WebSocket('ws://localhost:4000/ws');
         ws.onopen    = () => setConn(true);
         ws.onclose   = () => { setConn(false); retry = setTimeout(connect, 5000); };
