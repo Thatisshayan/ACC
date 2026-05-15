@@ -56,6 +56,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration:  false,
       contextIsolation: true,
+      webSecurity:      false,   // allows file:// to call http://localhost:4000
       preload:          path.join(__dirname, 'preload.js'),
     },
   });
