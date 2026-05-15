@@ -1,28 +1,28 @@
 @echo off
 title ACC v2 — Agent Command Center
 color 0A
+
+set ROOT=C:\Users\Shaya\agent-command-center
+set PM2=C:\Users\Shaya\AppData\Roaming\npm\pm2.cmd
+set ELECTRON=%ROOT%\desktop\node_modules\.bin\electron.cmd
+
 echo.
-echo  =====================================================
-echo   ACC v2 Starting...
-echo  =====================================================
+echo  ============================================
+echo   ACC v2 — Agent Command Center
+echo  ============================================
+echo.
 
-cd /d C:\Users\Shaya\agent-command-center
+REM Ensure backend is running via PM2
+echo [1/2] Starting backend services (PM2)...
+%PM2% restart acc-server >nul 2>&1 || %PM2% start %ROOT%\pm2.config.js >nul 2>&1
+%PM2% restart acc-bot    >nul 2>&1
 
-echo [1/3] Backend server...
-start "ACC-Server" /min cmd /k "cd /d C:\Users\Shaya\agent-command-center && node scripts/start.js"
-timeout /t 4 /nobreak >nul
-
-echo [2/3] Telegram bot...
-start "ACC-Bot" /min cmd /k "cd /d C:\Users\Shaya\agent-command-center && node cloud/telegram/bot.js"
+echo [2/2] Launching desktop app...
 timeout /t 2 /nobreak >nul
 
-echo [3/3] Dashboard UI...
-start "ACC-UI" /min cmd /k "cd /d C:\Users\Shaya\agent-command-center\ui && npm run dev"
-timeout /t 3 /nobreak >nul
-
+start "" "%ELECTRON%" "%ROOT%\desktop"
 echo.
-echo  Backend:    http://localhost:4000/api/health
-echo  Dashboard:  http://localhost:5173
-echo  Bot:        @OurAccbot
+echo  ACC v2 is running.
+echo  Server:  http://localhost:4000/api/health
+echo  Bot:     @OurAccbot
 echo.
-start "" http://localhost:5173
