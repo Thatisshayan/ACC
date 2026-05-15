@@ -119,15 +119,29 @@ async function executeTask(task = {}) {
     return result;
   }
 
-  // ---------- TEXT AGENTS ----------
+  // ---------- TEXT AGENTS — DeepSeek primary, Claude fallback ----------
   if (["architect", "writer", "research", "engineer", "data"].includes(agentType)) {
-    const engine = payload?.engine || defaultEngineForAgent(agentType);
-    if (engine === "deepseek") {
-      result = await runDeepseekTask({ mode: "execute", prompt: payload.prompt || payload.query, context: { agentType } });
-    } else if (["architect", "writer", "research"].includes(agentType)) {
-      result = await runClaudeTask(payload);
-    } else {
-      result = await runOpenAITask(payload);
+    const explicitEngine = payload?.engine;
+
+    // Always try DeepSeek first (has credit, cheaper)
+    if (explicitEngine !== "claude") {
+      result = await runDeepseekTask({
+        mode:    agentType === "research" ? "reason" : agentType === "engineer" ? "optimize" : "execute",
+        prompt:  payload.prompt || payload.query || JSON.stringify(payload),
+        context: { agentType },
+      });
+      if (result.success) {
+        logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: "completed" });
+        return result;
+      }
+      console.warn(`[executor] DeepSeek failed for ${agentType}:`, typeof result.error === 'object' ? JSON.stringify(result.error) : result.error, "— trying Claude");
+    }
+
+    // Fallback to Claude
+    result = await runClaudeTask(payload);
+    if (!result.success) {
+      const errMsg = typeof result.error === 'object' ? JSON.stringify(result.error) : result.error;
+      result = { success: false, error: errMsg };
     }
     logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: result.success ? "completed" : "failed" });
     return result;

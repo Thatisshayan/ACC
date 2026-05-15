@@ -42,11 +42,12 @@ async function workerLoop() {
       if (result.success) {
         updateTask(task.id, { status: "completed", result, error: null });
         logEvent("task_complete", "Task completed", { taskId: task.id });
-        console.log(`[worker] Task ${task.id} completed.`);
+        console.log(`[worker] Task ${task.id} completed | provider: ${result.provider || 'default'}`);
       } else {
-        updateTask(task.id, { status: "failed", error: result.error, result: null });
-        logEvent("task_error", "Task failed", { taskId: task.id, error: result.error });
-        console.log(`[worker] Task ${task.id} failed: ${result.error}`);
+        const errStr = typeof result.error === 'object' ? JSON.stringify(result.error) : (result.error || 'unknown error');
+        updateTask(task.id, { status: "failed", error: errStr, result: null });
+        logEvent("task_error", "Task failed", { taskId: task.id, error: errStr });
+        console.log(`[worker] Task ${task.id} failed: ${errStr}`);
       }
     } catch (err) {
       console.error(`[worker] Unhandled error on task ${task.id}:`, err.message);
