@@ -1,7 +1,7 @@
 // cloud/security/vaultStub.js
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
 
 const VAULT_DIR = path.join(process.cwd(), "cloud", "security", ".vault");
 if (!fs.existsSync(VAULT_DIR)) fs.mkdirSync(VAULT_DIR, { recursive: true });
@@ -19,7 +19,7 @@ function _vaultFile(name) {
   return path.join(VAULT_DIR, `${name}.vault`);
 }
 
-export function writeSecret(name, value) {
+function writeSecret(name, value) {
   if (!name) throw new Error("secret name required");
   const file = _vaultFile(name);
   if (!MASTER_KEY_ENV) {
@@ -37,7 +37,7 @@ export function writeSecret(name, value) {
   return true;
 }
 
-export function readSecret(name, fallback = null) {
+function readSecret(name, fallback = null) {
   const file = _vaultFile(name);
   if (!fs.existsSync(file)) return fallback;
   const raw = fs.readFileSync(file, "utf8");
@@ -60,8 +60,10 @@ export function readSecret(name, fallback = null) {
   }
 }
 
-export function listSecrets() {
+function listSecrets() {
   return fs.readdirSync(VAULT_DIR)
     .filter(f => f.endsWith(".vault"))
     .map(f => f.replace(".vault", ""));
 }
+
+module.exports = { writeSecret, readSecret, listSecrets };
