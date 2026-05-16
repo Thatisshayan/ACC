@@ -24,3 +24,9 @@ ui/dist/
 *.tmp
 *.temp
 .cache/
+.env
+.env.*
+!.env.example
+serviceAccountKey.json
+*.pem
+*.key
