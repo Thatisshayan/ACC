@@ -1,0 +1,64 @@
+# ACC v2 — Cursor Rules
+# Cursor is the code implementation agent. Claude (via ACC Task Bus) is the architect.
+# Read tasks/current-task.md before starting any implementation.
+
+## Project Structure
+- Backend: cloud/ (Node.js CommonJS, Express)
+- Frontend: ui/ (React + Vite + Tailwind)
+- Desktop: desktop/ (Electron)
+- Task Bus: cloud/taskbus/ (store, router, providerFallback)
+- Bot: cloud/telegram/bot.js
+- Config: pm2.config.js, railway.json, Dockerfile
+
+## Primary AI Provider
+- DeepSeek is primary (DEEPSEEK_API_KEY in .env)
+- Claude is fallback only (balance depleted)
+- All AI calls go through cloud/taskbus/providerFallback.js
+
+## SAFETY RULES — NEVER VIOLATE
+- NEVER use production Railway API tokens for destructive operations
+- NEVER delete files without explicit confirmation from Shayan
+- NEVER modify .env directly — only read it
+- NEVER run database migrations without Shayan approval
+- NEVER push directly to main/master on Railway-connected repos
+- NEVER expose secrets in code, logs, or commits
+- ALWAYS use sandbox mode for marketplace/external actions
+
+## Workflow
+1. Read tasks/current-task.md for the current task spec
+2. Implement ONLY what the spec says — no scope creep
+3. Run: node _servertest.js to verify server loads
+4. Commit with clear message matching task title
+5. Push to GitHub — Railway auto-deploys staging
+
+## Code Style
+- CommonJS (require/module.exports) for cloud/
+- ES modules (import/export) for ui/
+- No TypeScript in cloud/ — plain JavaScript only
+- Always add error handling — never let errors swallow silently
+- Log format: [module] message (e.g. [airtable] Connected)
+
+## Adding a new connector
+1. File: cloud/connectors/<name>.js
+2. Export: { checkHealth, enabled }
+3. Add warning if API key missing
+4. Register in cloud/connectors/registry.js
+5. Add key to .env.example
+
+## Adding a Telegram command
+1. Edit cloud/taskbus/telegramCommands.js
+2. Add exact match in handleTaskBusCommand()
+3. Always wrap in try/catch run() wrapper
+4. Use safeSend() not sendFn() directly — strips Markdown that breaks Telegram
+
+## Testing
+- Syntax: node --check <file>
+- Server load: node _servertest.js (create if needed)
+- Task Bus: POST http://localhost:4000/api/taskbus/task
+- Health: GET http://localhost:4000/api/health
+
+## Git
+- Branch: master
+- Remote: https://github.com/Thatisshayan/ACC.git
+- PM2 manages local processes — never kill node.exe manually
+- After push: Railway auto-rebuilds using Dockerfile
