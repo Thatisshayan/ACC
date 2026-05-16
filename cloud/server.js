@@ -40,7 +40,11 @@ function ensureWorker() {
   }
 }
 
-// ---------- Health ----------
+// ---------- Health (root + /api/health — both must return JSON on Railway) ----------
+app.get("/health", (req, res) => {
+  res.json({ ok: true, service: "ACC v2", time: new Date().toISOString(), env: process.env.NODE_ENV || "development" });
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "ACC Module 7", time: new Date().toISOString() });
 });

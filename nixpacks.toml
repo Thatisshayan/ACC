@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_18"]
+
+[phases.install]
+cmds = ["npm install --REDACTED"]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "node scripts/start.js"

@@ -1,0 +1,14 @@
+node_modules
+ui/node_modules
+ui/dist
+desktop/node_modules
+.git
+.env
+.env.*
+data/logs
+data/taskbus
+data/users
+data/storage
+*.log
+*.tmp
+.pm2
