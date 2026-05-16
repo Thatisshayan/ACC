@@ -1,0 +1,12 @@
+fix: Electron black screen resolved
+
+Root cause: Vite was building with absolute asset paths (/assets/...)
+which resolve to filesystem root under file:// protocol in Electron.
+
+Fixes:
+- ui/vite.config.js: added base:'./' for relative paths in dist
+- ui/index.html: added CSP meta tag for localhost connections
+- desktop/main.js: added webSecurity:false to allow file:// -> http://localhost:4000
+- START_ACC.bat: cleaned up launcher script
+
+Result: Electron window now renders full React dashboard

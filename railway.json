@@ -1,0 +1,12 @@
+{
+  "build": {
+    "builder": "nixpacks",
+    "buildCommand": "npm install --production"
+  },
+  "deploy": {
+    "startCommand": "node scripts/start.js",
+    "healthcheckPath": "/api/health",
+    "restartPolicyType": "on_failure",
+    "restartPolicyMaxRetries": 5
+  }
+}

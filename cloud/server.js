@@ -1,12 +1,14 @@
 // cloud/server.js
 const express      = require("express");
 const cors         = require("cors");
+const rateLimit    = require("express-rate-limit");
 const { enqueueTask, getTask } = require("./queue.js");
 const { startWorker }          = require("./worker.js");
 const { adminRouter }          = require("./admin/api.js");
 const dlqRoutes                = require("./admin/dlqRoutes.js");
 const securityApproval         = require("./api/securityApproval.js");
 const telegramWebhook          = require("./api/telegramWebhook.js");
+const webhookHandler           = require("./telegram/webhookHandler.js");
 const uiRoutes                 = require("./api/uiRoutes.js");
 const taskbusRoutes            = require("./taskbus/routes.js");
 const { startWSServer }        = require("./ws/server.js");
@@ -16,8 +18,18 @@ const cloudRouter  = require("./router.js");
 const app  = express();
 const PORT = process.env.PORT || 4000;
 
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // 100 requests per windowMs
+  message: "Too many requests, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(cors());
 app.use(express.json());
+app.use(limiter); // Apply rate limiting to all routes
 
 // Worker singleton
 let workerStarted = false;
@@ -86,6 +98,7 @@ app.use("/api/taskbus", taskbusRoutes);
 // ---------- Security Approval + Telegram Webhook ----------
 app.use("/api", securityApproval);
 app.use("/api", telegramWebhook);
+app.use("/api", webhookHandler);
 
 // ---------- UI Routes ----------
 app.use("/api/ui", uiRoutes);
