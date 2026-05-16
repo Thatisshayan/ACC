@@ -356,7 +356,34 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
   if (text === '/latestresult') { await run('/latestresult',function(){ return handleLatestResult(chatId, sendFn); });return true; }
   if (text === '/taskhelp')     { await run('/taskhelp',    function(){ return handleHelp(chatId, sendFn); });        return true; }
 
-  // ── Approval actions ───────────────────────────────────────────────────────
+  // /notebook — export completed tasks as NotebookLM Markdown packet
+  if (text === '/notebook') {
+    await run('/notebook', async function() {
+      var notebookExport = require('../services/notebookExport.js');
+      var content = notebookExport.buildExportPacket();
+      if (!content) {
+        await safeSend(chatId, 'No completed tasks in last 7 days to export.\n\nRun some tasks first: task: your instruction', sendFn);
+        return;
+      }
+      var fpath = notebookExport.saveExport(content);
+      var count = (content.match(/^## \d+\./mg) || []).length;
+      var lines = [
+        'NotebookLM Export Ready',
+        'Tasks: ' + count + ' | File saved to data/notebook-exports/',
+        '',
+        'How to use:',
+        '1. Open NotebookLM (notebooklm.google.com)',
+        '2. Click Add Source',
+        '3. Paste the content below or upload the file',
+        '',
+        '--- CONTENT PREVIEW ---',
+        content.slice(0, 2500),
+        content.length > 2500 ? '\n...[' + (content.length - 2500) + ' chars truncated — full file on disk]' : '',
+      ];
+      await safeSend(chatId, lines.join('\n'), sendFn);
+    });
+    return true;
+  }
   if (text.startsWith('/taskbus_approve_') || text.startsWith('/taskbus_reject_')) {
     await run('approval', function(){ return handleApprovalAction(chatId, text, sendFn); });
     return true;

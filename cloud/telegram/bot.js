@@ -322,7 +322,7 @@ async function handleMessage(msg) {
   if (text === '/jobs')        { await sendButtons(chatId, t(userId,'main_menu',{name:user.name||'friend'}), jobsMenu(userId)); return; }
 
   // ── Task Bus commands — strict prefix routing ─────────────────────────────
-  var taskbusPrefixes = ['/tasks','/taskstats','/taskhelp','/task_','/taskdetails_','/taskbus_','/agents','/approvals','/latesttask','/latestresult','/result_'];
+  var taskbusPrefixes = ['/tasks','/taskstats','/taskhelp','/task_','/taskdetails_','/taskbus_','/agents','/approvals','/latesttask','/latestresult','/result_','/notebook'];
   var isMaybeTaskbus = taskbusPrefixes.some(function(p) { return text === p || text.startsWith(p); });
   if (isMaybeTaskbus) {
     var tbHandled = await taskbus.handleTaskBusCommand(chatId, userId, text, sendMsg, user);
