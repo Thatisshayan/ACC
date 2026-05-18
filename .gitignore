@@ -30,3 +30,4 @@ ui/dist/
 serviceAccountKey.json
 *.pem
 *.key
+node_modules/  
