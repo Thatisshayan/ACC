@@ -31,6 +31,25 @@ app.get('/stats', function(req, res) {
   res.json({ success: true, stats: store.getStats() });
 });
 
+// ── GET /api/taskbus/integrations/status ────────────────────────────────────────
+app.get('/integrations/status', async function(req, res) {
+  var integrations = {};
+  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','airtable','clickup'];
+  for (var i = 0; i < files.length; i++) {
+    var name = files[i];
+    try {
+      var mod = require('../integrations/' + name + '.js');
+      var health = await mod.checkHealth();
+      integrations[name] = Object.assign({ enabled: mod.enabled() }, health);
+    } catch (e) {
+      integrations[name] = { enabled: false, status: 'error', error: e.message };
+    }
+  }
+  var statuses = Object.values(integrations).map(function(i) { return i.status; });
+  var overall = statuses.every(function(s) { return s === 'connected' || s === 'disabled'; }) ? 'ok' : 'degraded';
+  res.json({ success: true, overall: overall, integrations: integrations, timestamp: new Date().toISOString() });
+});
+
 // ── GET /api/taskbus/providers/status ─────────────────────────────────────────
 app.get('/providers/status', async function(req, res) {
   try {
