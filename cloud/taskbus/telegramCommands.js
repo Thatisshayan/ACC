@@ -440,25 +440,28 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
 
 // ── createTaskFromMessage ─────────────────────────────────────────────────────
 async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatId) {
-  var isTaskCreate = /^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm)/i.test(text);
+  var isTaskCreate = /^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:)/i.test(text);
   if (!isTaskCreate) return false;
 
-  var instruction = text.replace(/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm):?\s*/i, '').trim();
+  var instruction = text.replace(/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:):?\s*/i, '').trim();
   if (!instruction.length) {
     await safeSend(chatId, 'Please provide an instruction after task:\n\nExample: task: summarize the latest system status', sendFn);
     return true;
   }
 
   var agent = 'claude';
-  if (/tell gemini/i.test(text))     agent = 'gemini';
-  if (/tell chatgpt/i.test(text))    agent = 'chatgpt';
-  if (/tell notebooklm/i.test(text)) agent = 'notebooklm';
+  if (/^tell gemini/i.test(text))        agent = 'gemini';
+  if (/^tell chatgpt/i.test(text))       agent = 'chatgpt';
+  if (/^tell notebooklm/i.test(text))    agent = 'notebooklm';
+  if (/^tell openhands/i.test(text))     agent = 'openhands';
+  if (/^openhands:/i.test(text))         agent = 'openhands';
+  if (/^code:/i.test(text))              agent = 'openhands';
 
   var task = store.createTask({
     title:             instruction.slice(0, 80),
     instruction:       instruction,
     assigned_agent:    agent,
-    automation_mode:   agent === 'claude' ? 'semi_auto' : 'manual',
+    automation_mode:   (agent === 'claude' || agent === 'openhands') ? 'semi_auto' : 'manual',
     approval_required: false,
     created_by:        'telegram:' + userId,
     priority:          'normal',
