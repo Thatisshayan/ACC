@@ -438,6 +438,25 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
   return false; // not a taskbus command
 }
 
+// ── Extract deliverable text from routeTask + stored result ───────────────────
+function extractRouteOutput(routeResult, taskId) {
+  var output = routeResult && (routeResult.output || routeResult.summary);
+  var prov   = routeResult && routeResult.provider_used;
+  var isReal = routeResult && (routeResult.is_real_ai_result || routeResult.is_real_ai);
+  if (!output || String(output).length < 4) {
+    var latest = store.getLatestResult(taskId);
+    if (latest) {
+      output = latest.output || latest.summary || output;
+      prov   = latest.provider_used || prov;
+      isReal = typeof latest.is_real_ai_result === 'boolean' ? latest.is_real_ai_result : isReal;
+    }
+  }
+  if ((!output || String(output).length < 4) && routeResult && routeResult.summary) {
+    output = routeResult.summary;
+  }
+  return { text: String(output || '').trim(), prov: prov, isReal: !!isReal };
+}
+
 // ── createTaskFromMessage ─────────────────────────────────────────────────────
 async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatId) {
   var isTaskCreate = /^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:)/i.test(text);
@@ -464,7 +483,7 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
     title:             instruction.slice(0, 80),
     instruction:       instruction,
     assigned_agent:    agent,
-    automation_mode:   (agent === 'claude' || agent === 'openhands') ? 'semi_auto' : 'manual',
+    automation_mode:   (agent === 'claude' || agent === 'openhands' || agent === 'crewai') ? 'semi_auto' : 'manual',
     approval_required: false,
     created_by:        'telegram:' + userId,
     priority:          'normal',
@@ -491,19 +510,14 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
         return true;
       }
 
-      var output = routeResult && (routeResult.output || routeResult.summary);
-      var prov   = routeResult && routeResult.provider_used;
-      var isReal = routeResult && routeResult.is_real_ai_result;
-
-      if (!output) {
-        var latest = store.getLatestResult(task.id);
-        if (latest) { output = latest.output || latest.summary; prov = latest.provider_used; isReal = latest.is_real_ai_result; }
-      }
-
-      if (output && String(output).length > 3) {
-        await safeSend(chatId, (isReal ? 'Done! (DeepSeek)\n\n' : 'Done!\n\n') + String(output).slice(0, 3500), sendFn);
+      var delivered = extractRouteOutput(routeResult, task.id);
+      if (delivered.text.length > 3) {
+        var label = delivered.isReal ? 'Done! (' + (delivered.prov || 'AI') + ')\n\n' : 'Done!\n\n';
+        await safeSend(chatId, label + delivered.text.slice(0, 3500), sendFn);
+      } else if (routeResult && routeResult.status === 'assigned') {
+        await safeSend(chatId, 'Task queued for ' + agent + '. Pick up: /task_' + task.id.slice(0, 8), sendFn);
       } else {
-        await safeSend(chatId, 'Task stored. Check: /task_' + task.id.slice(0,8), sendFn);
+        await safeSend(chatId, 'Task stored. Check: /task_' + task.id.slice(0, 8), sendFn);
       }
     } catch(e) {
       console.log('[taskbus] execution error:', e.message);

@@ -27,13 +27,20 @@ function getNotesFile(userId) { return path.join(users.getUserStorageDir(userId)
 function getNotes(userId) {
   const fp = getNotesFile(userId);
   if (!fs.existsSync(fp)) return [];
-  const dec = decrypt(userId, fs.readFileSync(fp, 'utf8'));
-  return dec ? JSON.parse(dec) : [];
+  try {
+    const dec = decrypt(userId, fs.readFileSync(fp, 'utf8'));
+    if (!dec) return [];
+    return JSON.parse(dec);
+  } catch (_) { return []; }
 }
 function saveNotes(userId, notes) {
-  fs.writeFileSync(getNotesFile(userId), encrypt(userId, JSON.stringify(notes)), 'utf8');
+  const file = getNotesFile(userId);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, encrypt(userId, JSON.stringify(notes)), 'utf8');
 }
 function addNote(userId, title, content) {
+  const file = getNotesFile(userId);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   const notes = getNotes(userId);
   const note  = { id: Date.now(), title, content, createdAt: new Date().toISOString() };
   notes.unshift(note);

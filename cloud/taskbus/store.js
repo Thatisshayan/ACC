@@ -6,6 +6,7 @@
 const fs   = require('fs');
 const path = require('path');
 const uuid = require('uuid').v4;
+const persistence = require('./persistence.js');
 
 const DATA_DIR = path.join(__dirname, '../../data/taskbus');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -94,7 +95,9 @@ function createTask(opts) {
     created_at:       new Date().toISOString(),
     updated_at:       new Date().toISOString(),
   };
-  return append('tasks', task);
+  const item = append('tasks', task);
+  persistence.syncTaskToCloud(item).catch(function() {});
+  return item;
 }
 
 function getTasks(filter) {
@@ -167,7 +170,9 @@ function addResult(opts) {
       updateTask(opts.task_id, { status: task.approval_required ? 'waiting_approval' : 'done' });
     }
   }
-  return append('results', result);
+  const item = append('results', result);
+  persistence.syncResultToCloud(item).catch(function() {});
+  return item;
 }
 
 function getResults(taskId) {

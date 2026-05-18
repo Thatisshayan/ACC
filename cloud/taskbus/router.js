@@ -152,7 +152,8 @@ async function routeTask(taskId) {
       });
       store.updateTask(taskId, { status: ohResult.success ? 'done' : 'failed', provider_used: 'openhands' });
       return { status: ohResult.success ? 'done' : 'failed', taskId, resultId: ohR.id,
-        provider_used: 'openhands', output: ohResult.output, pr_url: ohResult.pr_url };
+        provider_used: 'openhands', output: ohResult.output || ohR.output || '',
+        summary: ohR.summary || '', is_real_ai_result: true, pr_url: ohResult.pr_url };
     }
     log('[router] OpenHands not configured — falling through to provider chain');
   }
@@ -173,7 +174,8 @@ async function routeTask(taskId) {
       });
       store.updateTask(taskId, { status: crResult.success ? 'done' : 'failed', provider_used: 'crewai' });
       return { status: crResult.success ? 'done' : 'failed', taskId, resultId: crR.id,
-        provider_used: 'crewai', output: crResult.output };
+        provider_used: 'crewai', output: crResult.output || crR.output || '',
+        summary: crR.summary || crResult.summary || '', is_real_ai_result: true };
     }
     log('[router] CrewAI not enabled — falling through to provider chain');
   }
@@ -227,13 +229,16 @@ async function routeTask(taskId) {
     '| cost:', exec.cost_tier);
 
   return {
-    status:        finalStatus,
-    taskId:        taskId,
-    resultId:      r.id,
-    provider_used: exec.provider_used,
-    cost_tier:     exec.cost_tier,
-    is_real_ai:    exec.is_real_ai_result,
-    adapter:       exec.provider_used,  // backward compat
+    status:              finalStatus,
+    taskId:              taskId,
+    resultId:            r.id,
+    provider_used:       exec.provider_used,
+    cost_tier:           exec.cost_tier,
+    is_real_ai:          exec.is_real_ai_result,
+    is_real_ai_result:   exec.is_real_ai_result,
+    output:              exec.output || '',
+    summary:             exec.summary || '',
+    adapter:             exec.provider_used,  // backward compat
   };
 }
 
