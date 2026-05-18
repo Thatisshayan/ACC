@@ -175,19 +175,15 @@ async function executeAndReply(chatId, agentType, prompt, language) {
 function mainMenu(userId) {
   var fa = (users.getUserProfile(userId)||{}).language === 'fa';
   return fa ? [
-    [{text:'💼 شغل',callback_data:'menu_jobs'},{text:'📄 رزومه',callback_data:'menu_resume'}],
-    [{text:'📱 محتوا',callback_data:'menu_content'},{text:'🛒 بازار',callback_data:'menu_marketplace'}],
-    [{text:'📝 یادداشت',callback_data:'menu_notes'},{text:'🎯 مصاحبه',callback_data:'menu_interview'}],
-    [{text:'🍳 آشپز AI',callback_data:'menu_chef'},{text:'🌐 ترجمه',callback_data:'menu_translate'}],
-    [{text:'🛠️ ابزار بیشتر',callback_data:'menu_tools'},{text:'⚙️ تنظیمات',callback_data:'menu_settings'}],
-    [{text:'📊 وضعیت',callback_data:'menu_status'},{text:'❓ راهنما',callback_data:'menu_help'}],
+    [{text:'💼 پیدا کردن شغل',callback_data:'job_search'},{text:'📄 تنظیم رزومه',callback_data:'tailor_resume'}],
+    [{text:'🌐 صفحه فرود',callback_data:'landing_page'},{text:'🎬 اسکریپت ویدیو',callback_data:'video_script'}],
+    [{text:'📱 پست شبکه اجتماعی',callback_data:'social_post'},{text:'🌍 ترجمه',callback_data:'menu_translate'}],
+    [{text:'🍳 آشپز AI',callback_data:'menu_chef'},{text:'🔍 تحقیق',callback_data:'competitor_research'}],
   ] : [
-    [{text:'💼 Jobs',callback_data:'menu_jobs'},{text:'📄 Resume',callback_data:'menu_resume'}],
-    [{text:'📱 Content',callback_data:'menu_content'},{text:'🛒 Marketplace',callback_data:'menu_marketplace'}],
-    [{text:'📝 Notes',callback_data:'menu_notes'},{text:'🎯 Interview Prep',callback_data:'menu_interview'}],
-    [{text:'🍳 Chef AI',callback_data:'menu_chef'},{text:'🌐 Translate',callback_data:'menu_translate'}],
-    [{text:'🛠️ More Tools',callback_data:'menu_tools'},{text:'⚙️ Settings',callback_data:'menu_settings'}],
-    [{text:'📊 Status',callback_data:'menu_status'},{text:'❓ Help',callback_data:'menu_help'}],
+    [{text:'💼 Find Jobs',callback_data:'job_search'},{text:'📄 Tailor Resume',callback_data:'tailor_resume'}],
+    [{text:'🌐 Landing Page',callback_data:'landing_page'},{text:'🎬 Video Script',callback_data:'video_script'}],
+    [{text:'📱 Social Post',callback_data:'social_post'},{text:'🌍 Translate',callback_data:'menu_translate'}],
+    [{text:'🍳 Chef AI',callback_data:'menu_chef'},{text:'🔍 Research',callback_data:'competitor_research'}],
   ];
 }
 function jobsMenu(userId) {
@@ -513,6 +509,15 @@ async function handleStateInput(chatId, userId, text, state) {
       await sendButtons(chatId, user.language==='fa' ? '⏰ نوع شغل:' : '⏰ Job type:', jobTypeMenu(userId));
       setState(userId, 'awaiting_job_type', { role: state.data.role, location: text }); break;
 
+    case 'awaiting_tailor_role':
+      await sendMsg(chatId, '✏️ _Tailoring your resume for_ *' + text.slice(0,60) + '*_..._');
+      await executeAndReply(chatId, 'writer',
+        'You are a professional resume writer. Tailor this resume for the following role/job description. ' +
+        'Highlight relevant skills, reorder bullet points, optimize keywords for ATS. ' +
+        'Role/JD: ' + text + '\n\nProvide the tailored resume content with specific changes highlighted.',
+        user.language);
+      break;
+
     case 'awaiting_cover_role':
       if (!user.resumeFile) { await sendMsg(chatId, t(userId,'no_resume')); break; }
       await sendMsg(chatId, '✍️ _Writing your cover letter for_ *' + text + '*_..._');
@@ -555,8 +560,25 @@ async function handleStateInput(chatId, userId, text, state) {
       await sendMsg(chatId, '✅ *LinkedIn connected!*\nEmail: `' + text + '`'); break;
 
     case 'awaiting_content_topic':
+      var ctype = state.data && state.data.type;
+      var cprompt = {
+        video:    'Write a complete YouTube video script about: ' + text + '. Include hook (0-30s), intro, 3-5 main sections with talking points, B-roll suggestions, and strong CTA. Format with timestamps.',
+        social:   'Write 5 social media posts about: ' + text + '. Include one for LinkedIn (professional), Instagram (visual/casual), Twitter/X (punchy), Facebook (community), and TikTok (trending hook). Add relevant hashtags.',
+        seo:      'Write SEO-optimized content about: ' + text + '. Include title, meta description, H1/H2 structure, and 500 words of content with natural keyword integration.',
+        blog:     'Write a complete blog post about: ' + text + '. Include engaging title, intro, 3-5 sections with subheadings, examples, and conclusion with CTA. ~800 words.',
+        email:    'Write a 5-email marketing sequence about: ' + text + '. Include subject lines, preview text, and body for: welcome, value, social proof, offer, and follow-up emails.',
+        legal:    'You are a helpful legal assistant (not a lawyer). Explain in plain language: ' + text + '. Note: this is general info, not legal advice.',
+        shopping: 'Create an organized shopping list for: ' + text + '. Group by category (produce, dairy, pantry, etc). Estimate quantities.',
+        travel:   'Create a detailed travel plan for: ' + text + '. Include itinerary, accommodation suggestions, must-see spots, food recommendations, and budget estimate.',
+        gift:     'Suggest 10 creative gift ideas for: ' + text + '. Include price range, where to buy, and why it\'s a good choice.',
+        health:   'Provide helpful general health information about: ' + text + '. Note: always consult a doctor for medical decisions.',
+        schedule: 'Create a detailed schedule/plan for: ' + text + '. Include time blocks, priorities, and actionable steps.',
+        kijiji:   'Write a compelling marketplace listing for: ' + text + '. Include attention-grabbing title, detailed description, condition, and suggested price.',
+        data:     'Analyze this data and provide insights: ' + text + '. Identify trends, anomalies, and actionable recommendations.',
+        youtube:  'Create a complete YouTube content package for: ' + text + '. Include: video title (SEO), description, tags, thumbnail concept, and full script.',
+      }[ctype] || text;
       await sendMsg(chatId, t(userId,'processing',{task:text.slice(0,60)}));
-      await executeAndReply(chatId, 'writer', text, user.language);
+      await executeAndReply(chatId, 'writer', cprompt, user.language);
       break;
 
     case 'awaiting_landing_desc':
@@ -763,7 +785,11 @@ async function handleCallback(cb) {
 
   // Resume
   if (data==='upload_resume')   { await sendMsg(chatId, t(userId,'upload_prompt')); setState(userId,'awaiting_resume'); return; }
-  if (data==='tailor_resume')   { if (!user.resumeFile) { await sendMsg(chatId,t(userId,'no_resume')); return; } await sendMsg(chatId,'✏️ What role to tailor for?'); setState(userId,'awaiting_cover_role'); return; }
+  if (data==='tailor_resume') {
+    if (!user.resumeFile) { await sendMsg(chatId, t(userId,'no_resume')); return; }
+    await sendMsg(chatId, '✏️ *Resume Tailoring*\n\nWhat job role or paste the job description to tailor for?');
+    setState(userId,'awaiting_tailor_role'); return;
+  }
   if (data==='ats_check')       { if (!user.resumeFile) { await sendMsg(chatId,t(userId,'no_resume')); return; } await sendMsg(chatId,'📋 _Running ATS check..._'); await executeAndReply(chatId, 'writer', 'Run ATS check and score this resume 1-100. List specific improvements to increase score.', user.language); return; }
   if (data==='view_resume')     { if (!user.resumeFile) { await sendMsg(chatId,t(userId,'no_resume')); return; } try { await sendDocument(chatId, path.join(users.getUserStorageDir(userId), user.resumeFile), '📄 Your resume'); } catch(e) { await sendMsg(chatId,'❌ Could not retrieve file.'); } return; }
   if (data==='resume_versions') { var files=users.listUserFiles(userId).filter(function(f){return f.match(/resume/i);}); await sendMsg(chatId,'🗂️ *Resume versions:*\n\n'+(files.length?files.map(function(f,i){return (i+1)+'. '+f;}).join('\n'):'No resume files found.\n\nUpload one first!')); return; }
