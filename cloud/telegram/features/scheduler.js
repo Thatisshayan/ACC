@@ -19,8 +19,34 @@ function send(chatId, text) {
   });
 }
 
+var BRIEFING_TZ = process.env.BRIEFING_TZ || 'America/Toronto';
+var SLOT_WINDOW_MIN = parseInt(process.env.BRIEFING_WINDOW_MIN || '30', 10);
+
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return localNow().dateKey;
+}
+
+function localNow() {
+  var parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BRIEFING_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    weekday: 'short',
+  }).formatToParts(new Date());
+  var get = function(t) {
+    var p = parts.find(function(x) { return x.type === t; });
+    return p ? p.value : '';
+  };
+  return {
+    dateKey: get('year') + '-' + get('month') + '-' + get('day'),
+    hour: parseInt(get('hour'), 10),
+    minute: parseInt(get('minute'), 10),
+    day: get('weekday'),
+  };
+}
+
+function inSlot(hour, minute, targetHour) {
+  return hour === targetHour && minute < SLOT_WINDOW_MIN;
 }
 
 function userLocation(user) {
@@ -200,41 +226,42 @@ function buildWeeklyReport(user) {
 
 var intervals = [];
 var lastRuns = { morning: null, afternoon: null, weekly: null, stale: null };
+var slotRunning = { morning: false, afternoon: false };
+
+function startBriefingSlot(type, dk) {
+  if (slotRunning[type]) return;
+  slotRunning[type] = true;
+  lastRuns[type] = dk;
+  console.log('[scheduler] Triggering', type, 'briefing | tz:', BRIEFING_TZ, '| date:', dk);
+  runBriefingSlot(type)
+    .catch(function(e) { console.log('[scheduler]', type, 'run err:', e.message); })
+    .finally(function() { slotRunning[type] = false; });
+}
 
 function start() {
   var iv = setInterval(function() {
-    var now = new Date();
-    var h   = now.getHours();
-    var m   = now.getMinutes();
-    var day = now.getDay();
-    var dk  = todayKey();
+    var now = localNow();
+    var h   = now.hour;
+    var m   = now.minute;
+    var dk  = now.dateKey;
+    var day = now.day; // Sun, Mon, ...
 
-    // 8:00am morning briefing (2-minute window)
-    if (h === 8 && m < 2 && lastRuns.morning !== dk) {
-      lastRuns.morning = dk;
-      runBriefingSlot('morning').catch(function(e) {
-        console.log('[scheduler] morning run err:', e.message);
-      });
+    if (inSlot(h, m, 8) && lastRuns.morning !== dk) {
+      startBriefingSlot('morning', dk);
     }
 
-    // 12:00pm afternoon briefing
-    if (h === 12 && m < 2 && lastRuns.afternoon !== dk) {
-      lastRuns.afternoon = dk;
-      runBriefingSlot('afternoon').catch(function(e) {
-        console.log('[scheduler] afternoon run err:', e.message);
-      });
+    if (inSlot(h, m, 12) && lastRuns.afternoon !== dk) {
+      startBriefingSlot('afternoon', dk);
     }
 
-    // Sunday 9:00am weekly report
-    if (day === 0 && h === 9 && m < 2 && lastRuns.weekly !== dk) {
+    if (day === 'Sun' && inSlot(h, m, 9) && lastRuns.weekly !== dk) {
       lastRuns.weekly = dk;
       users.getAllUsers().filter(function(u) { return u.state === 'ready' && u.name; }).forEach(function(user) {
         send(user.id, buildWeeklyReport(user));
       });
     }
 
-    // Monday 10am stale application reminders
-    if (day === 1 && h === 10 && m < 2 && lastRuns.stale !== dk) {
+    if (day === 'Mon' && inSlot(h, m, 10) && lastRuns.stale !== dk) {
       lastRuns.stale = dk;
       users.getAllUsers().filter(function(u) { return u.state === 'ready' && u.name; }).forEach(function(user) {
         var stale = jobTracker.getStaleApplications(user.id, 7);
@@ -248,13 +275,29 @@ function start() {
   }, 60000);
 
   intervals.push(iv);
-  console.log('[scheduler] Started — AI briefings 8:00 + 12:00, weekly Sun 9am, stale Mon 10am');
+  var n = localNow();
+  console.log('[scheduler] Started — briefings 8:00 + 12:00 (' + BRIEFING_TZ + ', window ' + SLOT_WINDOW_MIN + 'm) | now:', n.hour + ':' + String(n.minute).padStart(2, '0'));
 }
 
 function stop() { intervals.forEach(clearInterval); intervals = []; }
 
+/** Manual trigger — all ready users */
+function triggerBriefing(type, force) {
+  if (force) lastRuns[type] = null;
+  return runBriefingSlot(type);
+}
+
+/** Manual trigger — single user (e.g. /briefing in Telegram) */
+async function sendBriefingForUser(userId, type) {
+  var user = users.getUserProfile(userId);
+  if (!user || user.state !== 'ready' || !user.name) {
+    throw new Error('Complete onboarding first (/start)');
+  }
+  await sendBriefingToUser(user, type);
+}
+
 module.exports = {
   init, start, stop,
   buildDailyBriefing, buildWeeklyReport,
-  generateBriefingViaTaskBus, runBriefingSlot,
+  generateBriefingViaTaskBus, runBriefingSlot, triggerBriefing, sendBriefingForUser,
 };

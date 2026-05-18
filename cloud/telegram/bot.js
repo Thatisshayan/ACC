@@ -388,6 +388,16 @@ async function handleMessage(msg) {
   if (text === '/menu')        { await sendButtons(chatId, t(userId,'main_menu',{name:(user.name||'friend')}), mainMenu(userId)); return; }
   if (text === '/status')      { await handleStatus(chatId, userId); return; }
   if (text === '/help')        { await handleHelp(chatId, userId); return; }
+  if (text === '/briefing' || text === '/briefing afternoon' || text === '/briefing morning') {
+    var bType = /morning/i.test(text) ? 'morning' : 'afternoon';
+    await sendMsg(chatId, '📬 _Generating your ' + bType + ' briefing..._');
+    try {
+      await scheduler.sendBriefingForUser(userId, bType);
+    } catch (e) {
+      await sendMsg(chatId, '❌ Briefing failed: ' + e.message);
+    }
+    return;
+  }
   if (text === '/settings')    { await handleSettings(chatId, userId); return; }
   if (text === '/notes')       { await sendButtons(chatId, '📝 *Notes Vault*', notesMenu(userId)); return; }
   if (text === '/tracker')     { await sendMsg(chatId, jobTracker.formatTracker(userId, user.language)); return; }

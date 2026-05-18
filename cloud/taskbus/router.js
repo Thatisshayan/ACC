@@ -51,7 +51,9 @@ var rateLimitMap = {};
 var MAX_PER_HOUR = parseInt(process.env.MAX_TASKS_PER_USER_PER_HOUR || '30');
 
 function checkRateLimit(userId) {
-  if (!userId || userId === 'claude_operator' || userId === 'bot') return { allowed: true, remaining: MAX_PER_HOUR };
+  if (!userId || userId === 'claude_operator' || userId === 'bot' || userId === 'scheduler') {
+    return { allowed: true, remaining: MAX_PER_HOUR };
+  }
   var now = Date.now();
   var hour = 3600000;
   var times = (rateLimitMap[userId] || []).filter(function(t){ return now - t < hour; });
