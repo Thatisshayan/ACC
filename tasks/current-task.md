@@ -1,64 +1,8 @@
-# Current Task for Cursor — IMPLEMENT NOW
-
-## Task: Add /api/system/integrations/status endpoint
-
-DeepSeek already wrote the spec. Now implement it.
-
-## Files to modify:
-
-### 1. cloud/taskbus/routes.js — add this route:
-
-```javascript
-// GET /api/taskbus/integrations/status
-app.get('/integrations/status', async function(req, res) {
-  var integrations = {};
-  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','airtable','clickup'];
-  for (var i = 0; i < files.length; i++) {
-    var name = files[i];
-    try {
-      var mod = require('../integrations/' + name + '.js');
-      var health = await mod.checkHealth();
-      integrations[name] = Object.assign({ enabled: mod.enabled() }, health);
-    } catch(e) {
-      integrations[name] = { enabled: false, status: 'error', error: e.message };
-    }
-  }
-  var statuses = Object.values(integrations).map(function(i){ return i.status; });
-  var overall = statuses.every(function(s){ return s==='connected'||s==='disabled'; }) ? 'ok' : 'degraded';
-  res.json({ success: true, overall: overall, integrations: integrations, timestamp: new Date().toISOString() });
-});
-```
-
-Add it AFTER the existing /stats route.
-
-### 2. Add to .env.example:
-```
-OPENHANDS_URL=https://your-openhands.up.railway.app
-OPENHANDS_API_KEY=your-basic-auth-password
-OPENHANDS_USER=shayan
-LANGFUSE_PUBLIC_KEY=
-LANGFUSE_SECRET_KEY=
-OPENROUTER_API_KEY=
-QDRANT_URL=
-QDRANT_API_KEY=
-SENTRY_DSN=
-HELICONE_API_KEY=
-N8N_WEBHOOK_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-BROWSERBASE_API_KEY=
-BROWSERBASE_PROJECT_ID=
-FLOWISE_API_URL=
-FLOWISE_API_KEY=
-NEO4J_URI=
-NEO4J_USER=
-NEO4J_PASSWORD=
-```
-
-## Commands:
-1. node --check cloud/taskbus/routes.js
-2. git add cloud/taskbus/routes.js .env.example
-3. git commit -m "feat: /api/taskbus/integrations/status endpoint"
-4. git push origin master
-
-## Do NOT change any other files.
-## Verdict when done: test with curl http://localhost:4000/api/taskbus/integrations/status
+on
+{
+  "summary": "Generated Cursor task file for installing CrewAI and wiring it into ACC's task bus and environment configuration.",
+  "output": "# Cursor Task: Install CrewAI and Wire into ACC\n\n**Feature:** `crewai-integration`  \n**Priority:** critical  \n**Status:** pending\n\n---\n\n## Objective\n\nInstall CrewAI and its dependencies, create the integration bridge (JS + Python), wire it into the ACC task bus, and verify everything works end-to-end.\n\n---\n\n## Steps\n\n### 1. Verify Python is installed\n\nRun the following command to ensure Python is available:\n\n```bash\npython --version\n```\n\nExpected output: `Python 3.10+` (or similar). If not installed, abort and notify the user.\n\n---\n\n### 2. Install CrewAI and dependencies\n\n```bash\npip install crewai crewai-tools python-dotenv\n```\n\nVerify installation:\n\n```bash\npython -c \"import crewai; print(crewai.__version__)\"\n```\n\n---\n\n### 3. Create `cloud/integrations/crewai.js`\n\nCreate the JavaScript bridge that ACC’s task bus will call. This module will spawn the Python agent script and return results.\n\n**File:** `cloud/integrations/crewai.js`\n\n```javascript\nconst { spawn } = require('child_process');\nconst path = require('path');\n\nconst PYTHON_SCRIPT = path.join(__dirname, 'crewai_agent.py');\n\n/**\n * Send a task from ACC to CrewAI agent.\n * @param {Object} task - The task object from ACC task bus.\n * @returns {Promise<Object>} - The result from the CrewAI agent.\n */\nasync function sendTaskFromACC(task) {\n  return new Promise((resolve, reject) => {\n    const pythonProcess = spawn('python', [PYTHON_SCRIPT, JSON.stringify(task)]);\n\n    let stdout = '';\n    let stderr = '';\n\n    pythonProcess.stdout.on('data', (data) => {\n      stdout += data.toString();\n    });\n\n    pythonProcess.stderr.on('data', (data) => {\n      stderr += data.toString();\n    });\n\n    pythonProcess.on('close', (code) => {\n      if (code !== 0) {\n        return reject(new Error(`CrewAI agent exited with code ${code}: ${stderr}`));\n      }\n      try {\n        const result = JSON.parse(stdout);\n        resolve(result);\n      } catch (err) {\n        reject(new Error(`Failed to parse CrewAI output: ${stdout}`));\n      }\n    });\n\n    pythonProcess.on('error', (err) => {\n      reject(err);\n    });\n  });\n}\n\n/**\n * Health check for CrewAI integration.\n * @returns {Promise<Object>} - Status of the integration.\n */\nasync function checkHealth() {\n  try {\n    const result = await sendTaskFromACC({ type: 'health_check' });\n    return { status: 'ok', result };\n  } catch (err) {\n    return { status: 'error', message: err.message };\n  }\n}\n\nmodule.exports = { sendTaskFromACC, checkHealth };\n```\n\n---\n\n### 4. Create `cloud/integrations/crewai_agent.py`\n\nCreate the Python agent script that CrewAI will execute.\n\n**File:** `cloud/integrations/crewai_agent.py`\n\n```python\nimport sys\nimport json\nimport os\nfrom dotenv import load_dotenv\n\nload_dotenv()\n\nfrom crewai import Agent, Task, Crew\n\ndef handle_task(task_json):\n    \"\"\"\n    Process a task from ACC using CrewAI.\n    \"\"\"\n    task_data = json.loads(task_json)\n\n    # Health check\n    if task_data.get('type') == 'health_check':\n        return {\"status\": \"healthy\", \"agent\": \"crewai\"}\n\n    # Create a simple agent\n    agent = Agent(\n        role='ACC Assistant',\n        goal='Complete the assigned task from ACC.',\n        backstory='You are an AI agent integrated into the ACC platform.',\n        verbose=True,\n        allow_delegation=False\n    )\n\n    # Create a task for the agent\n    crew_task = Task(\n        description=task_data.get('description', 'No description provided.'),\n        agent=agent,\n        expected_output='A JSON object with the result.'\n    )\n\n    # Create a crew and execute\n    crew = Crew(\n        agents=[agent],\n        tasks=[crew_task],\n        verbose=True\n    )\n\n    result = crew.kickoff()\n\n    return {\"status\": \"completed\", \"result\": result}\n\nif __name__ == '__main__':\n    if len(sys.argv) < 2:\n        print(json.dumps({\"error\": \"No task provided\"}))\n        sys.exit(1)\n\n    task_json = sys.argv[1]\n    try:\n        output = handle_task(task_json)\n        print(json.dumps(output))\n    except Exception as e:\n        print(json.dumps({\"error\": str(e)}))\n        sys.exit(1)\n```\n\n---\n\n### 5. Wire into `cloud/taskbus/router.js`\n\nAdd the following logic to the router so that when `assigned_agent === \"crewai\"`, it delegates to the CrewAI bridge.\n\n**File:** `cloud/taskbus/router.js`\n\nFind the section where tasks are dispatched based on `assigned_agent`. Add:\n\n```javascript\nconst crewai = require('../integrations/crewai.js');\n\n// Inside the dispatch function:\nif (assigned_agent === 'crewai') {\n  return crewai.sendTaskFromACC(task);\n}\n```\n\nMake sure the import is at the top of the file.\n\n---\n\n### 6. Update `.env.example`\n\nAdd the following environment variables:\n\n```\nCREWAI_ENABLED=true\nCREWAI_MODEL=deepseek-chat\n```\n\n---\n\n### 7. Syntax check JavaScript files\n\n```bash\nnode --check cloud/integrations/crewai.js\nnode --check cloud/taskbus/router.js\n```\n\nFix any syntax errors.\n\n---\n\n### 8. Test the integration\n\nRun a health check:\n\n```bash\nnode -e \"require('./cloud/integrations/crewai.js').checkHealth().then(console.log)\"\n```\n\nExpected output:\n```\n{ status: 'ok', result: { status: 'healthy', agent: 'crewai' } }\n```\n\n---\n\n### 9. Commit and push\n\n```bash\ngit add .\ngit commit -m \"feat: integrate CrewAI agent into ACC task bus\"\ngit push origin main\n```\n\n---\n\n## Verification Checklist\n\n- [ ] Python 3.10+ installed\n- [ ] `crewai` and `crewai-tools` installed via pip\n- [ ] `cloud/integrations/crewai.js` created and exports `sendTaskFromACC` and `checkHealth`\n- [ ] `cloud/integrations/crewai_agent.py` created and handles tasks\n- [ ] `cloud/taskbus/router.js` dispatches to CrewAI when `assigned_agent === 'crewai'`\n- [ ] `.env.example` includes `CREWAI_ENABLED=true` and `CREWAI_MODEL=deepseek-chat`\n- [ ] `node --check` passes on all JS files\n- [ ] Health check returns `{ status: 'ok', result: { status: 'healthy', agent: 'crewai' } }`\n- [ ] Changes committed and pushed\n\n---\n\n## Notes\n\n- The Python agent uses `deepseek-chat` as the default model (configurable via `.env`).\n- The bridge uses `child_process.spawn` to run the Python script synchronously per task.\n- For REDACTED, consider using a persistent Python process or message queue for better performance.\n- Ensure the `.env` file is loaded in the Python script (already handled via `python-dotenv`).",
+  "files_changed": [
+    "cloud/integrations/crewai.js",
+    "cloud/integrations/crewai_agent.py",
+    "cloud/taskbus/router
