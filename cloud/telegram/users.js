@@ -81,8 +81,10 @@ function getAllUsers() {
 
 function getUserCount() { return getAllUsers().length; }
 
+const MAX_USERS = parseInt(process.env.MAX_USERS || '100');
+
 function isAtCapacity() {
-  return getUserCount() >= 10;
+  return getUserCount() >= MAX_USERS;
 }
 
 function isAllowed(userId) {
