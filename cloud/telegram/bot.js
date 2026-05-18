@@ -151,12 +151,9 @@ function getACC(p) {
   });
 }
 
-// ── executeAndReply: queue task, poll for result, send back ──────────────────
+// ── executeAndReply: Task Bus ONLY — no old executor, no Claude ──────────────
 async function executeAndReply(chatId, agentType, prompt, language) {
-  var MAX_WAIT = 28000;
-  var POLL     = 2000;
   try {
-    // First try Task Bus directly — faster and has real AI chain
     var tbRes = await callACC('/api/taskbus/task', {
       title: prompt.slice(0, 80),
       instruction: prompt,
@@ -164,34 +161,11 @@ async function executeAndReply(chatId, agentType, prompt, language) {
       automation_mode: 'semi_auto',
       approval_required: false,
       created_by: 'bot',
-      meta: { language: language || 'en' }
     });
     var routing = tbRes.routing || {};
-    if (routing.status === 'done' || routing.status === 'completed') {
-      var out = routing.output || routing.summary;
-      if (out) { await sendMsg(chatId, String(out).slice(0, 3500)); return; }
-    }
-    // Fallback: old executor
-    var res = await callACC('/api/execute', {
-      agentType: agentType,
-      payload:   { prompt: prompt, mode: 'write', language: language || 'en' },
-      meta:      { role: 'Agent', userId: 'bot', sandbox: true }
-    });
-    var taskId = res.taskId || res.id;
-    if (!taskId) { await sendMsg(chatId, '✅ Queued! Send /latesttask to see result.'); return; }
-    var start = Date.now();
-    while (Date.now() - start < MAX_WAIT) {
-      await new Promise(function(r){ setTimeout(r, POLL); });
-      var t = await getACC('/api/task/' + taskId);
-      var task = t.task || t;
-      if (task.status === 'completed' || task.status === 'done') {
-        var output = (task.result && (task.result.output || task.result.text || task.result.summary)) || task.output;
-        await sendMsg(chatId, output ? String(output).slice(0, 3500) : '✅ Done! Send /latesttask for result.');
-        return;
-      }
-      if (task.status === 'failed') { await sendMsg(chatId, '❌ ' + (task.error || 'Task failed')); return; }
-    }
-    await sendMsg(chatId, '⏳ Still processing... Send /latesttask to check.');
+    var out = routing.output || routing.summary;
+    if (out) { await sendMsg(chatId, String(out).slice(0, 3500)); return; }
+    await sendMsg(chatId, '✅ Done! Send /latesttask to see the full result.');
   } catch(e) {
     await sendMsg(chatId, '❌ Error: ' + e.message);
   }
@@ -419,19 +393,8 @@ async function handleMessage(msg) {
     if (tbCreated) return;
   }
 
-  // Free text → generic AI task via ACC server
-  await sendMsg(chatId, t(userId, 'processing', { task: text.slice(0,80) }));
-  try {
-    var u2 = users.getUserProfile(userId) || {};
-    var res = await callACC('/api/execute', {
-      agentType: 'architect',
-      payload:   { prompt: text, mode: 'plan', language: u2.language||'en', userId: userId, userName: u2.name, resumeFile: u2.resumeFile, jobPrefs: u2.jobPrefs },
-      meta:      { role: u2.role||'member', userId: userId, sandbox: true }
-    });
-    await executeAndReply(chatId, 'writer', text, u2.language||'en');
-  } catch(e) {
-    await sendMsg(chatId, '⚠️ _Server not reachable. Run_ `npm start` _in the project folder._');
-  }
+  // Free text → Task Bus (DeepSeek only, no Claude)
+  await executeAndReply(chatId, 'writer', text, (users.getUserProfile(userId)||{}).language||'en');
 }
 
 // ── Voice handler ─────────────────────────────────────────────────────────────
