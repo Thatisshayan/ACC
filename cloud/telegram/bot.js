@@ -141,6 +141,62 @@ function callACC(p, body) {
   });
 }
 
+function getACC(p) {
+  return new Promise(function(resolve) {
+    var req = http.request({ hostname: 'localhost', port: parseInt(ACC_PORT), path: p, method: 'GET' }, function(res) {
+      var d = ''; res.on('data', function(c){d+=c;}); res.on('end', function(){ try { resolve(JSON.parse(d)); } catch(e){ resolve({}); } });
+    });
+    req.on('error', function(){ resolve({}); });
+    req.end();
+  });
+}
+
+// ── executeAndReply: queue task, poll for result, send back ──────────────────
+async function executeAndReply(chatId, agentType, prompt, language) {
+  var MAX_WAIT = 28000;
+  var POLL     = 2000;
+  try {
+    // First try Task Bus directly — faster and has real AI chain
+    var tbRes = await callACC('/api/taskbus/task', {
+      title: prompt.slice(0, 80),
+      instruction: prompt,
+      assigned_agent: 'claude',
+      automation_mode: 'semi_auto',
+      approval_required: false,
+      created_by: 'bot',
+      meta: { language: language || 'en' }
+    });
+    var routing = tbRes.routing || {};
+    if (routing.status === 'done' || routing.status === 'completed') {
+      var out = routing.output || routing.summary;
+      if (out) { await sendMsg(chatId, String(out).slice(0, 3500)); return; }
+    }
+    // Fallback: old executor
+    var res = await callACC('/api/execute', {
+      agentType: agentType,
+      payload:   { prompt: prompt, mode: 'write', language: language || 'en' },
+      meta:      { role: 'Agent', userId: 'bot', sandbox: true }
+    });
+    var taskId = res.taskId || res.id;
+    if (!taskId) { await sendMsg(chatId, '✅ Queued! Send /latesttask to see result.'); return; }
+    var start = Date.now();
+    while (Date.now() - start < MAX_WAIT) {
+      await new Promise(function(r){ setTimeout(r, POLL); });
+      var t = await getACC('/api/task/' + taskId);
+      var task = t.task || t;
+      if (task.status === 'completed' || task.status === 'done') {
+        var output = (task.result && (task.result.output || task.result.text || task.result.summary)) || task.output;
+        await sendMsg(chatId, output ? String(output).slice(0, 3500) : '✅ Done! Send /latesttask for result.');
+        return;
+      }
+      if (task.status === 'failed') { await sendMsg(chatId, '❌ ' + (task.error || 'Task failed')); return; }
+    }
+    await sendMsg(chatId, '⏳ Still processing... Send /latesttask to check.');
+  } catch(e) {
+    await sendMsg(chatId, '❌ Error: ' + e.message);
+  }
+}
+
 // ── Inline keyboards ──────────────────────────────────────────────────────────
 function mainMenu(userId) {
   var fa = (users.getUserProfile(userId)||{}).language === 'fa';
@@ -372,7 +428,7 @@ async function handleMessage(msg) {
       payload:   { prompt: text, mode: 'plan', language: u2.language||'en', userId: userId, userName: u2.name, resumeFile: u2.resumeFile, jobPrefs: u2.jobPrefs },
       meta:      { role: u2.role||'member', userId: userId, sandbox: true }
     });
-    await sendMsg(chatId, '✅ *Task queued!*\nID: `' + (res.taskId||res.id||'submitted') + '`\n_I\'ll notify you when done._');
+    await executeAndReply(chatId, 'writer', text, u2.language||'en');
   } catch(e) {
     await sendMsg(chatId, '⚠️ _Server not reachable. Run_ `npm start` _in the project folder._');
   }
@@ -497,7 +553,7 @@ async function handleStateInput(chatId, userId, text, state) {
     case 'awaiting_cover_role':
       if (!user.resumeFile) { await sendMsg(chatId, t(userId,'no_resume')); break; }
       await sendMsg(chatId, '✍️ _Writing your cover letter for_ *' + text + '*_..._');
-      await callACC('/api/execute', { agentType: 'writer', payload: { prompt: 'Write a professional cover letter for: ' + text + '. Use the candidate resume on file.', mode: 'write', userId: userId, resumeFile: user.resumeFile }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', 'Write a professional cover letter for role: ' + text + '. 3 paragraphs, compelling and specific.', user.language);
       break;
 
     case 'awaiting_interview_role':
@@ -510,7 +566,7 @@ async function handleStateInput(chatId, userId, text, state) {
 
     case 'awaiting_salary_input':
       await sendMsg(chatId, '💰 _Analyzing the offer and preparing negotiation strategy..._');
-      await callACC('/api/execute', { agentType: 'writer', payload: { prompt: 'Act as a salary negotiation coach. Analyze this job offer and give specific counter-offer scripts and negotiation strategy: ' + text, mode: 'write', language: user.language||'en' }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', 'Salary negotiation coach: analyze this offer and give exact counter-offer scripts and numbers: ' + text, user.language);
       break;
 
     case 'awaiting_note_title':
@@ -537,33 +593,33 @@ async function handleStateInput(chatId, userId, text, state) {
 
     case 'awaiting_content_topic':
       await sendMsg(chatId, t(userId,'processing',{task:text.slice(0,60)}));
-      await callACC('/api/execute', { agentType: 'writer', payload: { prompt: text, mode: 'write', contentType: state.data.type||'content', language: user.language }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', text, user.language);
       break;
 
     case 'awaiting_landing_desc':
       await sendMsg(chatId, t(userId,'processing',{task:'Landing page: '+text.slice(0,50)}));
-      await callACC('/api/execute', { agentType: 'engineer', payload: { prompt: 'Create a landing page for: ' + text, mode: 'build' }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', 'Create compelling landing page copy for: ' + text + '. Include headline, 3 benefits, CTA.', user.language);
       break;
 
     case 'awaiting_chef_request':
       await sendMsg(chatId, '🍳 _Finding recipes for you..._');
-      await callACC('/api/execute', { agentType: 'writer', payload: { prompt: 'You are a personal chef AI. The user asks: ' + text + '. Give 3 meal options with full recipes, ingredients list, and cooking time. Make it practical and delicious.', mode: 'write', language: user.language||'en' }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', 'You are a personal chef AI. User asks: ' + text + '. Give 3 meal options with full recipes, ingredients and cooking time.', user.language);
       break;
 
     case 'awaiting_translate':
       var targetLang = user.language==='fa' ? 'English' : 'Persian/Farsi';
       await sendMsg(chatId, '🌐 _Translating to ' + targetLang + '..._');
-      await callACC('/api/execute', { agentType: 'writer', payload: { prompt: 'Translate this to ' + targetLang + ': ' + text, mode: 'write' }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', 'Translate to ' + targetLang + ', output translation only: ' + text, user.language);
       break;
 
     case 'awaiting_research':
       await sendMsg(chatId, t(userId,'processing',{task:'Research: '+text.slice(0,50)}));
-      await callACC('/api/execute', { agentType: 'browser', payload: { mode: 'search', query: text }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', 'Research and summarize with key facts and insights: ' + text, user.language);
       break;
 
     case 'awaiting_brainstorm':
       await sendMsg(chatId, t(userId,'processing',{task:'Brainstorm: '+text.slice(0,50)}));
-      await callACC('/api/execute', { agentType: 'architect', payload: { prompt: 'Generate 10 creative ideas for: ' + text + '. Include pros/cons for top 3.', mode: 'plan', language: user.language||'en' }, meta: { role: 'member', userId: userId, sandbox: true } });
+      await executeAndReply(chatId, 'writer', 'Generate 10 creative ideas for: ' + text + '. Include pros/cons for top 3.', user.language);
       break;
 
     default:
@@ -745,7 +801,7 @@ async function handleCallback(cb) {
   // Resume
   if (data==='upload_resume')   { await sendMsg(chatId, t(userId,'upload_prompt')); setState(userId,'awaiting_resume'); return; }
   if (data==='tailor_resume')   { if (!user.resumeFile) { await sendMsg(chatId,t(userId,'no_resume')); return; } await sendMsg(chatId,'✏️ What role to tailor for?'); setState(userId,'awaiting_cover_role'); return; }
-  if (data==='ats_check')       { if (!user.resumeFile) { await sendMsg(chatId,t(userId,'no_resume')); return; } await sendMsg(chatId,'📋 _Running ATS check..._'); await callACC('/api/execute',{agentType:'writer',payload:{prompt:'Run ATS check on this resume. Score 1-100 and list specific improvements.',mode:'validate',userId:userId,resumeFile:user.resumeFile},meta:{role:'member',userId:userId,sandbox:true}}); return; }
+  if (data==='ats_check')       { if (!user.resumeFile) { await sendMsg(chatId,t(userId,'no_resume')); return; } await sendMsg(chatId,'📋 _Running ATS check..._'); await executeAndReply(chatId, 'writer', 'Run ATS check and score this resume 1-100. List specific improvements to increase score.', user.language); return; }
   if (data==='view_resume')     { if (!user.resumeFile) { await sendMsg(chatId,t(userId,'no_resume')); return; } try { await sendDocument(chatId, path.join(users.getUserStorageDir(userId), user.resumeFile), '📄 Your resume'); } catch(e) { await sendMsg(chatId,'❌ Could not retrieve file.'); } return; }
   if (data==='resume_versions') { var files=users.listUserFiles(userId).filter(function(f){return f.match(/resume/i);}); await sendMsg(chatId,'🗂️ *Resume versions:*\n\n'+(files.length?files.map(function(f,i){return (i+1)+'. '+f;}).join('\n'):'No resume files found.\n\nUpload one first!')); return; }
 
