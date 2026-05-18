@@ -157,7 +157,26 @@ async function routeTask(taskId) {
     log('[router] OpenHands not configured — falling through to provider chain');
   }
 
-  // ── 4. AUTO-EXECUTE via provider fallback chain ────────────────────────────
+  // ── 3c. CrewAI — multi-agent Python framework ─────────────────────────────
+  if (task.assigned_agent === 'crewai') {
+    var crewai = require('../integrations/crewai.js');
+    if (crewai.enabled()) {
+      log('[router] Routing to CrewAI multi-agent framework...');
+      store.updateTask(taskId, { status: 'in_progress' });
+      var crResult = await crewai.sendTaskFromACC(task);
+      var crR = store.addResult({
+        task_id: taskId, provider_used: 'crewai',
+        is_real_ai_result: true, cost_tier: 'local_free',
+        provider_chain_attempted: ['crewai'],
+        output: crResult.output || '',
+        summary: crResult.success ? (crResult.summary || 'CrewAI completed') : crResult.error,
+      });
+      store.updateTask(taskId, { status: crResult.success ? 'done' : 'failed', provider_used: 'crewai' });
+      return { status: crResult.success ? 'done' : 'failed', taskId, resultId: crR.id,
+        provider_used: 'crewai', output: crResult.output };
+    }
+    log('[router] CrewAI not enabled — falling through to provider chain');
+  }
   store.updateTask(taskId, { status: 'in_progress' });
   store.addMessage(taskId, 'system', task.assigned_agent,
     'Executing | mode: ' + task.automation_mode + ' | chain: deepseek→ollama→claude→smart_stub');

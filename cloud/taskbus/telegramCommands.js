@@ -456,6 +456,9 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   if (/^tell openhands/i.test(text))     agent = 'openhands';
   if (/^openhands:/i.test(text))         agent = 'openhands';
   if (/^code:/i.test(text))              agent = 'openhands';
+  if (/^tell crewai/i.test(text))        agent = 'crewai';
+  if (/^crewai:/i.test(text))            agent = 'crewai';
+  if (/^crew:/i.test(text))              agent = 'crewai';
 
   var task = store.createTask({
     title:             instruction.slice(0, 80),
