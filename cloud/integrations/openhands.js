@@ -16,6 +16,10 @@ function enabled() { return !!BASE; }
 function headers() {
   var h = { 'Content-Type': 'application/json' };
   if (KEY) h['Authorization'] = 'Bearer ' + KEY;
+  // Basic auth support (Railway OpenHands template uses basic auth)
+  var user = process.env.OPENHANDS_USER || 'shayan';
+  var pass = process.env.OPENHANDS_API_KEY || KEY;
+  if (user && pass) h['Authorization'] = 'Basic ' + Buffer.from(user + ':' + pass).toString('base64');
   return h;
 }
 
