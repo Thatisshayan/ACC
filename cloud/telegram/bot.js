@@ -151,10 +151,10 @@ function getACC(p) {
   });
 }
 
-// ── executeAndReply: Task Bus ONLY — no old executor, no Claude ──────────────
+// ── executeAndReply: calls Task Bus, waits for real result, sends it back ─────
 async function executeAndReply(chatId, agentType, prompt, language) {
   try {
-    var tbRes = await callACC('/api/taskbus/task', {
+    var tbRes  = await callACC('/api/taskbus/task', {
       title: prompt.slice(0, 80),
       instruction: prompt,
       assigned_agent: 'claude',
@@ -162,10 +162,54 @@ async function executeAndReply(chatId, agentType, prompt, language) {
       approval_required: false,
       created_by: 'bot',
     });
+
+    // The routing result is returned synchronously from Task Bus
     var routing = tbRes.routing || {};
     var out = routing.output || routing.summary;
-    if (out) { await sendMsg(chatId, String(out).slice(0, 3500)); return; }
-    await sendMsg(chatId, '✅ Done! Send /latesttask to see the full result.');
+
+    // If we got a real result immediately — send it
+    if (out && String(out).trim().length > 10) {
+      await sendMsg(chatId, String(out).slice(0, 3800));
+      return;
+    }
+
+    // Otherwise poll the task result via taskId
+    var taskId = tbRes.task && tbRes.task.id;
+    if (!taskId) {
+      await sendMsg(chatId, '⚠️ Task Bus unavailable. Try again in a moment.');
+      return;
+    }
+
+    var start   = Date.now();
+    var timeout = 28000;
+    while (Date.now() - start < timeout) {
+      await new Promise(function(r){ setTimeout(r, 1800); });
+      var tr      = await getACC('/api/taskbus/task/' + taskId);
+      var task    = tr.task || {};
+      var results = tr.results || [];
+      if (!task.status) continue;
+
+      if (task.status === 'done' || task.status === 'completed') {
+        // Get latest result
+        var latest  = results[results.length - 1] || {};
+        var answer  = latest.output || latest.summary || task.summary;
+        if (answer && String(answer).trim().length > 5) {
+          await sendMsg(chatId, String(answer).slice(0, 3800));
+        } else {
+          await sendMsg(chatId, '✅ Done! Send /latesttask to see result.');
+        }
+        return;
+      }
+      if (task.status === 'failed') {
+        await sendMsg(chatId, '❌ ' + (task.error || 'Task failed'));
+        return;
+      }
+      if (task.status === 'rate_limited') {
+        await sendMsg(chatId, '⏳ ' + (task.message || 'Rate limit. Try again in a few minutes.'));
+        return;
+      }
+    }
+    await sendMsg(chatId, '⏳ Still working... Send /latesttask to check when ready.');
   } catch(e) {
     await sendMsg(chatId, '❌ Error: ' + e.message);
   }
