@@ -38,9 +38,11 @@ function isFullAutoExternalRisk(task) {
 }
 
 // ── Manual agents — never auto-execute ───────────────────────────────────────
+// openhands is NOT manual — routed via OpenHands connector (§3b)
 var MANUAL_AGENTS = ['gemini', 'notebooklm', 'chatgpt'];
 
 function isManualAgent(agentId) {
+  if (agentId === 'openhands') return false;
   return MANUAL_AGENTS.indexOf(agentId) !== -1;
 }
 
