@@ -11,11 +11,12 @@ const ollama     = require('../connectors/ollama.js');
 const { buildSmartStub } = require('./smartStub.js');
 
 // ── Provider order from env or default ────────────────────────────────────────
-var DEFAULT_ORDER = ['deepseek', 'ollama', 'claude', 'smart_stub'];
+// Claude REMOVED — credits depleted. Chain: DeepSeek → Ollama → Smart Stub
+var DEFAULT_ORDER = ['deepseek', 'ollama', 'smart_stub'];
 function getProviderOrder() {
   var env = process.env.TASKBUS_PROVIDER_ORDER;
   if (!env) return DEFAULT_ORDER;
-  return env.split(',').map(function(p) { return p.trim().toLowerCase(); });
+  return env.split(',').map(function(p) { return p.trim().toLowerCase(); }).filter(function(p){ return p !== 'claude'; });
 }
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
