@@ -134,6 +134,27 @@ async function routeTask(taskId) {
     return { status: 'assigned', taskId: taskId, agent: 'clickup', note: 'CLICKUP_API_KEY missing — manual' };
   }
 
+  // ── 3b. OpenHands — AI coding agent ───────────────────────────────────────
+  if (task.assigned_agent === 'openhands') {
+    var oh = require('../integrations/openhands.js');
+    if (oh.enabled()) {
+      log('[router] Routing to OpenHands coding agent...');
+      store.updateTask(taskId, { status: 'in_progress' });
+      var ohResult = await oh.sendTaskFromACC(task);
+      var ohR = store.addResult({
+        task_id: taskId, provider_used: 'openhands',
+        is_real_ai_result: true, cost_tier: 'external_agent',
+        provider_chain_attempted: ['openhands'],
+        output: ohResult.output || ohResult.pr_url || '',
+        summary: ohResult.success ? 'OpenHands completed' + (ohResult.pr_url ? ': PR at ' + ohResult.pr_url : '') : ohResult.error,
+      });
+      store.updateTask(taskId, { status: ohResult.success ? 'done' : 'failed', provider_used: 'openhands' });
+      return { status: ohResult.success ? 'done' : 'failed', taskId, resultId: ohR.id,
+        provider_used: 'openhands', output: ohResult.output, pr_url: ohResult.pr_url };
+    }
+    log('[router] OpenHands not configured — falling through to provider chain');
+  }
+
   // ── 4. AUTO-EXECUTE via provider fallback chain ────────────────────────────
   store.updateTask(taskId, { status: 'in_progress' });
   store.addMessage(taskId, 'system', task.assigned_agent,
