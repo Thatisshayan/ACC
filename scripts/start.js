@@ -1,6 +1,8 @@
 // scripts/start.js
-// Unified startup — loads .env, launches cloud API + worker.
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+// Load .env only in local dev — Railway injects vars directly
+if (process.env.NODE_ENV !== 'REDACTED') {
+  try { require('dotenv').config({ path: require('path').join(__dirname, '../.env') }); } catch(e) {}
+}
 
 const { startWorker } = require("../cloud/worker.js");
 
