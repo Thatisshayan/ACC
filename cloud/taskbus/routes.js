@@ -34,7 +34,7 @@ app.get('/stats', function(req, res) {
 // ── GET /api/taskbus/integrations/status ────────────────────────────────────────
 app.get('/integrations/status', async function(req, res) {
   var integrations = {};
-  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','crewai','airtable','clickup'];
+  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','crewai','grok','perplexity','airtable','clickup'];
   for (var i = 0; i < files.length; i++) {
     var name = files[i];
     try {

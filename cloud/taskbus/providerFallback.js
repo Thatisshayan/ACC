@@ -8,6 +8,7 @@
 const axios      = require('axios');
 const { log }    = require('../utils/logger.js');
 const ollama     = require('../connectors/ollama.js');
+const perplexity = require('../integrations/perplexity.js');
 const { buildSmartStub } = require('./smartStub.js');
 
 // ── Provider order from env or default ────────────────────────────────────────
@@ -40,6 +41,29 @@ function parseJSON(raw) {
   catch(_) { return { summary: 'AI responded (raw)', output: raw, files_changed: [], risks: [], next_request: '' }; }
 }
 
+function isResearchTask(task) {
+  return String(task.feature_ref || '').toLowerCase().indexOf('research') !== -1;
+}
+
+function buildProviderSuccess(result, attempted, reasons, task) {
+  var data = result.data || {};
+  return {
+    provider_used:            result.provider,
+    provider_chain_attempted: attempted,
+    fallback_reason:          attempted.length > 1
+      ? 'Tried: ' + attempted.slice(0, -1).join(', ') + '. Reasons: ' + JSON.stringify(reasons)
+      : null,
+    execution_mode:           task.automation_mode || 'semi_auto',
+    cost_tier:                result.cost_tier,
+    is_real_ai_result:        result.provider !== 'smart_stub',
+    summary:                  data.summary       || '',
+    output:                   data.output        || '',
+    files_changed:            data.files_changed || [],
+    risks:                    data.risks         || [],
+    next_request:             data.next_request  || '',
+  };
+}
+
 function sanitizeProviderError(err) {
   var msg = String(err || 'provider unavailable');
   msg = msg.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]');
@@ -47,6 +71,34 @@ function sanitizeProviderError(err) {
   msg = msg.replace(/sk-[A-Za-z0-9_-]+/g, '[redacted_key]');
   if (msg.length > 220) msg = msg.slice(0, 220) + '...';
   return msg;
+}
+
+// ── Provider 0: Perplexity (research tasks only) ────────────────────────────────
+async function tryPerplexity(task) {
+  if (!perplexity.enabled()) return { tried: false, reason: 'PERPLEXITY_API_KEY not set' };
+
+  log('[provider] Trying Perplexity (research)...');
+  var res = await perplexity.research(buildUserPrompt(task));
+  if (!res || !res.success || !res.text) {
+    var err = (res && res.error) || 'no response';
+    log('[provider] Perplexity failed:', String(err).slice(0, 120));
+    return { tried: true, success: false, reason: err };
+  }
+
+  log('[provider] Perplexity succeeded | citations:', (res.citations || []).length);
+  return {
+    tried: true,
+    success: true,
+    provider: 'perplexity',
+    cost_tier: 'research',
+    data: {
+      summary: 'Research completed via Perplexity (' + (res.citations || []).length + ' sources)',
+      output: res.text,
+      files_changed: [],
+      risks: [],
+      next_request: '',
+    },
+  };
 }
 
 // ── Provider 1: DeepSeek ──────────────────────────────────────────────────────
@@ -128,6 +180,15 @@ function useSmartStub(task) {
 async function getProvidersStatus() {
   var ollamaHealth = await ollama.checkHealth();
   return {
+    perplexity: {
+      name:      'Perplexity',
+      status:    perplexity.enabled() ? 'key_set' : 'no_key',
+      note:      perplexity.enabled()
+        ? 'Used for feature_ref containing "research" (before DeepSeek)'
+        : 'Add PERPLEXITY_API_KEY for online research tasks',
+      cost_tier: 'research',
+      role:      'research_primary',
+    },
     deepseek: {
       name:      'DeepSeek',
       status:    process.env.DEEPSEEK_API_KEY ? 'key_set' : 'no_key',
@@ -172,9 +233,16 @@ async function getProvidersStatus() {
 
 // ── Main fallback chain ────────────────────────────────────────────────────────
 async function executeWithProviderFallback(task) {
-  var order    = getProviderOrder();
+  var order     = getProviderOrder();
   var attempted = [];
-  var reasons  = {};
+  var reasons   = {};
+
+  if (isResearchTask(task)) {
+    var pxResult = await tryPerplexity(task);
+    if (pxResult.tried) attempted.push('perplexity');
+    if (pxResult.success) return buildProviderSuccess(pxResult, attempted, reasons, task);
+    if (pxResult.tried && !pxResult.success) reasons.perplexity = pxResult.reason;
+  }
 
   for (var i = 0; i < order.length; i++) {
     var provider = order[i];
@@ -190,23 +258,7 @@ async function executeWithProviderFallback(task) {
     if (!result.tried) { log('[provider] Skipping', provider, '—', result.reason); continue; }
     if (!result.success) { reasons[provider] = result.reason; continue; }
 
-    // Success — enrich with full metadata
-    var data = result.data || {};
-    return {
-      provider_used:            result.provider,
-      provider_chain_attempted: attempted,
-      fallback_reason:          attempted.length > 1
-        ? 'Tried: ' + attempted.slice(0, -1).join(', ') + '. Reasons: ' + JSON.stringify(reasons)
-        : null,
-      execution_mode:           task.automation_mode || 'semi_auto',
-      cost_tier:                result.cost_tier,
-      is_real_ai_result:        result.provider !== 'smart_stub',
-      summary:                  data.summary       || '',
-      output:                   data.output        || '',
-      files_changed:            data.files_changed || [],
-      risks:                    data.risks         || [],
-      next_request:             data.next_request  || '',
-    };
+    return buildProviderSuccess(result, attempted, reasons, task);
   }
 
   // Should never reach here — smart_stub is always last
