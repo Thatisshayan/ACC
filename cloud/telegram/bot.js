@@ -322,7 +322,7 @@ async function handleMessage(msg) {
       await sendMsg(chatId, t(userId, 'full')); return;
     }
     if (user.state === 'new') {
-      await sendMsg(chatId, t(userId, 'welcome_new'));
+      await sendMsg(chatId, '👋 *Welcome to ACC v2!*\n\nI\'m your personal AI assistant. I can:\n💼 Find jobs & tailor your resume\n✍️ Write content & translate\n📝 Save encrypted notes\n🍳 Suggest recipes\n🎯 Run mock interviews\n\nFirst, what\'s your *first name*?');
       users.updateUser(userId, { state: 'onboarding_name' }); return;
     }
     await sendButtons(chatId, t(userId, 'main_menu', { name: user.name || 'friend' }), mainMenu(userId));

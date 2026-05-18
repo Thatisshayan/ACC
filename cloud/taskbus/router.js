@@ -44,6 +44,25 @@ function isManualAgent(agentId) {
   return MANUAL_AGENTS.indexOf(agentId) !== -1;
 }
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+var rateLimitMap = {};
+var MAX_PER_HOUR = parseInt(process.env.MAX_TASKS_PER_USER_PER_HOUR || '30');
+
+function checkRateLimit(userId) {
+  if (!userId || userId === 'claude_operator' || userId === 'bot') return { allowed: true, remaining: MAX_PER_HOUR };
+  var now = Date.now();
+  var hour = 3600000;
+  var times = (rateLimitMap[userId] || []).filter(function(t){ return now - t < hour; });
+  rateLimitMap[userId] = times;
+  if (times.length >= MAX_PER_HOUR) {
+    var oldest = times[0];
+    var resetIn = Math.ceil((oldest + hour - now) / 1000);
+    return { allowed: false, remaining: 0, resetIn: resetIn };
+  }
+  rateLimitMap[userId].push(now);
+  return { allowed: true, remaining: MAX_PER_HOUR - times.length - 1 };
+}
+
 // ── Main router ───────────────────────────────────────────────────────────────
 async function routeTask(taskId) {
   var task = store.getTask(taskId);
@@ -56,6 +75,14 @@ async function routeTask(taskId) {
     '| "' + task.title.slice(0,45) + '"',
     '| agent:', task.assigned_agent,
     '| mode:', task.automation_mode);
+
+  // ── 0. RATE LIMIT CHECK ────────────────────────────────────────────────────
+  var rl = checkRateLimit(task.created_by || task.userId);
+  if (!rl.allowed) {
+    store.updateTask(taskId, { status: 'failed', error: 'Rate limit exceeded' });
+    return { status: 'rate_limited', taskId: taskId,
+      message: '⏳ Slow down! Max ' + MAX_PER_HOUR + ' tasks/hour. Try again in ' + Math.ceil(rl.resetIn/60) + ' min.' };
+  }
 
   // ── 1. SAFETY GATE — runs before anything else ─────────────────────────────
   if (isFullAutoExternalRisk(task)) {
