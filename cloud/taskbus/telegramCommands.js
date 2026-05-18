@@ -356,7 +356,25 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
   if (text === '/latestresult') { await run('/latestresult',function(){ return handleLatestResult(chatId, sendFn); });return true; }
   if (text === '/taskhelp')     { await run('/taskhelp',    function(){ return handleHelp(chatId, sendFn); });        return true; }
 
-  // /notebook — export completed tasks as NotebookLM Markdown packet
+  // ── goal: prefix — parallel workflow engine ────────────────────────────────
+  if (text.toLowerCase().startsWith('goal:') || text.toLowerCase().startsWith('/goal ')) {
+    await run('goal', async function() {
+      var goal = text.replace(/^goal:\s*/i,'').replace(/^\/goal\s+/i,'').trim();
+      if (!goal) { await safeSend(chatId, 'Please provide a goal.\n\nExample: goal: create a YouTube video about finance', sendFn); return; }
+      var { executeGoal } = require('../orchestrator/parallelWorkflow.js');
+      var result = await executeGoal(goal, chatId, async function(update) {
+        try { await safeSend(chatId, update, sendFn); } catch(e) {}
+      });
+      if (result.success) {
+        var out = result.merged_output || '';
+        await safeSend(chatId, 'RESULT\n\n' + out.slice(0, 3500) + (out.length > 3500 ? '\n\n...(truncated - ' + result.branch_count + ' agents ran)' : ''), sendFn);
+        if (result.requires_approval) await safeSend(chatId, 'This result requires your approval before publishing/deploying.\n\nCheck /approvals', sendFn);
+      } else {
+        await safeSend(chatId, 'Goal execution failed: ' + result.error, sendFn);
+      }
+    });
+    return true;
+  }
   if (text === '/notebook') {
     await run('/notebook', async function() {
       var notebookExport = require('../services/notebookExport.js');
@@ -457,31 +475,29 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
     try {
       console.log('[taskbus] routing task:', task.id.slice(0,8));
       var routeResult = await router.routeTask(task.id);
-      var latest      = store.getLatestResult(task.id);
 
+      if (routeResult && routeResult.status === 'rate_limited') {
+        await safeSend(chatId, routeResult.message || 'Rate limit hit. Try again in a few minutes.', sendFn);
+        return true;
+      }
       if (routeResult && routeResult.status === 'waiting_approval') {
-        await safeSend(chatId, 'Approval required!\n\nTask flagged as high-risk.\nCheck: /approvals', sendFn);
+        await safeSend(chatId, 'Approval required! Check: /approvals', sendFn);
         return true;
       }
 
-      if (latest) {
-        var isReal = latest.is_real_ai_result === true;
-        var prov   = latest.provider_used || 'unknown';
-        var lines  = [
-          (isReal ? 'Task Complete! (Real AI)' : 'Task Complete! (Stub — no AI credits)'),
-          '',
-          'Provider: ' + prov,
-          'Cost: ' + (latest.cost_tier || 'unknown'),
-          '',
-          'Summary: ' + (latest.summary || 'none'),
-          '',
-          (latest.output || '').slice(0, 800) + (latest.output && latest.output.length > 800 ? '\n...(truncated)' : ''),
-        ];
-        if (latest.next_request) lines.push('\nNext: ' + latest.next_request);
-        await safeSend(chatId, lines.join('\n'), sendFn);
-        logReply(chatId, lines.join('\n').length);
+      var output = routeResult && (routeResult.output || routeResult.summary);
+      var prov   = routeResult && routeResult.provider_used;
+      var isReal = routeResult && routeResult.is_real_ai_result;
+
+      if (!output) {
+        var latest = store.getLatestResult(task.id);
+        if (latest) { output = latest.output || latest.summary; prov = latest.provider_used; isReal = latest.is_real_ai_result; }
+      }
+
+      if (output && String(output).length > 3) {
+        await safeSend(chatId, (isReal ? 'Done! (DeepSeek)\n\n' : 'Done!\n\n') + String(output).slice(0, 3500), sendFn);
       } else {
-        await safeSend(chatId, 'Task routed but no result yet.\nCheck: /task_' + task.id.slice(0,8), sendFn);
+        await safeSend(chatId, 'Task stored. Check: /task_' + task.id.slice(0,8), sendFn);
       }
     } catch(e) {
       console.log('[taskbus] execution error:', e.message);
