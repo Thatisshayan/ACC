@@ -179,11 +179,13 @@ function mainMenu(userId) {
     [{text:'🌐 صفحه فرود',callback_data:'landing_page'},{text:'🎬 اسکریپت ویدیو',callback_data:'video_script'}],
     [{text:'📱 پست شبکه اجتماعی',callback_data:'social_post'},{text:'🌍 ترجمه',callback_data:'menu_translate'}],
     [{text:'🍳 آشپز AI',callback_data:'menu_chef'},{text:'🔍 تحقیق',callback_data:'competitor_research'}],
+    [{text:'⚙️ بیشتر',callback_data:'menu_more'}],
   ] : [
     [{text:'💼 Find Jobs',callback_data:'job_search'},{text:'📄 Tailor Resume',callback_data:'tailor_resume'}],
     [{text:'🌐 Landing Page',callback_data:'landing_page'},{text:'🎬 Video Script',callback_data:'video_script'}],
     [{text:'📱 Social Post',callback_data:'social_post'},{text:'🌍 Translate',callback_data:'menu_translate'}],
     [{text:'🍳 Chef AI',callback_data:'menu_chef'},{text:'🔍 Research',callback_data:'competitor_research'}],
+    [{text:'⚙️ More',callback_data:'menu_more'}],
   ];
 }
 function jobsMenu(userId) {
@@ -703,7 +705,27 @@ async function handleCallback(cb) {
   }
 
   // Menus
-  if (data==='back_main'||data==='menu_home') { await sendButtons(chatId, t(userId,'main_menu',{name:user.name||'friend'}), mainMenu(userId)); return; }
+  if (data==='menu_more') {
+    var fa = user.language==='fa';
+    await sendButtons(chatId, fa?'⚙️ *ابزارهای بیشتر*':'⚙️ *More Tools*', fa ? [
+      [{text:'📝 یادداشت',callback_data:'menu_notes'},{text:'🎯 مصاحبه',callback_data:'menu_interview'}],
+      [{text:'💰 مذاکره حقوق',callback_data:'salary_coach'},{text:'📊 دنبال‌کن شغل',callback_data:'job_tracker'}],
+      [{text:'🛒 بازار',callback_data:'menu_marketplace'},{text:'📧 ایمیل',callback_data:'email_monitor'}],
+      [{text:'💡 ایده‌پردازی',callback_data:'brainstorm'},{text:'⚖️ حقوقی',callback_data:'legal_assistant'}],
+      [{text:'📅 برنامه‌ریز',callback_data:'scheduler_tool'},{text:'✈️ سفر',callback_data:'travel_planner'}],
+      [{text:'📊 وضعیت',callback_data:'menu_status'},{text:'⚙️ تنظیمات',callback_data:'menu_settings'}],
+      [{text:'◀️ برگشت',callback_data:'back_main'}],
+    ] : [
+      [{text:'📝 Notes',callback_data:'menu_notes'},{text:'🎯 Interview Prep',callback_data:'menu_interview'}],
+      [{text:'💰 Salary Coach',callback_data:'salary_coach'},{text:'📊 Job Tracker',callback_data:'job_tracker'}],
+      [{text:'🛒 Marketplace',callback_data:'menu_marketplace'},{text:'📧 Email Monitor',callback_data:'email_monitor'}],
+      [{text:'💡 Brainstorm',callback_data:'brainstorm'},{text:'⚖️ Legal Help',callback_data:'legal_assistant'}],
+      [{text:'📅 Planner',callback_data:'scheduler_tool'},{text:'✈️ Travel Plan',callback_data:'travel_planner'}],
+      [{text:'📊 Status',callback_data:'menu_status'},{text:'⚙️ Settings',callback_data:'menu_settings'}],
+      [{text:'◀️ Back',callback_data:'back_main'}],
+    ]);
+    return;
+  }
   if (data==='menu_jobs')        { await sendButtons(chatId, '💼 *Career & Jobs*', jobsMenu(userId)); return; }
   if (data==='menu_resume')      { await sendButtons(chatId, '📄 *Resume Tools*', resumeMenu(userId)); return; }
   if (data==='menu_content')     { await sendButtons(chatId, '📱 *Content Creation*', contentMenu(userId)); return; }
