@@ -1,0 +1,49 @@
+{
+  "id": "relationship_crm_workflow",
+  "name": "AI Relationship / CRM Workflow",
+  "category": "CRM / Relationship Management",
+  "user_command": "ACC: Help me maintain business relationships",
+  "description": "Tracks contacts, past interactions, reminders, suggested replies, and relationship health.",
+  "flow": [
+    "User command",
+    "Contact analysis",
+    "Reminder engine",
+    "Conversation AI",
+    "Smart CRM"
+  ],
+  "lanes": [
+    {
+      "name": "Contact Analysis",
+      "outputs": [
+        "interaction history",
+        "priority score"
+      ]
+    },
+    {
+      "name": "Reminders",
+      "outputs": [
+        "birthdays",
+        "events",
+        "follow-ups"
+      ]
+    },
+    {
+      "name": "Conversation AI",
+      "outputs": [
+        "suggested replies",
+        "tone analysis"
+      ]
+    },
+    {
+      "name": "CRM",
+      "outputs": [
+        "relationship health dashboard"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "relationship dashboard",
+    "follow-up schedule",
+    "reply suggestions"
+  ]
+}

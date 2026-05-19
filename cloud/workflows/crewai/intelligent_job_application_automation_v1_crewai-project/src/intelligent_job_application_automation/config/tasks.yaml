@@ -1,0 +1,108 @@
+---
+search_job_opportunities:
+  description: |-
+    Search for job opportunities based on the search query: {search_query}. Use multiple search approaches:
+
+    1. Search LinkedIn, Indeed, Google Jobs, and other major job boards
+    2. Use web search to find relevant job postings
+    3. Scrape job posting details to gather comprehensive information
+    4. Identify at least 50 potential opportunities to analyze
+    5. Extract key information including:
+       - Job title and company
+       - Location and salary (if available)
+       - Job description and requirements
+       - Application URL or contact information
+       - Company information and culture
+
+    Focus on finding diverse opportunities that could match different aspects of the candidate's background.
+  expected_output: A comprehensive list of at least 50 job opportunities with detailed
+    information including job titles, companies, locations, descriptions, requirements,
+    and application details. The output should include direct URLs to job postings
+    and sufficient detail for analysis.
+  agent: job_search_specialist
+analyze_and_score_job_matches:
+  description: |-
+    Analyze the job opportunities found and create a comprehensive scoring and ranking system. Using the resume content {resume_content}, evaluate each position based on:
+
+    1. **Technical Skills Match (30%)**: How well the candidate's technical skills align with job requirements
+    2. **Experience Level Fit (25%)**: Whether the seniority level and experience match the role
+    3. **Industry/Domain Fit (20%)**: Alignment with the candidate's industry background
+    4. **Company Culture Fit (15%)**: Based on company values, size, and work environment
+    5. **Growth Potential (10%)**: Career advancement and learning opportunities
+
+    For each job, provide:
+    - Overall match score (1-100)
+    - Detailed explanation of why this is a good fit
+    - Specific strengths that make the candidate suitable
+    - Areas where the candidate might need to emphasize certain skills
+    - Company benefits that align with career goals
+
+    Create a ranked table of the top 30 opportunities with all scoring details and rationale.
+  expected_output: A detailed scoring table in markdown format with the top 30 job
+    opportunities ranked by compatibility score (1-100). Each entry should include
+    job title, company, location, overall score, detailed fit analysis, and specific
+    reasons why this opportunity matches the candidate's profile. Include actionable
+    insights for each position.
+  agent: job_match_analyzer
+  context:
+  - search_job_opportunities
+prepare_tailored_application_materials:
+  description: |-
+    For the top 10 positions from the analysis, create tailored application materials. This task should wait for user approval of the top 10 selected positions before proceeding.
+
+    For each approved position:
+    1. **Tailor Resume**: Customize the resume from {resume_content} to highlight relevant skills and experiences for the specific role
+    2. **Create Cover Letter**: Write a personalized cover letter that addresses the specific job requirements and company culture
+    3. **Optimize Keywords**: Ensure ATS compatibility by incorporating relevant keywords from the job description
+    4. **Highlight Achievements**: Emphasize specific accomplishments that align with the role requirements
+    5. **Company Research**: Include specific details about the company to show genuine interest
+
+    Each tailored package should include:
+    - Customized resume (keeping core information accurate)
+    - Personalized cover letter
+    - Brief company research summary
+    - Key talking points for potential interviews
+    - Application strategy notes
+
+    **IMPORTANT**: This task requires user confirmation before creating tailored materials. Present the top 10 positions for approval first.
+  expected_output: 'For each of the approved top 10 positions: a complete application
+    package including a tailored resume, personalized cover letter, company research
+    summary, and application strategy. All materials should be optimized for the specific
+    role and company while maintaining authenticity and accuracy.'
+  agent: resume_tailor
+  context:
+  - analyze_and_score_job_matches
+execute_job_applications:
+  description: |-
+    Coordinate and manage the application process for the approved positions with tailored materials. This task handles the final application submission workflow.
+
+    **IMPORTANT**: This task requires user confirmation before submitting any applications.
+
+    For each approved application:
+    1. **Review Materials**: Present the tailored resume and cover letter for final approval
+    2. **Prepare Application Email**: Create professional application emails with:
+       - Compelling subject lines
+       - Professional email body
+       - Proper attachments (resume and cover letter)
+       - Follow-up schedule recommendations
+
+    3. **Application Execution Plan**: Provide detailed instructions for:
+       - When to send each application (optimal timing)
+       - How to track application status
+       - Follow-up timeline and templates
+       - Interview preparation notes
+
+    4. **Documentation**: Create an application tracking system with:
+       - Application dates and methods
+       - Contact information
+       - Status tracking
+       - Follow-up reminders
+
+    **Note**: Since automated email sending requires Gmail connection setup, this task will provide ready-to-send email drafts and detailed instructions for manual sending until email tools are configured.
+  expected_output: Complete application execution plan including ready-to-send email
+    drafts for all approved positions, detailed application timing recommendations,
+    tracking system, and follow-up templates. All materials should be ready for immediate
+    use with clear instructions for optimal application management.
+  agent: job_application_manager
+  context:
+  - prepare_tailored_application_materials

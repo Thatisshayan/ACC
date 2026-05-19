@@ -1,0 +1,63 @@
+{
+  "id": "media_command_workflow",
+  "name": "Media Command Workflow",
+  "category": "Content / Agency",
+  "user_command": "ACC: Build a 30-day content strategy",
+  "description": "Plans and produces a 30-day media strategy with trends, calendar, creative, publishing, and analytics.",
+  "flow": [
+    "User command",
+    "Trend research",
+    "Content calendar",
+    "Creative generation",
+    "Publishing lane",
+    "Analytics engine"
+  ],
+  "lanes": [
+    {
+      "name": "Trend Research",
+      "outputs": [
+        "audience analysis",
+        "hooks"
+      ]
+    },
+    {
+      "name": "Content Calendar",
+      "outputs": [
+        "30-day schedule",
+        "platform strategy"
+      ]
+    },
+    {
+      "name": "Creative",
+      "outputs": [
+        "posts",
+        "reels",
+        "captions",
+        "thumbnails"
+      ]
+    },
+    {
+      "name": "Publishing",
+      "outputs": [
+        "schedule",
+        "manual/auto publish queue"
+      ]
+    },
+    {
+      "name": "Analytics",
+      "outputs": [
+        "engagement report",
+        "optimization notes"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "posting publicly"
+  ],
+  "final_outputs": [
+    "30-day calendar",
+    "asset prompts",
+    "posting schedule",
+    "analytics dashboard"
+  ]
+}

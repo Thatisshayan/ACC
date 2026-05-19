@@ -1,0 +1,61 @@
+{
+  "id": "ai_newsroom_workflow",
+  "name": "AI Real-Time Newsroom Workflow",
+  "category": "Media / News",
+  "user_command": "ACC: Cover today’s AI news automatically",
+  "description": "Tracks news, verifies facts, detects trends, generates content, and prepares publishing queue.",
+  "flow": [
+    "User command",
+    "News scraping",
+    "Fact verification",
+    "Trend detection",
+    "Article/video generation",
+    "Publishing engine"
+  ],
+  "lanes": [
+    {
+      "name": "News Scraping",
+      "outputs": [
+        "source list",
+        "breaking items"
+      ]
+    },
+    {
+      "name": "Fact Verification",
+      "outputs": [
+        "source comparison",
+        "credibility score"
+      ]
+    },
+    {
+      "name": "Trend Detection",
+      "outputs": [
+        "viral opportunities",
+        "audience interest"
+      ]
+    },
+    {
+      "name": "Content Gen",
+      "outputs": [
+        "shorts",
+        "reels",
+        "blogs"
+      ]
+    },
+    {
+      "name": "Publishing",
+      "outputs": [
+        "approval queue",
+        "posting schedule"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "publishing"
+  ],
+  "final_outputs": [
+    "news content pack",
+    "verification notes",
+    "publishing queue"
+  ]
+}

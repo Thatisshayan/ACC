@@ -1,0 +1,50 @@
+{
+  "id": "permit_navigator_workflow",
+  "name": "AI Government / Permit Workflow",
+  "category": "Government / Compliance",
+  "user_command": "ACC: Figure out permit requirements for this project",
+  "description": "Researches regulations, zoning, code, required documents, and prepares permit pack.",
+  "flow": [
+    "User command",
+    "Municipal research",
+    "Zoning analysis",
+    "Code review",
+    "Application prep",
+    "Final permit pack"
+  ],
+  "lanes": [
+    {
+      "name": "Municipal Research",
+      "outputs": [
+        "bylaws",
+        "permit forms"
+      ]
+    },
+    {
+      "name": "Zoning",
+      "outputs": [
+        "restrictions",
+        "approval paths"
+      ]
+    },
+    {
+      "name": "Code Review",
+      "outputs": [
+        "safety rules",
+        "requirements"
+      ]
+    },
+    {
+      "name": "Application Prep",
+      "outputs": [
+        "forms checklist",
+        "documents needed"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "permit requirements report",
+    "application checklist",
+    "document pack"
+  ]
+}

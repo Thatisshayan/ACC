@@ -495,6 +495,9 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   if (/^tell aider/i.test(text))         agent = 'aider';
   if (/^devika:/i.test(text))            agent = 'devika';
   if (/^tell devika/i.test(text))        agent = 'devika';
+  if (/^alphonso:/i.test(text))          agent = 'alphonso';
+  if (/^tell alphonso/i.test(text))      agent = 'alphonso';
+  if (/^local:/i.test(text))             agent = 'alphonso'; // shortcut for local Ollama
 
   var task = store.createTask({
     title:             instruction.slice(0, 80),

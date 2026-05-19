@@ -1,0 +1,58 @@
+{
+  "id": "kickstarter_launch_workflow",
+  "name": "AI Kickstarter Launch Workflow",
+  "category": "Crowdfunding / Launch",
+  "user_command": "ACC: Launch my product on Kickstarter",
+  "description": "Creates campaign research, video plan, rewards, funnel, outreach, and launch campaign package.",
+  "flow": [
+    "User command",
+    "Campaign research",
+    "Video production",
+    "Reward strategy",
+    "Landing/email funnel",
+    "Marketing blast",
+    "Final campaign"
+  ],
+  "lanes": [
+    {
+      "name": "Campaign Research",
+      "outputs": [
+        "top campaign analysis",
+        "backer psychology"
+      ]
+    },
+    {
+      "name": "Video",
+      "outputs": [
+        "trailer script",
+        "storyboard"
+      ]
+    },
+    {
+      "name": "Rewards",
+      "outputs": [
+        "pricing tiers",
+        "stretch goals"
+      ]
+    },
+    {
+      "name": "Funnel",
+      "outputs": [
+        "landing page",
+        "email sequence"
+      ]
+    },
+    {
+      "name": "Marketing",
+      "outputs": [
+        "Reddit/X/YouTube outreach plan"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "campaign page draft",
+    "video script",
+    "reward tiers",
+    "launch checklist"
+  ]
+}

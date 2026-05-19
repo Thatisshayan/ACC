@@ -229,6 +229,21 @@ async function routeTask(taskId) {
     log('[router] Devika not running — falling through');
   }
 
+  // ── 3g. Alphonso — local Ollama agent ecosystem ───────────────────────────
+  if (task.assigned_agent === 'alphonso') {
+    var alphonso = require('../integrations/alphonso.js');
+    if (alphonso.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var alResult = await alphonso.sendTaskFromACC(task);
+      var alR = store.addResult({ task_id: taskId, provider_used: 'alphonso_ollama',
+        is_real_ai_result: true, cost_tier: 'local_free',
+        output: alResult.output || '', summary: alResult.success ? 'Alphonso/Ollama completed (free, local)' : alResult.error });
+      store.updateTask(taskId, { status: alResult.success?'done':'failed', provider_used: 'alphonso_ollama' });
+      return { status: alResult.success?'done':'failed', taskId, provider_used:'alphonso_ollama', output: alResult.output };
+    }
+    log('[router] Alphonso/Ollama not enabled — falling through');
+  }
+
   store.addMessage(taskId, 'system', task.assigned_agent,
     'Executing | mode: ' + task.automation_mode + ' | chain: deepseek→ollama→claude→smart_stub');
 

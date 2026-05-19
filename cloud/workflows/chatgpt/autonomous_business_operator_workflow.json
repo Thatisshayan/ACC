@@ -1,0 +1,69 @@
+{
+  "id": "autonomous_business_operator_workflow",
+  "name": "AI Autonomous Business Operator",
+  "category": "Business OS",
+  "user_command": "ACC: Grow this business to $50k/month",
+  "description": "Coordinates sales, marketing, operations, finance, executive reporting, and approval layer for business growth.",
+  "flow": [
+    "User command",
+    "Business OS",
+    "Sales lane",
+    "Marketing lane",
+    "Operations lane",
+    "Finance lane",
+    "Executive reports",
+    "Human approval"
+  ],
+  "lanes": [
+    {
+      "name": "Sales",
+      "outputs": [
+        "lead gen",
+        "CRM",
+        "outreach"
+      ]
+    },
+    {
+      "name": "Marketing",
+      "outputs": [
+        "content",
+        "ads",
+        "SEO"
+      ]
+    },
+    {
+      "name": "Operations",
+      "outputs": [
+        "team tasks",
+        "automations",
+        "SOPs"
+      ]
+    },
+    {
+      "name": "Finance",
+      "outputs": [
+        "cashflow",
+        "forecasts",
+        "KPIs"
+      ]
+    },
+    {
+      "name": "Executive Layer",
+      "outputs": [
+        "strategy report",
+        "next actions"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "spending money",
+    "hiring",
+    "sending campaigns",
+    "legal/financial actions"
+  ],
+  "final_outputs": [
+    "business dashboard",
+    "growth plan",
+    "weekly executive report"
+  ]
+}

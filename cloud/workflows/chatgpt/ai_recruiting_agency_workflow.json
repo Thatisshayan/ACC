@@ -1,0 +1,54 @@
+{
+  "id": "ai_recruiting_agency_workflow",
+  "name": "AI Recruiting Agency Workflow",
+  "category": "HR / Recruiting",
+  "user_command": "ACC: Recruit a frontend developer",
+  "description": "Creates job description, sourcing plan, candidate screening, salary research, and shortlist.",
+  "flow": [
+    "User command",
+    "Job description",
+    "Candidate search",
+    "Salary research",
+    "Interview/screening lane",
+    "Final shortlist"
+  ],
+  "lanes": [
+    {
+      "name": "Job Description",
+      "outputs": [
+        "requirements",
+        "screening questions"
+      ]
+    },
+    {
+      "name": "Candidate Search",
+      "outputs": [
+        "candidate sources",
+        "profiles"
+      ]
+    },
+    {
+      "name": "Salary Research",
+      "outputs": [
+        "market salary",
+        "offer guidance"
+      ]
+    },
+    {
+      "name": "Interview",
+      "outputs": [
+        "screening rubric",
+        "interview questions"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "contacting candidates",
+    "sending outreach"
+  ],
+  "final_outputs": [
+    "job post",
+    "candidate shortlist",
+    "screening plan"
+  ]
+}

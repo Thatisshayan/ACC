@@ -1,0 +1,66 @@
+{
+  "id": "acc_self_improvement_workflow",
+  "name": "ACC Self-Improvement Workflow",
+  "category": "Software / Internal Ops",
+  "user_command": "ACC: Improve your dashboard UI",
+  "description": "Allows ACC to improve itself through UX research, design, backend/API work, build/merge, and testing.",
+  "flow": [
+    "User command",
+    "ACC Self-Orchestrator",
+    "UX research lane",
+    "UI design lane",
+    "Backend/API lane",
+    "Build and merge",
+    "Testing/audit",
+    "Updated ACC version"
+  ],
+  "lanes": [
+    {
+      "name": "UX Research",
+      "outputs": [
+        "pain points",
+        "flow analysis",
+        "screen priorities"
+      ]
+    },
+    {
+      "name": "UI Design",
+      "outputs": [
+        "component specs",
+        "layout",
+        "states"
+      ]
+    },
+    {
+      "name": "Backend/API",
+      "outputs": [
+        "endpoint changes",
+        "data contract"
+      ]
+    },
+    {
+      "name": "Build/Merge",
+      "outputs": [
+        "implemented changes",
+        "diffs"
+      ]
+    },
+    {
+      "name": "Audit",
+      "outputs": [
+        "test proof",
+        "remaining issues"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "deployments",
+    "external actions",
+    "major destructive changes"
+  ],
+  "final_outputs": [
+    "updated dashboard",
+    "change log",
+    "QA report"
+  ]
+}

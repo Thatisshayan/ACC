@@ -1,0 +1,50 @@
+{
+  "id": "due_diligence_workflow",
+  "name": "AI Due Diligence Workflow",
+  "category": "Investment / Business Analysis",
+  "user_command": "ACC: Analyze this business before I invest",
+  "description": "Evaluates a business through financial, market, risk, reputation, and scoring analysis.",
+  "flow": [
+    "User command",
+    "Financial analysis",
+    "Market research",
+    "Risk detection",
+    "Scoring engine",
+    "Final DD report"
+  ],
+  "lanes": [
+    {
+      "name": "Financial",
+      "outputs": [
+        "revenue/expense analysis",
+        "margin notes"
+      ]
+    },
+    {
+      "name": "Market",
+      "outputs": [
+        "competitors",
+        "demand analysis"
+      ]
+    },
+    {
+      "name": "Risk",
+      "outputs": [
+        "legal/reputation risks",
+        "red flags"
+      ]
+    },
+    {
+      "name": "Scoring",
+      "outputs": [
+        "investment rating",
+        "recommendation"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "due diligence report",
+    "risk score",
+    "investment summary"
+  ]
+}

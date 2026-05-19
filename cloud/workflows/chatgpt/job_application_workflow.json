@@ -1,0 +1,65 @@
+{
+  "id": "job_application_workflow",
+  "name": "Job Application Workflow",
+  "category": "Career",
+  "user_command": "ACC: Get me a project manager job in Toronto",
+  "description": "Finds jobs, tailors resumes, drafts cover letters, tracks pipeline, and optionally applies with approval.",
+  "flow": [
+    "User command",
+    "ACC Orchestrator",
+    "Research lane: job market, salary, companies",
+    "Resume lane: ATS optimization and variants",
+    "Cover letter lane: personalized letters",
+    "Browser automation lane: application support",
+    "Audit/QA: verify fields and attachments",
+    "Final result: applications/tracker updated"
+  ],
+  "lanes": [
+    {
+      "name": "Research",
+      "outputs": [
+        "job list",
+        "salary range",
+        "keywords"
+      ]
+    },
+    {
+      "name": "Resume",
+      "outputs": [
+        "tailored resume",
+        "ATS keywords"
+      ]
+    },
+    {
+      "name": "Cover Letter",
+      "outputs": [
+        "company-specific letters"
+      ]
+    },
+    {
+      "name": "Automation",
+      "outputs": [
+        "drafted applications",
+        "submission queue"
+      ]
+    },
+    {
+      "name": "Audit",
+      "outputs": [
+        "missing fields report",
+        "approval requirements"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "submitting applications",
+    "sending emails/messages",
+    "uploading private documents"
+  ],
+  "final_outputs": [
+    "job tracker entries",
+    "resume variants",
+    "cover letters",
+    "application status report"
+  ]
+}

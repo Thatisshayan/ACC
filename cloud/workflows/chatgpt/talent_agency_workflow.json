@@ -1,0 +1,53 @@
+{
+  "id": "talent_agency_workflow",
+  "name": "AI Talent Agency Workflow",
+  "category": "Creator / Influencer Business",
+  "user_command": "ACC: Grow my influencer brand",
+  "description": "Analyzes brand, finds sponsorships, plans content, manages negotiation and contract review.",
+  "flow": [
+    "User command",
+    "Brand analysis",
+    "Sponsorship search",
+    "Content strategy",
+    "Negotiation lane"
+  ],
+  "lanes": [
+    {
+      "name": "Brand Analysis",
+      "outputs": [
+        "audience data",
+        "niche positioning"
+      ]
+    },
+    {
+      "name": "Sponsorship",
+      "outputs": [
+        "brand leads",
+        "pricing deals"
+      ]
+    },
+    {
+      "name": "Content",
+      "outputs": [
+        "viral concepts",
+        "posting schedule"
+      ]
+    },
+    {
+      "name": "Negotiation",
+      "outputs": [
+        "deal terms",
+        "contract review notes"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "brand outreach",
+    "contract/signing"
+  ],
+  "final_outputs": [
+    "growth plan",
+    "sponsor target list",
+    "content calendar"
+  ]
+}
