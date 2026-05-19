@@ -1,0 +1,27 @@
+[project]
+name = "intelligent_job_application_automation"
+version = "0.1.0"
+description = "intelligent_job_application_automation using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[file-processing,litellm,tools]==1.14.4",
+]
+
+[project.scripts]
+intelligent_job_application_automation = "intelligent_job_application_automation.main:run"
+run_crew = "intelligent_job_application_automation.main:run"
+train = "intelligent_job_application_automation.main:train"
+replay = "intelligent_job_application_automation.main:replay"
+test = "intelligent_job_application_automation.main:test"
+run_with_trigger = "intelligent_job_application_automation.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
+
+[tool.uv]
+override-dependencies = ["litellm<=1.82.6"]

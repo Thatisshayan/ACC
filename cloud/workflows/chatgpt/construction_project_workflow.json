@@ -1,0 +1,70 @@
+{
+  "id": "construction_project_workflow",
+  "name": "Construction Project Workflow",
+  "category": "Construction / Operations",
+  "user_command": "ACC: Prepare a luxury backyard renovation quote",
+  "description": "Creates a full construction proposal package with scope, pricing, research, visuals, CRM, and follow-up.",
+  "flow": [
+    "User command",
+    "Scope review",
+    "Pricing lane",
+    "Supplier/permit research",
+    "Proposal generation",
+    "Visualization lane",
+    "CRM/follow-up",
+    "Final proposal pack"
+  ],
+  "lanes": [
+    {
+      "name": "Scope Review",
+      "outputs": [
+        "scope summary",
+        "measurement assumptions",
+        "missing info list"
+      ]
+    },
+    {
+      "name": "Pricing",
+      "outputs": [
+        "labor estimate",
+        "materials estimate",
+        "contingency"
+      ]
+    },
+    {
+      "name": "Research",
+      "outputs": [
+        "permit notes",
+        "supplier pricing",
+        "market comparison"
+      ]
+    },
+    {
+      "name": "Proposal",
+      "outputs": [
+        "client-ready proposal",
+        "payment schedule"
+      ]
+    },
+    {
+      "name": "Visualization",
+      "outputs": [
+        "render prompts",
+        "concept images plan"
+      ]
+    },
+    {
+      "name": "CRM",
+      "outputs": [
+        "lead record",
+        "follow-up reminders"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "proposal PDF",
+    "estimate breakdown",
+    "client follow-up plan",
+    "visual concept pack"
+  ]
+}

@@ -1,0 +1,1633 @@
+{
+  "bundle_name": "ACC Workflow Ideas JSON Bundle",
+  "version": "1.0",
+  "description": "Workflow ideas generated for ACC / Founder Project brainstorming. Non-personalized and reusable as templates.",
+  "total_workflows": 26,
+  "workflow_ids": [
+    "landing_page_workflow",
+    "job_application_workflow",
+    "youtube_automation_workflow",
+    "construction_project_workflow",
+    "acc_self_improvement_workflow",
+    "ai_tourist_assistant_workflow",
+    "startup_builder_workflow",
+    "real_estate_investor_workflow",
+    "ai_recruiting_agency_workflow",
+    "media_command_workflow",
+    "personal_assistant_workflow",
+    "ai_app_factory_workflow",
+    "due_diligence_workflow",
+    "permit_navigator_workflow",
+    "customer_acquisition_workflow",
+    "grant_funding_workflow",
+    "kickstarter_launch_workflow",
+    "cold_outreach_workflow",
+    "marketplace_flipping_workflow",
+    "course_business_workflow",
+    "ai_newsroom_workflow",
+    "relationship_crm_workflow",
+    "company_acquisition_workflow",
+    "talent_agency_workflow",
+    "autonomous_business_operator_workflow",
+    "founder_project_company_in_a_box"
+  ],
+  "workflows": [
+    {
+      "id": "landing_page_workflow",
+      "name": "Landing Page Workflow",
+      "category": "Software / Marketing",
+      "user_command": "ACC: Build me a landing page",
+      "description": "Builds and deploys a landing page using parallel research, UI/UX, frontend/backend, deployment, and QA lanes.",
+      "flow": [
+        "User command",
+        "ACC Orchestrator",
+        "Research lane: competitors, SEO, positioning",
+        "UI/UX lane: Gemini layouts, sections, responsive design",
+        "Backend/frontend lane: Claude/Cursor React/Vite implementation",
+        "Deployment lane: Netlify/Vercel/Railway",
+        "Audit/QA: Lighthouse, forms, responsiveness, tests",
+        "Final result: live website"
+      ],
+      "lanes": [
+        {
+          "name": "Research",
+          "outputs": [
+            "competitor scan",
+            "SEO keywords",
+            "positioning notes"
+          ]
+        },
+        {
+          "name": "UI/UX",
+          "outputs": [
+            "wireframe",
+            "section layout",
+            "visual direction"
+          ]
+        },
+        {
+          "name": "Build",
+          "outputs": [
+            "frontend code",
+            "forms",
+            "backend/API if needed"
+          ]
+        },
+        {
+          "name": "Deploy",
+          "outputs": [
+            "live URL",
+            "deployment config"
+          ]
+        },
+        {
+          "name": "QA",
+          "outputs": [
+            "test report",
+            "fix list",
+            "approval status"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "deployed landing page",
+        "SEO metadata",
+        "responsive test report",
+        "launch checklist"
+      ]
+    },
+    {
+      "id": "job_application_workflow",
+      "name": "Job Application Workflow",
+      "category": "Career",
+      "user_command": "ACC: Get me a project manager job in Toronto",
+      "description": "Finds jobs, tailors resumes, drafts cover letters, tracks pipeline, and optionally applies with approval.",
+      "flow": [
+        "User command",
+        "ACC Orchestrator",
+        "Research lane: job market, salary, companies",
+        "Resume lane: ATS optimization and variants",
+        "Cover letter lane: personalized letters",
+        "Browser automation lane: application support",
+        "Audit/QA: verify fields and attachments",
+        "Final result: applications/tracker updated"
+      ],
+      "lanes": [
+        {
+          "name": "Research",
+          "outputs": [
+            "job list",
+            "salary range",
+            "keywords"
+          ]
+        },
+        {
+          "name": "Resume",
+          "outputs": [
+            "tailored resume",
+            "ATS keywords"
+          ]
+        },
+        {
+          "name": "Cover Letter",
+          "outputs": [
+            "company-specific letters"
+          ]
+        },
+        {
+          "name": "Automation",
+          "outputs": [
+            "drafted applications",
+            "submission queue"
+          ]
+        },
+        {
+          "name": "Audit",
+          "outputs": [
+            "missing fields report",
+            "approval requirements"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "submitting applications",
+        "sending emails/messages",
+        "uploading private documents"
+      ],
+      "final_outputs": [
+        "job tracker entries",
+        "resume variants",
+        "cover letters",
+        "application status report"
+      ]
+    },
+    {
+      "id": "youtube_automation_workflow",
+      "name": "YouTube Automation Workflow",
+      "category": "Content / Creative",
+      "user_command": "ACC: Create a faceless AI tools video",
+      "description": "Creates a full video pipeline from research to script, visuals, voice, edit, SEO, and upload.",
+      "flow": [
+        "User command",
+        "ACC Orchestrator",
+        "Research trends and hooks",
+        "Script lane",
+        "Visual/thumbnail lane",
+        "Voice generation lane",
+        "Video assembly lane",
+        "SEO/upload lane",
+        "Analytics tracking"
+      ],
+      "lanes": [
+        {
+          "name": "Research",
+          "outputs": [
+            "trend report",
+            "hooks",
+            "competitor references"
+          ]
+        },
+        {
+          "name": "Script",
+          "outputs": [
+            "full script",
+            "voiceover text",
+            "CTA"
+          ]
+        },
+        {
+          "name": "Visuals",
+          "outputs": [
+            "scene prompts",
+            "thumbnail prompt",
+            "asset list"
+          ]
+        },
+        {
+          "name": "Voice",
+          "outputs": [
+            "TTS narration",
+            "audio notes"
+          ]
+        },
+        {
+          "name": "Editing",
+          "outputs": [
+            "assembled video plan",
+            "FFmpeg/editor instructions"
+          ]
+        },
+        {
+          "name": "SEO",
+          "outputs": [
+            "title",
+            "description",
+            "tags",
+            "chapters"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "publishing/uploading"
+      ],
+      "final_outputs": [
+        "video package",
+        "thumbnail",
+        "SEO pack",
+        "upload checklist"
+      ]
+    },
+    {
+      "id": "construction_project_workflow",
+      "name": "Construction Project Workflow",
+      "category": "Construction / Operations",
+      "user_command": "ACC: Prepare a luxury backyard renovation quote",
+      "description": "Creates a full construction proposal package with scope, pricing, research, visuals, CRM, and follow-up.",
+      "flow": [
+        "User command",
+        "Scope review",
+        "Pricing lane",
+        "Supplier/permit research",
+        "Proposal generation",
+        "Visualization lane",
+        "CRM/follow-up",
+        "Final proposal pack"
+      ],
+      "lanes": [
+        {
+          "name": "Scope Review",
+          "outputs": [
+            "scope summary",
+            "measurement assumptions",
+            "missing info list"
+          ]
+        },
+        {
+          "name": "Pricing",
+          "outputs": [
+            "labor estimate",
+            "materials estimate",
+            "contingency"
+          ]
+        },
+        {
+          "name": "Research",
+          "outputs": [
+            "permit notes",
+            "supplier pricing",
+            "market comparison"
+          ]
+        },
+        {
+          "name": "Proposal",
+          "outputs": [
+            "client-ready proposal",
+            "payment schedule"
+          ]
+        },
+        {
+          "name": "Visualization",
+          "outputs": [
+            "render prompts",
+            "concept images plan"
+          ]
+        },
+        {
+          "name": "CRM",
+          "outputs": [
+            "lead record",
+            "follow-up reminders"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "proposal PDF",
+        "estimate breakdown",
+        "client follow-up plan",
+        "visual concept pack"
+      ]
+    },
+    {
+      "id": "acc_self_improvement_workflow",
+      "name": "ACC Self-Improvement Workflow",
+      "category": "Software / Internal Ops",
+      "user_command": "ACC: Improve your dashboard UI",
+      "description": "Allows ACC to improve itself through UX research, design, backend/API work, build/merge, and testing.",
+      "flow": [
+        "User command",
+        "ACC Self-Orchestrator",
+        "UX research lane",
+        "UI design lane",
+        "Backend/API lane",
+        "Build and merge",
+        "Testing/audit",
+        "Updated ACC version"
+      ],
+      "lanes": [
+        {
+          "name": "UX Research",
+          "outputs": [
+            "pain points",
+            "flow analysis",
+            "screen priorities"
+          ]
+        },
+        {
+          "name": "UI Design",
+          "outputs": [
+            "component specs",
+            "layout",
+            "states"
+          ]
+        },
+        {
+          "name": "Backend/API",
+          "outputs": [
+            "endpoint changes",
+            "data contract"
+          ]
+        },
+        {
+          "name": "Build/Merge",
+          "outputs": [
+            "implemented changes",
+            "diffs"
+          ]
+        },
+        {
+          "name": "Audit",
+          "outputs": [
+            "test proof",
+            "remaining issues"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "deployments",
+        "external actions",
+        "major destructive changes"
+      ],
+      "final_outputs": [
+        "updated dashboard",
+        "change log",
+        "QA report"
+      ]
+    },
+    {
+      "id": "ai_tourist_assistant_workflow",
+      "name": "AI Tourist Assistant Workflow",
+      "category": "Travel / Local Experience",
+      "user_command": "ACC: Plan my FIFA World Cup weekend",
+      "description": "Creates a complete trip/event itinerary with hotels, transport, attractions, food, timing, and local recommendations.",
+      "flow": [
+        "User command",
+        "ACC Orchestrator",
+        "Hotels/flights/budget",
+        "Event research",
+        "Restaurant/local experience finder",
+        "Live itinerary",
+        "Final travel package"
+      ],
+      "lanes": [
+        {
+          "name": "Travel Logistics",
+          "outputs": [
+            "hotel options",
+            "transport plan",
+            "budget"
+          ]
+        },
+        {
+          "name": "Event Research",
+          "outputs": [
+            "event schedule",
+            "crowd/timing notes"
+          ]
+        },
+        {
+          "name": "Food/Experience",
+          "outputs": [
+            "restaurants",
+            "hidden spots",
+            "local activities"
+          ]
+        },
+        {
+          "name": "Itinerary",
+          "outputs": [
+            "daily schedule",
+            "maps/timing plan"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "trip itinerary",
+        "budget",
+        "maps/timing checklist",
+        "booking shortlist"
+      ]
+    },
+    {
+      "id": "startup_builder_workflow",
+      "name": "Startup Builder Workflow",
+      "category": "Startup / Founder",
+      "user_command": "ACC: Turn my idea into a startup",
+      "description": "Turns a startup idea into market research, branding, business model, MVP plan, launch workflow, and startup pack.",
+      "flow": [
+        "User idea",
+        "Market research",
+        "Branding",
+        "Business model",
+        "MVP build lane",
+        "Launch workflow",
+        "Final startup pack"
+      ],
+      "lanes": [
+        {
+          "name": "Market Research",
+          "outputs": [
+            "competitors",
+            "demand validation",
+            "market gaps"
+          ]
+        },
+        {
+          "name": "Branding",
+          "outputs": [
+            "name ideas",
+            "logo direction",
+            "identity"
+          ]
+        },
+        {
+          "name": "Business Model",
+          "outputs": [
+            "pricing",
+            "revenue model",
+            "offer"
+          ]
+        },
+        {
+          "name": "MVP Build",
+          "outputs": [
+            "website/app requirements",
+            "roadmap"
+          ]
+        },
+        {
+          "name": "Launch",
+          "outputs": [
+            "SEO",
+            "outreach",
+            "launch checklist"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "startup blueprint",
+        "brand kit",
+        "MVP roadmap",
+        "launch plan"
+      ]
+    },
+    {
+      "id": "real_estate_investor_workflow",
+      "name": "Real Estate Investor Workflow",
+      "category": "Real Estate / Investment",
+      "user_command": "ACC: Find profitable investment properties",
+      "description": "Analyzes markets, property ROI, renovation costs, risks, and produces ranked deal reports.",
+      "flow": [
+        "User command",
+        "Market research",
+        "ROI calculator",
+        "Renovation analysis",
+        "Deal ranking",
+        "Risk scoring",
+        "Final deal report"
+      ],
+      "lanes": [
+        {
+          "name": "Market Research",
+          "outputs": [
+            "neighborhood analysis",
+            "trend notes"
+          ]
+        },
+        {
+          "name": "ROI Calculator",
+          "outputs": [
+            "cashflow",
+            "mortgage assumptions",
+            "yield"
+          ]
+        },
+        {
+          "name": "Renovation Analysis",
+          "outputs": [
+            "rehab estimate",
+            "permit considerations"
+          ]
+        },
+        {
+          "name": "Risk Scoring",
+          "outputs": [
+            "risk report",
+            "ranking"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "ranked deal list",
+        "ROI sheet",
+        "risk report"
+      ]
+    },
+    {
+      "id": "ai_recruiting_agency_workflow",
+      "name": "AI Recruiting Agency Workflow",
+      "category": "HR / Recruiting",
+      "user_command": "ACC: Recruit a frontend developer",
+      "description": "Creates job description, sourcing plan, candidate screening, salary research, and shortlist.",
+      "flow": [
+        "User command",
+        "Job description",
+        "Candidate search",
+        "Salary research",
+        "Interview/screening lane",
+        "Final shortlist"
+      ],
+      "lanes": [
+        {
+          "name": "Job Description",
+          "outputs": [
+            "requirements",
+            "screening questions"
+          ]
+        },
+        {
+          "name": "Candidate Search",
+          "outputs": [
+            "candidate sources",
+            "profiles"
+          ]
+        },
+        {
+          "name": "Salary Research",
+          "outputs": [
+            "market salary",
+            "offer guidance"
+          ]
+        },
+        {
+          "name": "Interview",
+          "outputs": [
+            "screening rubric",
+            "interview questions"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "contacting candidates",
+        "sending outreach"
+      ],
+      "final_outputs": [
+        "job post",
+        "candidate shortlist",
+        "screening plan"
+      ]
+    },
+    {
+      "id": "media_command_workflow",
+      "name": "Media Command Workflow",
+      "category": "Content / Agency",
+      "user_command": "ACC: Build a 30-day content strategy",
+      "description": "Plans and produces a 30-day media strategy with trends, calendar, creative, publishing, and analytics.",
+      "flow": [
+        "User command",
+        "Trend research",
+        "Content calendar",
+        "Creative generation",
+        "Publishing lane",
+        "Analytics engine"
+      ],
+      "lanes": [
+        {
+          "name": "Trend Research",
+          "outputs": [
+            "audience analysis",
+            "hooks"
+          ]
+        },
+        {
+          "name": "Content Calendar",
+          "outputs": [
+            "30-day schedule",
+            "platform strategy"
+          ]
+        },
+        {
+          "name": "Creative",
+          "outputs": [
+            "posts",
+            "reels",
+            "captions",
+            "thumbnails"
+          ]
+        },
+        {
+          "name": "Publishing",
+          "outputs": [
+            "schedule",
+            "manual/auto publish queue"
+          ]
+        },
+        {
+          "name": "Analytics",
+          "outputs": [
+            "engagement report",
+            "optimization notes"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "posting publicly"
+      ],
+      "final_outputs": [
+        "30-day calendar",
+        "asset prompts",
+        "posting schedule",
+        "analytics dashboard"
+      ]
+    },
+    {
+      "id": "personal_assistant_workflow",
+      "name": "AI Personal Assistant Workflow",
+      "category": "Productivity",
+      "user_command": "ACC: Organize my entire week",
+      "description": "Builds weekly schedule using calendar, reminders, priorities, deadlines, and follow-ups.",
+      "flow": [
+        "User command",
+        "Calendar sync",
+        "Priority planner",
+        "Reminder engine",
+        "Smart schedule",
+        "Final weekly plan"
+      ],
+      "lanes": [
+        {
+          "name": "Calendar",
+          "outputs": [
+            "meetings",
+            "travel time"
+          ]
+        },
+        {
+          "name": "Priority",
+          "outputs": [
+            "deadline ranking",
+            "energy optimization"
+          ]
+        },
+        {
+          "name": "Reminder",
+          "outputs": [
+            "notifications",
+            "follow-ups"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "weekly plan",
+        "daily breakdown",
+        "reminder list"
+      ]
+    },
+    {
+      "id": "ai_app_factory_workflow",
+      "name": "AI App Factory Workflow",
+      "category": "Software / Product Build",
+      "user_command": "ACC: Build me a fitness tracking app",
+      "description": "Builds an app through research, UI/UX, backend, QA, deployment, and final app delivery.",
+      "flow": [
+        "User idea",
+        "Research lane",
+        "UI/UX lane",
+        "Backend lane",
+        "QA/test lane",
+        "Deployment lane",
+        "Final app"
+      ],
+      "lanes": [
+        {
+          "name": "Research",
+          "outputs": [
+            "competitor analysis",
+            "feature list"
+          ]
+        },
+        {
+          "name": "UI/UX",
+          "outputs": [
+            "design system",
+            "screens"
+          ]
+        },
+        {
+          "name": "Backend",
+          "outputs": [
+            "API",
+            "database",
+            "auth"
+          ]
+        },
+        {
+          "name": "QA",
+          "outputs": [
+            "test results",
+            "bug list"
+          ]
+        },
+        {
+          "name": "Deploy",
+          "outputs": [
+            "live URL",
+            "deployment notes"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "working MVP",
+        "repo structure",
+        "deployment report"
+      ]
+    },
+    {
+      "id": "due_diligence_workflow",
+      "name": "AI Due Diligence Workflow",
+      "category": "Investment / Business Analysis",
+      "user_command": "ACC: Analyze this business before I invest",
+      "description": "Evaluates a business through financial, market, risk, reputation, and scoring analysis.",
+      "flow": [
+        "User command",
+        "Financial analysis",
+        "Market research",
+        "Risk detection",
+        "Scoring engine",
+        "Final DD report"
+      ],
+      "lanes": [
+        {
+          "name": "Financial",
+          "outputs": [
+            "revenue/expense analysis",
+            "margin notes"
+          ]
+        },
+        {
+          "name": "Market",
+          "outputs": [
+            "competitors",
+            "demand analysis"
+          ]
+        },
+        {
+          "name": "Risk",
+          "outputs": [
+            "legal/reputation risks",
+            "red flags"
+          ]
+        },
+        {
+          "name": "Scoring",
+          "outputs": [
+            "investment rating",
+            "recommendation"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "due diligence report",
+        "risk score",
+        "investment summary"
+      ]
+    },
+    {
+      "id": "permit_navigator_workflow",
+      "name": "AI Government / Permit Workflow",
+      "category": "Government / Compliance",
+      "user_command": "ACC: Figure out permit requirements for this project",
+      "description": "Researches regulations, zoning, code, required documents, and prepares permit pack.",
+      "flow": [
+        "User command",
+        "Municipal research",
+        "Zoning analysis",
+        "Code review",
+        "Application prep",
+        "Final permit pack"
+      ],
+      "lanes": [
+        {
+          "name": "Municipal Research",
+          "outputs": [
+            "bylaws",
+            "permit forms"
+          ]
+        },
+        {
+          "name": "Zoning",
+          "outputs": [
+            "restrictions",
+            "approval paths"
+          ]
+        },
+        {
+          "name": "Code Review",
+          "outputs": [
+            "safety rules",
+            "requirements"
+          ]
+        },
+        {
+          "name": "Application Prep",
+          "outputs": [
+            "forms checklist",
+            "documents needed"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "permit requirements report",
+        "application checklist",
+        "document pack"
+      ]
+    },
+    {
+      "id": "customer_acquisition_workflow",
+      "name": "AI Acquisition / Growth Workflow",
+      "category": "Sales / Growth",
+      "user_command": "ACC: Acquire customers for my SaaS",
+      "description": "Creates audience research, outreach, funnel, CRM, and customer acquisition pipeline.",
+      "flow": [
+        "User command",
+        "Audience research",
+        "Outreach lane",
+        "Funnel builder",
+        "CRM analytics",
+        "Customer pipeline"
+      ],
+      "lanes": [
+        {
+          "name": "Audience Research",
+          "outputs": [
+            "ICP",
+            "lead sources"
+          ]
+        },
+        {
+          "name": "Outreach",
+          "outputs": [
+            "email/DM scripts",
+            "campaigns"
+          ]
+        },
+        {
+          "name": "Funnel",
+          "outputs": [
+            "landing page",
+            "lead magnet"
+          ]
+        },
+        {
+          "name": "CRM",
+          "outputs": [
+            "lead tracker",
+            "follow-up states"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "sending outreach",
+        "public posting"
+      ],
+      "final_outputs": [
+        "lead pipeline",
+        "outreach scripts",
+        "funnel plan"
+      ]
+    },
+    {
+      "id": "grant_funding_workflow",
+      "name": "AI Grant / Funding Workflow",
+      "category": "Funding / Grants",
+      "user_command": "ACC: Find grants/funding for my startup",
+      "description": "Finds funding sources, checks eligibility, drafts pitch materials, and builds application pack.",
+      "flow": [
+        "User command",
+        "Grant research",
+        "Eligibility check",
+        "Pitch deck lane",
+        "Application builder",
+        "Final funding pack"
+      ],
+      "lanes": [
+        {
+          "name": "Grant Research",
+          "outputs": [
+            "grant list",
+            "accelerators",
+            "VC sources"
+          ]
+        },
+        {
+          "name": "Eligibility",
+          "outputs": [
+            "match score",
+            "deadlines",
+            "requirements"
+          ]
+        },
+        {
+          "name": "Pitch Deck",
+          "outputs": [
+            "deck outline",
+            "story",
+            "financial summary"
+          ]
+        },
+        {
+          "name": "Application",
+          "outputs": [
+            "forms checklist",
+            "draft answers"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "funding shortlist",
+        "pitch deck outline",
+        "application pack"
+      ]
+    },
+    {
+      "id": "kickstarter_launch_workflow",
+      "name": "AI Kickstarter Launch Workflow",
+      "category": "Crowdfunding / Launch",
+      "user_command": "ACC: Launch my product on Kickstarter",
+      "description": "Creates campaign research, video plan, rewards, funnel, outreach, and launch campaign package.",
+      "flow": [
+        "User command",
+        "Campaign research",
+        "Video REDACTED",
+        "Reward strategy",
+        "Landing/email funnel",
+        "Marketing blast",
+        "Final campaign"
+      ],
+      "lanes": [
+        {
+          "name": "Campaign Research",
+          "outputs": [
+            "top campaign analysis",
+            "backer psychology"
+          ]
+        },
+        {
+          "name": "Video",
+          "outputs": [
+            "trailer script",
+            "storyboard"
+          ]
+        },
+        {
+          "name": "Rewards",
+          "outputs": [
+            "pricing tiers",
+            "stretch goals"
+          ]
+        },
+        {
+          "name": "Funnel",
+          "outputs": [
+            "landing page",
+            "email sequence"
+          ]
+        },
+        {
+          "name": "Marketing",
+          "outputs": [
+            "Reddit/X/YouTube outreach plan"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "campaign page draft",
+        "video script",
+        "reward tiers",
+        "launch checklist"
+      ]
+    },
+    {
+      "id": "cold_outreach_workflow",
+      "name": "AI Cold Outreach Workflow",
+      "category": "Sales / Lead Generation",
+      "user_command": "ACC: Get me clients for my service business",
+      "description": "Finds leads, researches decision makers, writes personalized outreach, sends with approval, and tracks CRM.",
+      "flow": [
+        "User command",
+        "Lead scraping",
+        "Research lane",
+        "Message writer",
+        "Sending engine",
+        "CRM tracking"
+      ],
+      "lanes": [
+        {
+          "name": "Leads",
+          "outputs": [
+            "lead list",
+            "business info"
+          ]
+        },
+        {
+          "name": "Research",
+          "outputs": [
+            "decision maker data",
+            "pain points"
+          ]
+        },
+        {
+          "name": "Messaging",
+          "outputs": [
+            "personalized scripts",
+            "follow-ups"
+          ]
+        },
+        {
+          "name": "Sending",
+          "outputs": [
+            "approval queue",
+            "sent log"
+          ]
+        },
+        {
+          "name": "CRM",
+          "outputs": [
+            "reply tracking",
+            "meeting pipeline"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "sending messages/emails/DMs"
+      ],
+      "final_outputs": [
+        "lead list",
+        "outreach campaign",
+        "CRM pipeline"
+      ]
+    },
+    {
+      "id": "marketplace_flipping_workflow",
+      "name": "AI Marketplace Flipping Workflow",
+      "category": "Commerce / Resale",
+      "user_command": "ACC: Find profitable marketplace flips",
+      "description": "Scans marketplaces, compares prices, estimates profit, drafts negotiation messages, and creates resale listings.",
+      "flow": [
+        "User command",
+        "Marketplace scan",
+        "Price analysis",
+        "Demand research",
+        "Negotiation drafts",
+        "Resell workflow"
+      ],
+      "lanes": [
+        {
+          "name": "Marketplace Scan",
+          "outputs": [
+            "items found",
+            "seller data"
+          ]
+        },
+        {
+          "name": "Price Analysis",
+          "outputs": [
+            "comparison prices",
+            "profit margin"
+          ]
+        },
+        {
+          "name": "Demand Research",
+          "outputs": [
+            "sell-through notes",
+            "seasonality"
+          ]
+        },
+        {
+          "name": "Negotiation",
+          "outputs": [
+            "message drafts",
+            "offer strategy"
+          ]
+        },
+        {
+          "name": "Resell",
+          "outputs": [
+            "listing title",
+            "description",
+            "pricing"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "sending messages",
+        "posting listings"
+      ],
+      "final_outputs": [
+        "deal shortlist",
+        "profit estimate",
+        "listing pack"
+      ]
+    },
+    {
+      "id": "course_business_workflow",
+      "name": "AI Course Business Workflow",
+      "category": "Education / Digital Product",
+      "user_command": "ACC: Create and sell an AI tools course",
+      "description": "Builds course concept, curriculum, branding, content, sales funnel, and launch plan.",
+      "flow": [
+        "User command",
+        "Research lane",
+        "Curriculum lane",
+        "Branding lane",
+        "Content REDACTED",
+        "Sales funnel"
+      ],
+      "lanes": [
+        {
+          "name": "Research",
+          "outputs": [
+            "audience demand",
+            "competitor courses"
+          ]
+        },
+        {
+          "name": "Curriculum",
+          "outputs": [
+            "modules",
+            "lessons",
+            "exercises"
+          ]
+        },
+        {
+          "name": "Branding",
+          "outputs": [
+            "sales page positioning",
+            "visual style"
+          ]
+        },
+        {
+          "name": "Content",
+          "outputs": [
+            "slides",
+            "scripts",
+            "PDFs"
+          ]
+        },
+        {
+          "name": "Sales Funnel",
+          "outputs": [
+            "checkout plan",
+            "email campaign"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "course outline",
+        "lesson plan",
+        "sales page copy",
+        "launch funnel"
+      ]
+    },
+    {
+      "id": "ai_newsroom_workflow",
+      "name": "AI Real-Time Newsroom Workflow",
+      "category": "Media / News",
+      "user_command": "ACC: Cover today’s AI news automatically",
+      "description": "Tracks news, verifies facts, detects trends, generates content, and prepares publishing queue.",
+      "flow": [
+        "User command",
+        "News scraping",
+        "Fact verification",
+        "Trend detection",
+        "Article/video generation",
+        "Publishing engine"
+      ],
+      "lanes": [
+        {
+          "name": "News Scraping",
+          "outputs": [
+            "source list",
+            "breaking items"
+          ]
+        },
+        {
+          "name": "Fact Verification",
+          "outputs": [
+            "source comparison",
+            "credibility score"
+          ]
+        },
+        {
+          "name": "Trend Detection",
+          "outputs": [
+            "viral opportunities",
+            "audience interest"
+          ]
+        },
+        {
+          "name": "Content Gen",
+          "outputs": [
+            "shorts",
+            "reels",
+            "blogs"
+          ]
+        },
+        {
+          "name": "Publishing",
+          "outputs": [
+            "approval queue",
+            "posting schedule"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "publishing"
+      ],
+      "final_outputs": [
+        "news content pack",
+        "verification notes",
+        "publishing queue"
+      ]
+    },
+    {
+      "id": "relationship_crm_workflow",
+      "name": "AI Relationship / CRM Workflow",
+      "category": "CRM / Relationship Management",
+      "user_command": "ACC: Help me maintain business relationships",
+      "description": "Tracks contacts, past interactions, reminders, suggested replies, and relationship health.",
+      "flow": [
+        "User command",
+        "Contact analysis",
+        "Reminder engine",
+        "Conversation AI",
+        "Smart CRM"
+      ],
+      "lanes": [
+        {
+          "name": "Contact Analysis",
+          "outputs": [
+            "interaction history",
+            "priority score"
+          ]
+        },
+        {
+          "name": "Reminders",
+          "outputs": [
+            "birthdays",
+            "events",
+            "follow-ups"
+          ]
+        },
+        {
+          "name": "Conversation AI",
+          "outputs": [
+            "suggested replies",
+            "tone analysis"
+          ]
+        },
+        {
+          "name": "CRM",
+          "outputs": [
+            "relationship health dashboard"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "relationship dashboard",
+        "follow-up schedule",
+        "reply suggestions"
+      ]
+    },
+    {
+      "id": "company_acquisition_workflow",
+      "name": "AI Company Acquisition Workflow",
+      "category": "M&A / Business Acquisition",
+      "user_command": "ACC: Find businesses I can acquire",
+      "description": "Sources business acquisition targets, evaluates financials, reviews risk, and prepares negotiation pack.",
+      "flow": [
+        "User command",
+        "Deal sourcing",
+        "Financial review",
+        "Risk analysis",
+        "Negotiation pack"
+      ],
+      "lanes": [
+        {
+          "name": "Deal Sourcing",
+          "outputs": [
+            "business listings",
+            "broker sources"
+          ]
+        },
+        {
+          "name": "Financial Review",
+          "outputs": [
+            "revenue/profit analysis",
+            "growth potential"
+          ]
+        },
+        {
+          "name": "Risk",
+          "outputs": [
+            "liabilities",
+            "reputation scan"
+          ]
+        },
+        {
+          "name": "Negotiation",
+          "outputs": [
+            "valuation range",
+            "offer strategy"
+          ]
+        }
+      ],
+      "final_outputs": [
+        "target shortlist",
+        "valuation report",
+        "negotiation pack"
+      ]
+    },
+    {
+      "id": "talent_agency_workflow",
+      "name": "AI Talent Agency Workflow",
+      "category": "Creator / Influencer Business",
+      "user_command": "ACC: Grow my influencer brand",
+      "description": "Analyzes brand, finds sponsorships, plans content, manages negotiation and contract review.",
+      "flow": [
+        "User command",
+        "Brand analysis",
+        "Sponsorship search",
+        "Content strategy",
+        "Negotiation lane"
+      ],
+      "lanes": [
+        {
+          "name": "Brand Analysis",
+          "outputs": [
+            "audience data",
+            "niche positioning"
+          ]
+        },
+        {
+          "name": "Sponsorship",
+          "outputs": [
+            "brand leads",
+            "pricing deals"
+          ]
+        },
+        {
+          "name": "Content",
+          "outputs": [
+            "viral concepts",
+            "posting schedule"
+          ]
+        },
+        {
+          "name": "Negotiation",
+          "outputs": [
+            "deal terms",
+            "contract review notes"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "brand outreach",
+        "contract/signing"
+      ],
+      "final_outputs": [
+        "growth plan",
+        "sponsor target list",
+        "content calendar"
+      ]
+    },
+    {
+      "id": "autonomous_business_operator_workflow",
+      "name": "AI Autonomous Business Operator",
+      "category": "Business OS",
+      "user_command": "ACC: Grow this business to $50k/month",
+      "description": "Coordinates sales, marketing, operations, finance, executive reporting, and approval layer for business growth.",
+      "flow": [
+        "User command",
+        "Business OS",
+        "Sales lane",
+        "Marketing lane",
+        "Operations lane",
+        "Finance lane",
+        "Executive reports",
+        "Human approval"
+      ],
+      "lanes": [
+        {
+          "name": "Sales",
+          "outputs": [
+            "lead gen",
+            "CRM",
+            "outreach"
+          ]
+        },
+        {
+          "name": "Marketing",
+          "outputs": [
+            "content",
+            "ads",
+            "SEO"
+          ]
+        },
+        {
+          "name": "Operations",
+          "outputs": [
+            "team tasks",
+            "automations",
+            "SOPs"
+          ]
+        },
+        {
+          "name": "Finance",
+          "outputs": [
+            "cashflow",
+            "forecasts",
+            "KPIs"
+          ]
+        },
+        {
+          "name": "Executive Layer",
+          "outputs": [
+            "strategy report",
+            "next actions"
+          ]
+        }
+      ],
+      "approval_required_for": [
+        "spending money",
+        "hiring",
+        "sending campaigns",
+        "legal/financial actions"
+      ],
+      "final_outputs": [
+        "business dashboard",
+        "growth plan",
+        "weekly executive report"
+      ]
+    },
+    {
+      "id": "founder_project_company_in_a_box",
+      "name": "Founder Project — AI Company in a Box",
+      "category": "Founder / Business Launch",
+      "user_command": "Founder Project: Start a company from this idea",
+      "description": "Turns a business idea into a launch-ready company foundation with research, business model, brand, website, offers, operations, marketing, leads, automation, and dashboard.",
+      "flow": [
+        "Idea",
+        "Research",
+        "Business Model",
+        "Branding",
+        "Website",
+        "Offers/Pricing",
+        "Operations",
+        "Marketing",
+        "Lead Generation",
+        "Automation",
+        "Launch Dashboard"
+      ],
+      "lanes": [
+        {
+          "name": "Research Engine",
+          "outputs": [
+            "competitors",
+            "market demand",
+            "trends",
+            "target audience",
+            "SEO",
+            "risks"
+          ]
+        },
+        {
+          "name": "Business Model Engine",
+          "outputs": [
+            "revenue model",
+            "packages",
+            "pricing",
+            "upsells",
+            "cost assumptions"
+          ]
+        },
+        {
+          "name": "Branding Engine",
+          "outputs": [
+            "business names",
+            "slogan",
+            "tone",
+            "colors",
+            "positioning"
+          ]
+        },
+        {
+          "name": "Website Engine",
+          "outputs": [
+            "landing page copy",
+            "sections",
+            "CTA",
+            "FAQ",
+            "trust signals"
+          ]
+        },
+        {
+          "name": "Offer/Pricing Engine",
+          "outputs": [
+            "service packages",
+            "tiers",
+            "guarantees",
+            "sales structure"
+          ]
+        },
+        {
+          "name": "Document Engine",
+          "outputs": [
+            "proposals",
+            "invoices",
+            "contracts",
+            "onboarding docs",
+            "SOPs"
+          ]
+        },
+        {
+          "name": "Marketing Engine",
+          "outputs": [
+            "SEO blogs",
+            "social content",
+            "ads",
+            "email campaigns",
+            "lead magnets"
+          ]
+        },
+        {
+          "name": "Lead Generation Engine",
+          "outputs": [
+            "ICP",
+            "lead sources",
+            "outreach scripts",
+            "follow-ups"
+          ]
+        },
+        {
+          "name": "Automation Engine",
+          "outputs": [
+            "email flows",
+            "CRM pipeline",
+            "scheduling",
+            "reminders"
+          ]
+        },
+        {
+          "name": "Operations Engine",
+          "outputs": [
+            "tasks",
+            "leads",
+            "finance tracker",
+            "growth dashboard"
+          ]
+        }
+      ],
+      "starter_templates": [
+        "Local Service Business",
+        "SaaS Startup",
+        "Agency",
+        "Creator Business",
+        "E-commerce Brand",
+        "Consulting Business",
+        "Course Business",
+        "Marketplace Business"
+      ],
+      "final_outputs": [
+        "business blueprint",
+        "brand kit",
+        "website copy",
+        "pricing/offers",
+        "launch checklist",
+        "marketing plan",
+        "lead outreach scripts",
+        "operations dashboard",
+        "exportable company pack"
+      ]
+    }
+  ]
+}

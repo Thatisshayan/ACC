@@ -1,0 +1,60 @@
+{
+  "id": "course_business_workflow",
+  "name": "AI Course Business Workflow",
+  "category": "Education / Digital Product",
+  "user_command": "ACC: Create and sell an AI tools course",
+  "description": "Builds course concept, curriculum, branding, content, sales funnel, and launch plan.",
+  "flow": [
+    "User command",
+    "Research lane",
+    "Curriculum lane",
+    "Branding lane",
+    "Content REDACTED",
+    "Sales funnel"
+  ],
+  "lanes": [
+    {
+      "name": "Research",
+      "outputs": [
+        "audience demand",
+        "competitor courses"
+      ]
+    },
+    {
+      "name": "Curriculum",
+      "outputs": [
+        "modules",
+        "lessons",
+        "exercises"
+      ]
+    },
+    {
+      "name": "Branding",
+      "outputs": [
+        "sales page positioning",
+        "visual style"
+      ]
+    },
+    {
+      "name": "Content",
+      "outputs": [
+        "slides",
+        "scripts",
+        "PDFs"
+      ]
+    },
+    {
+      "name": "Sales Funnel",
+      "outputs": [
+        "checkout plan",
+        "email campaign"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "course outline",
+    "lesson plan",
+    "sales page copy",
+    "launch funnel"
+  ]
+}

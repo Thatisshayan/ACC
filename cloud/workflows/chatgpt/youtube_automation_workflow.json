@@ -1,0 +1,76 @@
+{
+  "id": "youtube_automation_workflow",
+  "name": "YouTube Automation Workflow",
+  "category": "Content / Creative",
+  "user_command": "ACC: Create a faceless AI tools video",
+  "description": "Creates a full video pipeline from research to script, visuals, voice, edit, SEO, and upload.",
+  "flow": [
+    "User command",
+    "ACC Orchestrator",
+    "Research trends and hooks",
+    "Script lane",
+    "Visual/thumbnail lane",
+    "Voice generation lane",
+    "Video assembly lane",
+    "SEO/upload lane",
+    "Analytics tracking"
+  ],
+  "lanes": [
+    {
+      "name": "Research",
+      "outputs": [
+        "trend report",
+        "hooks",
+        "competitor references"
+      ]
+    },
+    {
+      "name": "Script",
+      "outputs": [
+        "full script",
+        "voiceover text",
+        "CTA"
+      ]
+    },
+    {
+      "name": "Visuals",
+      "outputs": [
+        "scene prompts",
+        "thumbnail prompt",
+        "asset list"
+      ]
+    },
+    {
+      "name": "Voice",
+      "outputs": [
+        "TTS narration",
+        "audio notes"
+      ]
+    },
+    {
+      "name": "Editing",
+      "outputs": [
+        "assembled video plan",
+        "FFmpeg/editor instructions"
+      ]
+    },
+    {
+      "name": "SEO",
+      "outputs": [
+        "title",
+        "description",
+        "tags",
+        "chapters"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "publishing/uploading"
+  ],
+  "final_outputs": [
+    "video package",
+    "thumbnail",
+    "SEO pack",
+    "upload checklist"
+  ]
+}

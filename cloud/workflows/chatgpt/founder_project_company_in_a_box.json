@@ -1,0 +1,140 @@
+{
+  "id": "founder_project_company_in_a_box",
+  "name": "Founder Project — AI Company in a Box",
+  "category": "Founder / Business Launch",
+  "user_command": "Founder Project: Start a company from this idea",
+  "description": "Turns a business idea into a launch-ready company foundation with research, business model, brand, website, offers, operations, marketing, leads, automation, and dashboard.",
+  "flow": [
+    "Idea",
+    "Research",
+    "Business Model",
+    "Branding",
+    "Website",
+    "Offers/Pricing",
+    "Operations",
+    "Marketing",
+    "Lead Generation",
+    "Automation",
+    "Launch Dashboard"
+  ],
+  "lanes": [
+    {
+      "name": "Research Engine",
+      "outputs": [
+        "competitors",
+        "market demand",
+        "trends",
+        "target audience",
+        "SEO",
+        "risks"
+      ]
+    },
+    {
+      "name": "Business Model Engine",
+      "outputs": [
+        "revenue model",
+        "packages",
+        "pricing",
+        "upsells",
+        "cost assumptions"
+      ]
+    },
+    {
+      "name": "Branding Engine",
+      "outputs": [
+        "business names",
+        "slogan",
+        "tone",
+        "colors",
+        "positioning"
+      ]
+    },
+    {
+      "name": "Website Engine",
+      "outputs": [
+        "landing page copy",
+        "sections",
+        "CTA",
+        "FAQ",
+        "trust signals"
+      ]
+    },
+    {
+      "name": "Offer/Pricing Engine",
+      "outputs": [
+        "service packages",
+        "tiers",
+        "guarantees",
+        "sales structure"
+      ]
+    },
+    {
+      "name": "Document Engine",
+      "outputs": [
+        "proposals",
+        "invoices",
+        "contracts",
+        "onboarding docs",
+        "SOPs"
+      ]
+    },
+    {
+      "name": "Marketing Engine",
+      "outputs": [
+        "SEO blogs",
+        "social content",
+        "ads",
+        "email campaigns",
+        "lead magnets"
+      ]
+    },
+    {
+      "name": "Lead Generation Engine",
+      "outputs": [
+        "ICP",
+        "lead sources",
+        "outreach scripts",
+        "follow-ups"
+      ]
+    },
+    {
+      "name": "Automation Engine",
+      "outputs": [
+        "email flows",
+        "CRM pipeline",
+        "scheduling",
+        "reminders"
+      ]
+    },
+    {
+      "name": "Operations Engine",
+      "outputs": [
+        "tasks",
+        "leads",
+        "finance tracker",
+        "growth dashboard"
+      ]
+    }
+  ],
+  "starter_templates": [
+    "Local Service Business",
+    "SaaS Startup",
+    "Agency",
+    "Creator Business",
+    "E-commerce Brand",
+    "Consulting Business",
+    "Course Business",
+    "Marketplace Business"
+  ],
+  "final_outputs": [
+    "business blueprint",
+    "brand kit",
+    "website copy",
+    "pricing/offers",
+    "launch checklist",
+    "marketing plan",
+    "lead outreach scripts",
+    "operations dashboard",
+    "exportable company pack"
+  ]
+}

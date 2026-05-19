@@ -1,0 +1,43 @@
+{
+  "id": "personal_assistant_workflow",
+  "name": "AI Personal Assistant Workflow",
+  "category": "Productivity",
+  "user_command": "ACC: Organize my entire week",
+  "description": "Builds weekly schedule using calendar, reminders, priorities, deadlines, and follow-ups.",
+  "flow": [
+    "User command",
+    "Calendar sync",
+    "Priority planner",
+    "Reminder engine",
+    "Smart schedule",
+    "Final weekly plan"
+  ],
+  "lanes": [
+    {
+      "name": "Calendar",
+      "outputs": [
+        "meetings",
+        "travel time"
+      ]
+    },
+    {
+      "name": "Priority",
+      "outputs": [
+        "deadline ranking",
+        "energy optimization"
+      ]
+    },
+    {
+      "name": "Reminder",
+      "outputs": [
+        "notifications",
+        "follow-ups"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "weekly plan",
+    "daily breakdown",
+    "reminder list"
+  ]
+}

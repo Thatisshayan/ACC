@@ -1,0 +1,54 @@
+{
+  "id": "customer_acquisition_workflow",
+  "name": "AI Acquisition / Growth Workflow",
+  "category": "Sales / Growth",
+  "user_command": "ACC: Acquire customers for my SaaS",
+  "description": "Creates audience research, outreach, funnel, CRM, and customer acquisition pipeline.",
+  "flow": [
+    "User command",
+    "Audience research",
+    "Outreach lane",
+    "Funnel builder",
+    "CRM analytics",
+    "Customer pipeline"
+  ],
+  "lanes": [
+    {
+      "name": "Audience Research",
+      "outputs": [
+        "ICP",
+        "lead sources"
+      ]
+    },
+    {
+      "name": "Outreach",
+      "outputs": [
+        "email/DM scripts",
+        "campaigns"
+      ]
+    },
+    {
+      "name": "Funnel",
+      "outputs": [
+        "landing page",
+        "lead magnet"
+      ]
+    },
+    {
+      "name": "CRM",
+      "outputs": [
+        "lead tracker",
+        "follow-up states"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "sending outreach",
+    "public posting"
+  ],
+  "final_outputs": [
+    "lead pipeline",
+    "outreach scripts",
+    "funnel plan"
+  ]
+}

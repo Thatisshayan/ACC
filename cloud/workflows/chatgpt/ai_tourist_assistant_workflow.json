@@ -1,0 +1,54 @@
+{
+  "id": "ai_tourist_assistant_workflow",
+  "name": "AI Tourist Assistant Workflow",
+  "category": "Travel / Local Experience",
+  "user_command": "ACC: Plan my FIFA World Cup weekend",
+  "description": "Creates a complete trip/event itinerary with hotels, transport, attractions, food, timing, and local recommendations.",
+  "flow": [
+    "User command",
+    "ACC Orchestrator",
+    "Hotels/flights/budget",
+    "Event research",
+    "Restaurant/local experience finder",
+    "Live itinerary",
+    "Final travel package"
+  ],
+  "lanes": [
+    {
+      "name": "Travel Logistics",
+      "outputs": [
+        "hotel options",
+        "transport plan",
+        "budget"
+      ]
+    },
+    {
+      "name": "Event Research",
+      "outputs": [
+        "event schedule",
+        "crowd/timing notes"
+      ]
+    },
+    {
+      "name": "Food/Experience",
+      "outputs": [
+        "restaurants",
+        "hidden spots",
+        "local activities"
+      ]
+    },
+    {
+      "name": "Itinerary",
+      "outputs": [
+        "daily schedule",
+        "maps/timing plan"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "trip itinerary",
+    "budget",
+    "maps/timing checklist",
+    "booking shortlist"
+  ]
+}

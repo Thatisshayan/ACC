@@ -1,0 +1,52 @@
+{
+  "id": "real_estate_investor_workflow",
+  "name": "Real Estate Investor Workflow",
+  "category": "Real Estate / Investment",
+  "user_command": "ACC: Find profitable investment properties",
+  "description": "Analyzes markets, property ROI, renovation costs, risks, and produces ranked deal reports.",
+  "flow": [
+    "User command",
+    "Market research",
+    "ROI calculator",
+    "Renovation analysis",
+    "Deal ranking",
+    "Risk scoring",
+    "Final deal report"
+  ],
+  "lanes": [
+    {
+      "name": "Market Research",
+      "outputs": [
+        "neighborhood analysis",
+        "trend notes"
+      ]
+    },
+    {
+      "name": "ROI Calculator",
+      "outputs": [
+        "cashflow",
+        "mortgage assumptions",
+        "yield"
+      ]
+    },
+    {
+      "name": "Renovation Analysis",
+      "outputs": [
+        "rehab estimate",
+        "permit considerations"
+      ]
+    },
+    {
+      "name": "Risk Scoring",
+      "outputs": [
+        "risk report",
+        "ranking"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "ranked deal list",
+    "ROI sheet",
+    "risk report"
+  ]
+}

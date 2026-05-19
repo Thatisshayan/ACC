@@ -1,0 +1,53 @@
+{
+  "id": "grant_funding_workflow",
+  "name": "AI Grant / Funding Workflow",
+  "category": "Funding / Grants",
+  "user_command": "ACC: Find grants/funding for my startup",
+  "description": "Finds funding sources, checks eligibility, drafts pitch materials, and builds application pack.",
+  "flow": [
+    "User command",
+    "Grant research",
+    "Eligibility check",
+    "Pitch deck lane",
+    "Application builder",
+    "Final funding pack"
+  ],
+  "lanes": [
+    {
+      "name": "Grant Research",
+      "outputs": [
+        "grant list",
+        "accelerators",
+        "VC sources"
+      ]
+    },
+    {
+      "name": "Eligibility",
+      "outputs": [
+        "match score",
+        "deadlines",
+        "requirements"
+      ]
+    },
+    {
+      "name": "Pitch Deck",
+      "outputs": [
+        "deck outline",
+        "story",
+        "financial summary"
+      ]
+    },
+    {
+      "name": "Application",
+      "outputs": [
+        "forms checklist",
+        "draft answers"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "funding shortlist",
+    "pitch deck outline",
+    "application pack"
+  ]
+}

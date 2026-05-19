@@ -1,0 +1,59 @@
+{
+  "id": "ai_app_factory_workflow",
+  "name": "AI App Factory Workflow",
+  "category": "Software / Product Build",
+  "user_command": "ACC: Build me a fitness tracking app",
+  "description": "Builds an app through research, UI/UX, backend, QA, deployment, and final app delivery.",
+  "flow": [
+    "User idea",
+    "Research lane",
+    "UI/UX lane",
+    "Backend lane",
+    "QA/test lane",
+    "Deployment lane",
+    "Final app"
+  ],
+  "lanes": [
+    {
+      "name": "Research",
+      "outputs": [
+        "competitor analysis",
+        "feature list"
+      ]
+    },
+    {
+      "name": "UI/UX",
+      "outputs": [
+        "design system",
+        "screens"
+      ]
+    },
+    {
+      "name": "Backend",
+      "outputs": [
+        "API",
+        "database",
+        "auth"
+      ]
+    },
+    {
+      "name": "QA",
+      "outputs": [
+        "test results",
+        "bug list"
+      ]
+    },
+    {
+      "name": "Deploy",
+      "outputs": [
+        "live URL",
+        "deployment notes"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "working MVP",
+    "repo structure",
+    "deployment report"
+  ]
+}

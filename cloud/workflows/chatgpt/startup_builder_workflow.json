@@ -1,0 +1,63 @@
+{
+  "id": "startup_builder_workflow",
+  "name": "Startup Builder Workflow",
+  "category": "Startup / Founder",
+  "user_command": "ACC: Turn my idea into a startup",
+  "description": "Turns a startup idea into market research, branding, business model, MVP plan, launch workflow, and startup pack.",
+  "flow": [
+    "User idea",
+    "Market research",
+    "Branding",
+    "Business model",
+    "MVP build lane",
+    "Launch workflow",
+    "Final startup pack"
+  ],
+  "lanes": [
+    {
+      "name": "Market Research",
+      "outputs": [
+        "competitors",
+        "demand validation",
+        "market gaps"
+      ]
+    },
+    {
+      "name": "Branding",
+      "outputs": [
+        "name ideas",
+        "logo direction",
+        "identity"
+      ]
+    },
+    {
+      "name": "Business Model",
+      "outputs": [
+        "pricing",
+        "revenue model",
+        "offer"
+      ]
+    },
+    {
+      "name": "MVP Build",
+      "outputs": [
+        "website/app requirements",
+        "roadmap"
+      ]
+    },
+    {
+      "name": "Launch",
+      "outputs": [
+        "SEO",
+        "outreach",
+        "launch checklist"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "startup blueprint",
+    "brand kit",
+    "MVP roadmap",
+    "launch plan"
+  ]
+}

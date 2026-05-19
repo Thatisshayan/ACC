@@ -1,0 +1,64 @@
+{
+  "id": "landing_page_workflow",
+  "name": "Landing Page Workflow",
+  "category": "Software / Marketing",
+  "user_command": "ACC: Build me a landing page",
+  "description": "Builds and deploys a landing page using parallel research, UI/UX, frontend/backend, deployment, and QA lanes.",
+  "flow": [
+    "User command",
+    "ACC Orchestrator",
+    "Research lane: competitors, SEO, positioning",
+    "UI/UX lane: Gemini layouts, sections, responsive design",
+    "Backend/frontend lane: Claude/Cursor React/Vite implementation",
+    "Deployment lane: Netlify/Vercel/Railway",
+    "Audit/QA: Lighthouse, forms, responsiveness, tests",
+    "Final result: live website"
+  ],
+  "lanes": [
+    {
+      "name": "Research",
+      "outputs": [
+        "competitor scan",
+        "SEO keywords",
+        "positioning notes"
+      ]
+    },
+    {
+      "name": "UI/UX",
+      "outputs": [
+        "wireframe",
+        "section layout",
+        "visual direction"
+      ]
+    },
+    {
+      "name": "Build",
+      "outputs": [
+        "frontend code",
+        "forms",
+        "backend/API if needed"
+      ]
+    },
+    {
+      "name": "Deploy",
+      "outputs": [
+        "live URL",
+        "deployment config"
+      ]
+    },
+    {
+      "name": "QA",
+      "outputs": [
+        "test report",
+        "fix list",
+        "approval status"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "deployed landing page",
+    "SEO metadata",
+    "responsive test report",
+    "launch checklist"
+  ]
+}

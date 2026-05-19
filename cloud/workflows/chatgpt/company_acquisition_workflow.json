@@ -1,0 +1,49 @@
+{
+  "id": "company_acquisition_workflow",
+  "name": "AI Company Acquisition Workflow",
+  "category": "M&A / Business Acquisition",
+  "user_command": "ACC: Find businesses I can acquire",
+  "description": "Sources business acquisition targets, evaluates financials, reviews risk, and prepares negotiation pack.",
+  "flow": [
+    "User command",
+    "Deal sourcing",
+    "Financial review",
+    "Risk analysis",
+    "Negotiation pack"
+  ],
+  "lanes": [
+    {
+      "name": "Deal Sourcing",
+      "outputs": [
+        "business listings",
+        "broker sources"
+      ]
+    },
+    {
+      "name": "Financial Review",
+      "outputs": [
+        "revenue/profit analysis",
+        "growth potential"
+      ]
+    },
+    {
+      "name": "Risk",
+      "outputs": [
+        "liabilities",
+        "reputation scan"
+      ]
+    },
+    {
+      "name": "Negotiation",
+      "outputs": [
+        "valuation range",
+        "offer strategy"
+      ]
+    }
+  ],
+  "final_outputs": [
+    "target shortlist",
+    "valuation report",
+    "negotiation pack"
+  ]
+}

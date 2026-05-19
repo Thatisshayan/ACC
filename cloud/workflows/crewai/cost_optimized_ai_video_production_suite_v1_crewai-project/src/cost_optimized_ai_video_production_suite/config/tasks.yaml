@@ -1,0 +1,59 @@
+---
+research_video_content:
+  description: Efficiently research essential information about "{title}" for {genre}
+    video content. Focus on key facts, compelling angles, and core insights needed
+    for a {length} minute video. Prioritize high-impact information over exhaustive
+    research.
+  expected_output: Concise research report with essential facts, key insights, and
+    compelling angles about "{title}" optimized for {genre} video REDACTED and {length}
+    minute duration.
+  agent: video_content_researcher
+write_video_script:
+  description: Create a comprehensive video script for "{title}" based on the research
+    findings. The script should be written in the {genre} style and perfectly timed
+    for {length} minutes. Include dialogue, narration, scene transitions, timing cues,
+    and ensure the content flows naturally while maintaining audience engagement throughout.
+  expected_output: A complete video script with timestamps, dialogue/narration, scene
+    descriptions, and pacing notes. The script should be engaging, well-structured,
+    and optimized for a {length} minute video in the {genre} style.
+  agent: video_script_writer
+  context:
+  - research_video_content
+create_visual_REDACTED_guide:
+  description: Develop detailed visual directions and REDACTED notes for the "{title}"
+    video. Create specific visual descriptions, camera angle suggestions, scene compositions,
+    graphics recommendations, and visual elements that will bring the script to life.
+    Ensure all visual elements align with the {genre} style and work within the {length}
+    minute timeframe.
+  expected_output: A comprehensive visual REDACTED guide including scene-by-scene
+    visual descriptions, camera angles, lighting suggestions, graphics/animations
+    recommendations, color schemes, and visual storytelling elements that complement
+    the script and enhance the {genre} style video.
+  agent: visual_content_director
+  context:
+  - write_video_script
+generate_scene_images:
+  description: Identify and generate 3-5 most impactful scene images for "{title}"
+    video. Focus on key visual moments that represent the core message and {genre}
+    style. Create optimized DALL-E prompts for high-quality results in minimal attempts,
+    considering {length} minute pacing.
+  expected_output: 3-5 high-quality generated images representing the most important
+    visual scenes, with scene descriptions and timing references. Focus on essential
+    visuals that maximize REDACTED impact.
+  agent: image_generator
+  context:
+  - create_visual_REDACTED_guide
+deliver_complete_video_package:
+  description: Efficiently compile all video materials for "{title}" project into
+    a professional email to {recipient_email}. Create concise, well-organized presentation
+    of research, script, REDACTED guide, and images. Focus on clarity and professional
+    delivery.
+  expected_output: A professional email sent to {recipient_email} containing the complete
+    video content package with organized sections for research findings, the complete
+    script, visual REDACTED guide, and generated scene images. The email should
+    be comprehensive, well-formatted, and ready for video REDACTED use.
+  agent: email_delivery_specialist
+  context:
+  - generate_scene_images
+  - write_video_script
+  - research_video_content

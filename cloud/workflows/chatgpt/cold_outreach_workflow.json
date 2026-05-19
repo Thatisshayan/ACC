@@ -1,0 +1,60 @@
+{
+  "id": "cold_outreach_workflow",
+  "name": "AI Cold Outreach Workflow",
+  "category": "Sales / Lead Generation",
+  "user_command": "ACC: Get me clients for my service business",
+  "description": "Finds leads, researches decision makers, writes personalized outreach, sends with approval, and tracks CRM.",
+  "flow": [
+    "User command",
+    "Lead scraping",
+    "Research lane",
+    "Message writer",
+    "Sending engine",
+    "CRM tracking"
+  ],
+  "lanes": [
+    {
+      "name": "Leads",
+      "outputs": [
+        "lead list",
+        "business info"
+      ]
+    },
+    {
+      "name": "Research",
+      "outputs": [
+        "decision maker data",
+        "pain points"
+      ]
+    },
+    {
+      "name": "Messaging",
+      "outputs": [
+        "personalized scripts",
+        "follow-ups"
+      ]
+    },
+    {
+      "name": "Sending",
+      "outputs": [
+        "approval queue",
+        "sent log"
+      ]
+    },
+    {
+      "name": "CRM",
+      "outputs": [
+        "reply tracking",
+        "meeting pipeline"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "sending messages/emails/DMs"
+  ],
+  "final_outputs": [
+    "lead list",
+    "outreach campaign",
+    "CRM pipeline"
+  ]
+}

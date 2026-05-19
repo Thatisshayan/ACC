@@ -1,0 +1,62 @@
+{
+  "id": "marketplace_flipping_workflow",
+  "name": "AI Marketplace Flipping Workflow",
+  "category": "Commerce / Resale",
+  "user_command": "ACC: Find profitable marketplace flips",
+  "description": "Scans marketplaces, compares prices, estimates profit, drafts negotiation messages, and creates resale listings.",
+  "flow": [
+    "User command",
+    "Marketplace scan",
+    "Price analysis",
+    "Demand research",
+    "Negotiation drafts",
+    "Resell workflow"
+  ],
+  "lanes": [
+    {
+      "name": "Marketplace Scan",
+      "outputs": [
+        "items found",
+        "seller data"
+      ]
+    },
+    {
+      "name": "Price Analysis",
+      "outputs": [
+        "comparison prices",
+        "profit margin"
+      ]
+    },
+    {
+      "name": "Demand Research",
+      "outputs": [
+        "sell-through notes",
+        "seasonality"
+      ]
+    },
+    {
+      "name": "Negotiation",
+      "outputs": [
+        "message drafts",
+        "offer strategy"
+      ]
+    },
+    {
+      "name": "Resell",
+      "outputs": [
+        "listing title",
+        "description",
+        "pricing"
+      ]
+    }
+  ],
+  "approval_required_for": [
+    "sending messages",
+    "posting listings"
+  ],
+  "final_outputs": [
+    "deal shortlist",
+    "profit estimate",
+    "listing pack"
+  ]
+}
