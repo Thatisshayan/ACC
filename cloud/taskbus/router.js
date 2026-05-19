@@ -198,6 +198,37 @@ async function routeTask(taskId) {
     }
     log('[router] Composio not configured — falling through to provider chain');
   }
+
+  // ── 3e. Aider — CLI coding agent ──────────────────────────────────────────
+  if (task.assigned_agent === 'aider') {
+    var aider = require('../integrations/aider.js');
+    if (aider.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var aiResult = await aider.sendTaskFromACC(task);
+      var aiR = store.addResult({ task_id: taskId, provider_used: 'aider',
+        is_real_ai_result: true, cost_tier: 'local_deepseek',
+        output: aiResult.output || '', summary: aiResult.success ? 'Aider completed. Files: ' + (aiResult.files_changed||[]).join(', ') : aiResult.error });
+      store.updateTask(taskId, { status: aiResult.success ? 'done' : 'failed', provider_used: 'aider' });
+      return { status: aiResult.success?'done':'failed', taskId, provider_used:'aider', output: aiResult.output };
+    }
+    log('[router] Aider not enabled — falling through');
+  }
+
+  // ── 3f. Devika — AI coding agent server ───────────────────────────────────
+  if (task.assigned_agent === 'devika') {
+    var devika = require('../integrations/devika.js');
+    if (devika.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var dvResult = await devika.sendTaskFromACC(task);
+      var dvR = store.addResult({ task_id: taskId, provider_used: 'devika',
+        is_real_ai_result: true, cost_tier: 'local_agent',
+        output: dvResult.output || '', summary: dvResult.success ? 'Devika completed' : dvResult.error });
+      store.updateTask(taskId, { status: dvResult.success?'done':'failed', provider_used: 'devika' });
+      return { status: dvResult.success?'done':'failed', taskId, provider_used:'devika', output: dvResult.output };
+    }
+    log('[router] Devika not running — falling through');
+  }
+
   store.addMessage(taskId, 'system', task.assigned_agent,
     'Executing | mode: ' + task.automation_mode + ' | chain: deepseek→ollama→claude→smart_stub');
 
