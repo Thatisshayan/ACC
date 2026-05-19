@@ -354,7 +354,18 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
   if (text === '/approvals')    { await run('/approvals',   function(){ return handleApprovals(chatId, sendFn); });   return true; }
   if (text === '/latesttask')   { await run('/latesttask',  function(){ return handleLatestTask(chatId, sendFn); });  return true; }
   if (text === '/latestresult') { await run('/latestresult',function(){ return handleLatestResult(chatId, sendFn); });return true; }
-  if (text === '/taskhelp')     { await run('/taskhelp',    function(){ return handleHelp(chatId, sendFn); });        return true; }
+  if (text === '/briefing' || text === '/brief') {
+    await run('/briefing', async function() {
+      var scheduler = require('../telegram/features/scheduler.js');
+      await safeSend(chatId, '⏳ Generating your briefing...', sendFn);
+      try {
+        await scheduler.sendBriefingForUser(chatId, 'morning');
+      } catch(e) {
+        await safeSend(chatId, '❌ ' + e.message, sendFn);
+      }
+    });
+    return true;
+  }
 
   // ── goal: prefix — parallel workflow engine ────────────────────────────────
   if (text.toLowerCase().startsWith('goal:') || text.toLowerCase().startsWith('/goal ')) {
@@ -478,6 +489,8 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   if (/^tell crewai/i.test(text))        agent = 'crewai';
   if (/^crewai:/i.test(text))            agent = 'crewai';
   if (/^crew:/i.test(text))              agent = 'crewai';
+  if (/^composio:/i.test(text))          agent = 'composio';
+  if (/^tell composio/i.test(text))      agent = 'composio';
 
   var task = store.createTask({
     title:             instruction.slice(0, 80),

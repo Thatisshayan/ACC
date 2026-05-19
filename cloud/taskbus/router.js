@@ -181,7 +181,23 @@ async function routeTask(taskId) {
     }
     log('[router] CrewAI not enabled — falling through to provider chain');
   }
-  store.updateTask(taskId, { status: 'in_progress' });
+
+  // ── 3d. Composio — 250+ tool integrations ─────────────────────────────────
+  if (task.assigned_agent === 'composio') {
+    var composio = require('../integrations/composio.js');
+    if (composio.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var coResult = await composio.sendTaskFromACC(task);
+      var coR = store.addResult({ task_id: taskId, provider_used: 'composio',
+        is_real_ai_result: true, cost_tier: 'external_agent',
+        output: coResult.data ? JSON.stringify(coResult.data) : (coResult.hint || coResult.error || ''),
+        summary: coResult.success ? 'Composio action completed' : (coResult.error || 'Composio needs app+action in meta') });
+      store.updateTask(taskId, { status: coResult.success ? 'done' : 'failed', provider_used: 'composio' });
+      return { status: coResult.success ? 'done' : 'failed', taskId, provider_used: 'composio',
+        output: coR.output, summary: coR.summary };
+    }
+    log('[router] Composio not configured — falling through to provider chain');
+  }
   store.addMessage(taskId, 'system', task.assigned_agent,
     'Executing | mode: ' + task.automation_mode + ' | chain: deepseek→ollama→claude→smart_stub');
 
