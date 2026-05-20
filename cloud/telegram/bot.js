@@ -712,7 +712,9 @@ async function handleCallback(cb) {
     clearState(userId);
     users.updateUser(userId, { jobPrefs: Object.assign({}, user.jobPrefs, { type: jtype }) });
     await sendMsg(chatId, '🔍 *Searching ' + jtype + ' ' + jrole + ' jobs in ' + jloc + '...*\n\n_Checking LinkedIn, Indeed, and the web. Results coming shortly._');
-    await callACC('/api/execute', { agentType: 'browser', payload: { mode: 'search', query: jrole+' '+jtype+' jobs in '+jloc, userId: userId, resumeFile: user.resumeFile }, meta: { role: 'member', userId: userId, sandbox: true } });
+    var jobSearch = require('../connectors/jobSearch.js');
+    var jobResults = await jobSearch.searchJobs(jrole, jloc, jtype, 10);
+    await sendMsg(chatId, jobSearch.formatForTelegram(jobResults, jrole, jloc));
     return;
   }
 

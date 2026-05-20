@@ -1,0 +1,153 @@
+## Analysis
+
+Based on the codebase structure:
+- `cloud/telegram/bot.js` handles Telegram callbacks and commands
+- `cloud/connectors/jobSearch.js` has `searchJobs()` and `formatForTelegram()` already implemented
+- The `jobtype_` callback currently calls `/api/execute` with a browser agent - this is inefficient for job searches
+- We need to replace this with direct calls to the jobSearch connector
+
+## Changes Required
+
+### 1. Add require statement at top of bot.js
+
+**Old code (top of file):**
+javascript
+const callACC = require('../acc-api');
+const { createTaskFromMessage } = require('../task-manager');
+
+
+**New code:**
+javascript
+const callACC = require('../acc-api');
+const { createTaskFromMessage } = require('../task-manager');
+const jobSearch = require('../connectors/jobSearch.js');
+
+
+### 2. Replace jobtype_ callback handler
+
+**Old code (inside callback handler):**
+javascript
+if (data.startsWith('jobtype_')) {
+  const parts = data.split('_');
+  const jrole = parts[1] || '';
+  const jloc = parts[2] || '';
+  const jtype = parts[3] || 'remote';
+  
+  await callACC('/api/execute', {
+    agent: 'browser',
+    task: `Search for ${jrole} jobs in ${jloc} (${jtype})`,
+    source: 'telegram'
+  });
+  
+  await sendMsg(chatId, `Searching for ${jrole} jobs in ${jloc}...`);
+}
+
+
+**New code:**
+javascript
+if (data.startsWith('jobtype_')) {
+  const parts = data.split('_');
+  const jrole = parts[1] || '';
+  const jloc = parts[2] || '';
+  const jtype = parts[3] || 'remote';
+  
+  try {
+    const results = await jobSearch.searchJobs(jrole, jloc, jtype, 10);
+    const msg = jobSearch.formatForTelegram(results, jrole, jloc);
+    await sendMsg(chatId, msg);
+  } catch (error) {
+    console.error('Job search failed:', error);
+    await sendMsg(chatId, `❌ Job search failed: ${error.message}`);
+  }
+}
+
+
+### 3. Add job search routing to createTaskFromMessage
+
+**Old code (inside createTaskFromMessage or message handler):**
+javascript
+// No job search routing exists
+
+
+**New code (add before generic task creation):**
+javascript
+// Job search routing
+const jobSearchMatch = text.match(/^(job search|find jobs|search jobs|jobs):\s*(.+)/i);
+if (jobSearchMatch) {
+  const query = jobSearchMatch[2];
+  // Parse query: "PM in Toronto" or "developer in Toronto"
+  const parts = query.split(/\s+in\s+/i);
+  const jrole = parts[0]?.trim() || '';
+  const jloc = parts[1]?.trim() || 'remote';
+  const jtype = 'remote'; // default
+  
+  try {
+    const results = await jobSearch.searchJobs(jrole, jloc, jtype, 10);
+    const msg = jobSearch.formatForTelegram(results, jrole, jloc);
+    await sendMsg(chatId, msg);
+  } catch (error) {
+    console.error('Job search failed:', error);
+    await sendMsg(chatId, `❌ Job search failed: ${error.message}`);
+  }
+  return; // Don't proceed to generic task creation
+}
+
+
+## Complete Modified bot.js (relevant sections only)
+
+javascript
+// At top of file - ADD require
+const callACC = require('../acc-api');
+const { createTaskFromMessage } = require('../task-manager');
+const jobSearch = require('../connectors/jobSearch.js');  // NEW
+
+// ... existing code ...
+
+// Inside callback handler - REPLACE jobtype_ section
+if (data.startsWith('jobtype_')) {
+  const parts = data.split('_');
+  const jrole = parts[1] || '';
+  const jloc = parts[2] || '';
+  const jtype = parts[3] || 'remote';
+  
+  try {
+    const results = await jobSearch.searchJobs(jrole, jloc, jtype, 10);
+    const msg = jobSearch.formatForTelegram(results, jrole, jloc);
+    await sendMsg(chatId, msg);
+  } catch (error) {
+    console.error('Job search failed:', error);
+    await sendMsg(chatId, `❌ Job search failed: ${error.message}`);
+  }
+}
+
+// Inside message handler / createTaskFromMessage - ADD before generic task creation
+// Job search routing
+const jobSearchMatch = text.match(/^(job search|find jobs|search jobs|jobs):\s*(.+)/i);
+if (jobSearchMatch) {
+  const query = jobSearchMatch[2];
+  const parts = query.split(/\s+in\s+/i);
+  const jrole = parts[0]?.trim() || '';
+  const jloc = parts[1]?.trim() || 'remote';
+  const jtype = 'remote';
+  
+  try {
+    const results = await jobSearch.searchJobs(jrole, jloc, jtype, 10);
+    const msg = jobSearch.formatForTelegram(results, jrole, jloc);
+    await sendMsg(chatId, msg);
+  } catch (error) {
+    console.error('Job search failed:', error);
+    await sendMsg(chatId, `❌ Job search failed: ${error.message}`);
+  }
+  return;
+}
+
+
+## Recommendation
+
+1. **Immediate**: Apply the changes above to bot.js
+2. **Test**: Verify jobtype_ callbacks work with direct connector calls
+3. **Test**: Verify "job search: PM in Toronto" style commands work
+4. **Consider**: Adding more job types (onsite, hybrid) to the routing parser
+5. **Consider**: Adding pagination support if results exceed 10
+
+The changes are minimal and safe - we're replacing an API call with a direct module call, which is faster and more reliable.

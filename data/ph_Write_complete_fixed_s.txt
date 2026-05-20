@@ -1,0 +1,12 @@
+```javascript
+async function sendBriefingForUser(userId, type) {
+  var date = new Date();
+  var dayIndex = date.getDay();
+  var store = require('../taskbus/store.js');
+  var tips = ["Start with the hardest task first", "Take a 5-min break every hour", "Review your goals before starting", "Eliminate distractions now", "Batch similar tasks together", "Use the 2-minute rule", "End your day by planning tomorrow"];
+  var stats = await store.getStats();
+  var taskCount = stats ? stats.totalTasks : 0;
+  var text = "📋 Daily Briefing\n📅 " + date.toDateString() + "\n📊 Tasks: " + taskCount + " active\n💡 Tip: " + tips[dayIndex] + "\n✅ Let's make today productive!";
+  sendMsgFn(userId, text);
+}
+```

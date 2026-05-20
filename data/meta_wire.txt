@@ -1,0 +1,107 @@
+## Analysis & Recommendation
+
+### Current State
+- `cloud/taskbus/telegramCommands.js` handles message parsing and agent routing via `createTaskFromMessage`
+- `cloud/taskbus/router.js` dispatches tasks to integration connectors
+- `cloud/integrations/meta.js` exists as the Meta connector
+- Other integrations (e.g., twitter, discord) follow a pattern of prefix-based routing + approval flow
+
+### Required Changes
+
+#### 1. `cloud/taskbus/telegramCommands.js` - Add prefix routing in `createTaskFromMessage`
+
+**Location:** Inside the function that parses the message and determines `assigned_agent`
+
+**Code to add/modify:**
+
+javascript
+// In createTaskFromMessage function, after existing prefix checks (e.g., twitter:, discord:)
+// Add these lines:
+
+// Meta/Instagram/Facebook prefix routing
+if (messageText.startsWith('meta:') || messageText.startsWith('instagram:') || messageText.startsWith('facebook:')) {
+  task.assigned_agent = 'meta';
+  task.message = messageText.replace(/^(meta:|instagram:|facebook:)\s*/i, '').trim();
+  task.approval_required = true; // All meta posts require approval
+  task.source = 'telegram';
+  
+  // Add note to the task message
+  task.note = 'Meta/Instagram posts always require your approval.';
+  
+  return task;
+}
+
+// Natural language trigger
+if (/^tell\s+meta\b/i.test(messageText)) {
+  task.assigned_agent = 'meta';
+  task.message = messageText.replace(/^tell\s+meta\s*/i, '').trim();
+  task.approval_required = true;
+  task.source = 'telegram';
+  task.note = 'Meta/Instagram posts always require your approval.';
+  
+  return task;
+}
+
+
+**Exact placement:** After the twitter/discord prefix checks (around line 45-60 depending on current code), before the default fallback.
+
+#### 2. `cloud/taskbus/router.js` - Add meta agent case
+
+**Location:** Inside the main routing function (likely `routeTask` or similar), after other integration cases.
+
+**Code to add:**
+
+javascript
+// Meta/Instagram/Facebook agent routing
+if (task.assigned_agent === 'meta') {
+  var meta = require('../integrations/meta.js');
+  
+  if (meta.enabled()) {
+    // All meta posts require approval - create approval request
+    var approval = store.createApproval({
+      task_id: task.id,
+      agent: 'meta',
+      message: task.message,
+      source: task.source || 'telegram',
+      approval_required: true,
+      note: task.note || 'Meta/Instagram posts always require your approval.'
+    });
+    
+    if (approval && approval.status === 'pending') {
+      // Store the task for later execution after approval
+      store.saveTask(task);
+      return { status: 'pending_approval', approval_id: approval.id };
+    } else {
+      // If approval already granted or not needed (shouldn't happen for meta)
+      return meta.post(task.message)
+        .then(function(result) {
+          return { status: 'completed', result: result };
+        })
+        .catch(function(err) {
+          return { status: 'error', error: err.message };
+        });
+    }
+  } else {
+    return { status: 'error', error: 'Meta integration is not enabled' };
+  }
+}
+
+
+**Important notes:**
+- The `store.createApproval()` function must exist (check if other integrations use it)
+- The `meta.post()` function should be the main posting method in `meta.js`
+- All meta posts are forced to require approval regardless of any other settings
+
+### Risks
+1. **Approval flow dependency:** If `store.createApproval()` doesn't exist or has different signature, this will break. Verify against existing approval patterns (e.g., twitter integration).
+2. **Meta connector API:** Ensure `meta.js` exports `enabled()` and `post()` functions with expected signatures.
+3. **Message stripping:** The regex for stripping prefixes might need adjustment if messages contain colons in content (e.g., "meta: check this: link").
+4. **Natural language trigger overlap:** "tell meta" could conflict with other "tell X" patterns if they exist.
+
+### Recommendation
+Implement both changes as shown above. Test with:
+- `meta: Hello world` → should route to meta agent with approval required
+- `instagram: Photo caption` → same as above
+- `facebook: Status update` → same as above
+- `tell meta post this` → same as above
+- Verify approval flow works end-to-end before enabling in REDACTED.

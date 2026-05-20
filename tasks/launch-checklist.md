@@ -1,0 +1,71 @@
+# ACC v2 Public Launch Checklist
+
+## 3 Things That MUST Be Done Before Inviting Any External Users
+
+1. **Rate limiting & abuse prevention enabled** – Without this, a single malicious user can take down the service or run up massive API bills. Verify: `curl -X POST $ACC_URL/api/chat -d '{"test":true}'` returns 429 after 5 rapid requests. Owner: Shayan manually configures, ACC auto-verifies.
+
+2. **Secrets vault fully operational with no hardcoded keys** – Any leaked API key (OpenAI, GitHub, etc.) is a critical security incident. Verify: `grep -r "sk-" --include="*.py" --include="*.env"` returns zero results in public repos. Owner: OpenHands scans, Shayan confirms vault integration.
+
+3. **Bot answers work correctly for at least 5 representative test cases** – Core value proposition must be solid before anyone sees it. Verify: Run automated test suite covering: (a) simple Q&A, (b) multi-turn conversation, (c) error handling for ambiguous input, (d) context-aware follow-up, (e) graceful degradation when backend is slow. Owner: ACC auto-test, Shayan reviews results.
+
+---
+
+## 1. Technical Readiness
+
+- [ ] **Server deployment stable** – Check: `curl -I $ACC_URL` returns 200, response time <500ms. Owner: ACC auto (health endpoint).
+- [ ] **Bot service running** – Check: Bot responds to test prompts in <2s. Owner: ACC auto (synthetic user).
+- [ ] **Railway REDACTED environment configured** – Check: Railway dashboard shows green, no build errors, env vars set. Owner: Shayan manually.
+- [ ] **Database migrations applied** – Check: `ACC_DB_MIGRATION_STATUS` returns "up-to-date". Owner: ACC auto.
+- [ ] **Monitoring & alerting active** – Check: Uptime monitor (e.g., Better Uptime) shows 100% last 24h, alert triggers on 5xx. Owner: Shayan configures, ACC verifies.
+- [ ] **Logging pipeline working** – Check: `tail -n 10 /var/log/acc.log` shows recent requests. Owner: ACC auto.
+- [ ] **Backup strategy in place** – Check: Daily DB backup exists in S3/Railway volumes. Owner: Shayan manually.
+- [ ] **CI/CD pipeline green** – Check: Latest commit on main passes all tests. Owner: OpenHands.
+
+## 2. Security
+
+- [ ] **Rate limiting enforced per user/IP** – Check: 5 rapid requests from same IP return 429. Owner: ACC auto.
+- [ ] **Secrets vault (e.g., Doppler/HashiCorp) integrated** – Check: No secrets in `.env` files, all via vault. Owner: OpenHands scans, Shayan confirms.
+- [ ] **No hardcoded API keys in codebase** – Check: `grep -r "sk-"` returns 0. Owner: OpenHands.
+- [ ] **Input sanitization active** – Check: SQL injection attempt returns 400, not 500. Owner: ACC auto.
+- [ ] **HTTPS enforced** – Check: `curl http://$ACC_URL` redirects to https. Owner: ACC auto.
+- [ ] **CORS configured correctly** – Check: Only allowed origins can POST. Owner: Shayan manually.
+- [ ] **Guardrails for harmful content** – Check: Prompt with "ignore all instructions" returns refusal. Owner: ACC auto.
+- [ ] **Audit log of admin actions** – Check: `/admin/audit-log` shows recent changes. Owner: ACC auto.
+
+## 3. User Experience
+
+- [ ] **Bot answers are coherent and helpful** – Check: 5 test cases pass (see MUST-DO #3). Owner: ACC auto + Shayan review.
+- [ ] **Onboarding flow works** – Check: New user can sign up, verify email, and send first message in <3 min. Owner: Shayan manually.
+- [ ] **Help docs / FAQ accessible** – Check: `/help` page loads, covers common issues. Owner: Shayan manually.
+- [ ] **Error messages are user-friendly** – Check: 404 shows "Page not found" not stack trace. Owner: ACC auto.
+- [ ] **Mobile responsive** – Check: Bot UI works on 375px width. Owner: Shayan manually.
+- [ ] **Loading states present** – Check: Spinner shows while bot thinks. Owner: ACC auto.
+- [ ] **Feedback mechanism exists** – Check: Thumbs up/down on each answer. Owner: ACC auto.
+
+## 4. Business
+
+- [ ] **Pricing page live** – Check: `/pricing` shows tiers, no placeholder text. Owner: Shayan manually.
+- [ ] **Signup flow complete** – Check: New user can register, verify, and start free trial. Owner: Shayan manually.
+- [ ] **Beta program landing page** – Check: `/beta` explains program, collects email. Owner: Shayan manually.
+- [ ] **Payment integration (Stripe) test mode** – Check: Test card succeeds, webhook received. Owner: Shayan manually.
+- [ ] **Cancellation / refund policy clear** – Check: `/terms` includes cancellation process. Owner: Shayan manually.
+- [ ] **Admin dashboard for user management** – Check: Can view users, suspend, change plan. Owner: Shayan manually.
+
+## 5. Marketing
+
+- [ ] **Launch tweet drafted** – Check: Tweet text, image, link ready. Owner: Shayan manually.
+- [ ] **Product Hunt draft submitted** – Check: PH listing complete with tagline, description, images. Owner: Shayan manually.
+- [ ] **Beta user outreach list prepared** – Check: 20+ emails collected, intro message written. Owner: Shayan manually.
+- [ ] **Social media profiles updated** – Check: Twitter bio, LinkedIn page mention ACC v2. Owner: Shayan manually.
+- [ ] **Press kit / screenshots ready** – Check: 3 screenshots of bot in action, logo, one-liner. Owner: Shayan manually.
+- [ ] **Launch announcement blog post** – Check: Draft on Medium/Substack, scheduled. Owner: Shayan manually.
+
+---
+
+**Final Go/No-Go Check** – Before flipping the switch to public:
+- [ ] All 3 MUST-DO items complete.
+- [ ] No P0 or P1 bugs open.
+- [ ] Monitoring shows green for 24h.
+- [ ] Shayan has personally tested the full user journey.
+
+Owner for all final checks: Shayan manually.
