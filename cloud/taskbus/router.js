@@ -292,6 +292,19 @@ async function routeTask(taskId) {
     '| real_ai:', exec.is_real_ai_result,
     '| cost:', exec.cost_tier);
 
+  // ── Auto-sync to Airtable + ClickUp (non-blocking) ────────────────────────
+  try {
+    var at = require('../connectors/airtable.js');
+    if (at.enabled()) at.syncTask(task, r).catch(function(){});
+  } catch(e) {}
+  if (finalStatus === 'done') {
+    try {
+      var cu = require('../connectors/clickup.js');
+      var listId = process.env.CLICKUP_LIST_ID;
+      if (cu.enabled && cu.enabled() && listId) cu.onTaskCompleted(task, r, listId).catch(function(){});
+    } catch(e) {}
+  }
+
   return {
     status:              finalStatus,
     taskId:              taskId,

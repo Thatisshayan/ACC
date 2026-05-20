@@ -1,0 +1,92 @@
+## Analysis
+
+The current `executeAndReply` function in `cloud/telegram/bot.js` has two issues:
+
+1. **Long answers**: The AI model generates verbose responses (half-page for simple questions). This is because no system context is injected to constrain the response length and format.
+
+2. **Missing direct result delivery**: After task execution, the bot sends a generic "Done! Send /latesttask" message instead of the actual answer. The Task Bus returns results in `routing.output` for synchronous tasks, and for async tasks via the polling endpoint `GET /api/taskbus/task/:id` which returns `{ success, task: {id, status}, results: [{output, summary, ...}] }`.
+
+## Recommended Fix
+
+Replace the entire `executeAndReply` function with the following implementation:
+
+javascript
+async function executeAndReply(ctx, task) {
+  // 1. Add system context for short answers
+  const context = "Keep answers SHORT and PRACTICAL. Max 150 words. Use bullet points. No long explanations. User is on mobile Telegram.";
+  
+  // Inject context into task
+  if (!task.context) {
+    task.context = context;
+  } else if (typeof task.context === 'string') {
+    task.context = context + '\n' + task.context;
+  } else if (typeof task.context === 'object') {
+    task.context = { ...task.context, system: context };
+  }
+
+  // 2. Execute task via Task Bus
+  const tbRes = await taskBus.execute(task);
+
+  // 3. Check for immediate result in routing.output
+  if (tbRes && tbRes.routing && tbRes.routing.output && tbRes.routing.output.length > 10) {
+    await ctx.reply(tbRes.routing.output);
+    return;
+  }
+
+  // 4. If no immediate result, poll for async completion
+  if (tbRes && tbRes.task && tbRes.task.id) {
+    const taskId = tbRes.task.id;
+    let attempts = 0;
+    const maxAttempts = 30;
+    const pollInterval = 2000; // 2 seconds
+
+    while (attempts < maxAttempts) {
+      await sleep(pollInterval);
+      attempts++;
+
+      try {
+        const pollRes = await api.get(`/api/taskbus/task/${taskId}`);
+        
+        if (pollRes.success && pollRes.results && pollRes.results.length > 0) {
+          const lastResult = pollRes.results[pollRes.results.length - 1];
+          
+          if (lastResult.output && lastResult.output.length > 10) {
+            await ctx.reply(lastResult.output);
+            return;
+          }
+        }
+
+        // If task completed but no output found
+        if (pollRes.task && pollRes.task.status === 'completed') {
+          await ctx.reply("Task completed but no output was generated.");
+          return;
+        }
+
+        // If task failed
+        if (pollRes.task && pollRes.task.status === 'failed') {
+          await ctx.reply("Task execution failed. Please try again.");
+          return;
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+        await ctx.reply("Error checking task status. Please try /latesttask later.");
+        return;
+      }
+    }
+
+    // Timeout
+    await ctx.reply("Task is taking longer than expected. Use /latesttask to check later.");
+  } else {
+    // No task ID available
+    await ctx.reply("Task could not be started. Please try again.");
+  }
+}
+
+
+## Key Changes
+
+1. **Context injection**: Adds the short-answer constraint before execution, handling different context formats (string, object, or missing).
+2. **Immediate result check**: First checks `tbRes.routing.output` for synchronous results (length > 10 chars).
+3. **Async polling**: Falls back to polling `GET /api/taskbus/task/:id` with proper error handling and timeout (max 60 seconds).
+4. **Result extraction**: Gets the last item from `response.results` array and uses its `.output` field.
+5. **Edge cases**: Handles missing task ID, failed tasks, completed tasks without output, and polling timeouts.

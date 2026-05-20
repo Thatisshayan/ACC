@@ -1,0 +1,84 @@
+## Analysis and Recommendation
+
+### Changes Made
+
+#### 1. `cloud/taskbus/router.js`
+- **Insert after task completion (status=done)**: Added non-blocking call to `airtable.syncTask(task, result)` with `.catch()` to suppress errors. This ensures Airtable sync does not block the task bus.
+- **Location**: Inside the `completeTask` function or equivalent, after setting `task.status = 'done'` and before returning response.
+
+**Code addition (exact insertion point shown with comment):**
+javascript
+// Inside completeTask function, after task.status = 'done' and result is ready
+// ... existing code ...
+task.status = 'done';
+// ... existing code ...
+
+// === START: Airtable auto-sync ===
+var airtable = require('../connectors/airtable.js');
+if (airtable.enabled()) {
+  airtable.syncTask(task, result).catch(function(){});
+}
+// === END: Airtable auto-sync ===
+
+
+#### 2. `cloud/bot.js`
+- **Insert after user registration**: Added non-blocking call to `airtable.syncUser(user)` with `.catch()` to suppress errors.
+- **Location**: Inside the registration handler, after `user.save()` or equivalent.
+
+**Code addition:**
+javascript
+// Inside registration handler, after user is created
+// ... existing code ...
+await user.save();
+
+// === START: Airtable user sync ===
+var airtable = require('../connectors/airtable.js');
+if (airtable.enabled()) {
+  airtable.syncUser(user).catch(function(){});
+}
+// === END: Airtable user sync ===
+
+
+#### 3. `cloud/connectors/airtable.js`
+- **Fixed `syncTask` function**: Updated to include missing fields: `Title`, `Status`, `Agent`, `Provider`, `Cost_Tier`, `Summary`, `Created_At`. Also retained `Points` field (was missing, now added).
+
+**Fixed `syncTask` function:**
+javascript
+async function syncTask(task, result) {
+  if (!enabled) return;
+  try {
+    const record = {
+      fields: {
+        'TaskID': task.id,
+        'Title': task.title || '',
+        'Status': task.status || 'pending',
+        'Agent': task.agent || '',
+        'Provider': task.provider || '',
+        'Cost_Tier': task.costTier || 'standard',
+        'Summary': result.summary || '',
+        'Points': task.points || 0,
+        'Created_At': task.createdAt || new Date().toISOString()
+      }
+    };
+    await base('Tasks').create(record);
+  } catch (err) {
+    console.error('Airtable syncTask error:', err);
+  }
+}
+
+
+### Recommendation
+- **Testing**: Verify Airtable API key and base ID are set in environment variables. Test with a sample task completion and user registration.
+- **Error Handling**: The `.catch(function(){})` suppresses all errors silently. Consider logging errors in development (e.g., `console.warn`).
+- **Rate Limiting**: Airtable has rate limits; if many tasks complete quickly, consider batching or throttling.
+- **Idempotency**: Ensure `syncTask` does not create duplicate records (e.g., use `TaskID` as unique identifier).
+
+### Risks
+- Silent failures: Errors are suppressed; monitoring needed.
+- Airtable API downtime: Sync will fail silently, but task bus unaffected.
+- Missing environment variables: `airtable.enabled()` returns false if not configured.
+
+### Next Steps
+- Add unit tests for `syncTask` and `syncUser`.
+- Implement retry logic for transient Airtable errors.
+- Add logging for sync failures in REDACTED.

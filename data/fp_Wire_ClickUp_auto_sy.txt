@@ -1,0 +1,94 @@
+## Analysis
+
+The task requires wiring ClickUp auto-sync into the task execution pipeline. Two non-blocking calls are needed in `cloud/taskbus/router.js`:
+1. When a task fails → `clickup.onTaskFailed(task, LIST_ID)`
+2. When approval is required → `clickup.onApprovalRequired(task, approvalId, LIST_ID)`
+
+Both must be non-blocking (fire-and-forget) and conditional on `LIST_ID` being set.
+
+Additionally, `cloud/connectors/clickup.js` needs `onTaskCompleted` updated to include:
+- Task title
+- Agent used
+- Provider
+- Output summary (first 200 chars)
+- Tag: "acc-task"
+- Priority: 3 for normal, 1 for failed
+
+## Implementation
+
+### 1. `cloud/taskbus/router.js` additions
+
+javascript
+// At the top of the file, after existing requires
+const clickup = require('../connectors/clickup');
+const LIST_ID = process.env.CLICKUP_LIST_ID || null;
+
+// Inside the task failure handler (e.g., in the catch block or error path)
+if (LIST_ID && task && task.id) {
+  // Non-blocking: fire and forget
+  clickup.onTaskFailed(task, LIST_ID).catch(err => {
+    console.error('ClickUp sync failed (non-blocking):', err.message);
+  });
+}
+
+// Inside the approval required handler (e.g., when task status changes to pending_approval)
+if (LIST_ID && task && task.id && approvalId) {
+  // Non-blocking: fire and forget
+  clickup.onApprovalRequired(task, approvalId, LIST_ID).catch(err => {
+    console.error('ClickUp approval sync failed (non-blocking):', err.message);
+  });
+}
+
+
+### 2. `cloud/connectors/clickup.js` updated `onTaskCompleted`
+
+javascript
+async onTaskCompleted(task, listId, status = 'normal') {
+  if (!listId || !task) return;
+  
+  const priority = status === 'failed' ? 1 : 3;
+  const summary = task.output ? task.output.substring(0, 200) : 'No output';
+  
+  const payload = {
+    name: task.title || `Task ${task.id}`,
+    description: `Agent: ${task.agent || 'unknown'}\nProvider: ${task.provider || 'unknown'}\nSummary: ${summary}`,
+    tags: ['acc-task'],
+    priority: priority,
+    status: status === 'failed' ? 'failed' : 'completed'
+  };
+  
+  try {
+    const response = await this.api.post(`/list/${listId}/task`, payload);
+    return response.data;
+  } catch (error) {
+    console.error('ClickUp onTaskCompleted error:', error.message);
+    throw error;
+  }
+}
+
+
+### 3. `.env.example` addition
+
+
+CLICKUP_LIST_ID=your_list_id_here
+
+
+## Recommendation
+
+- Ensure `clickup.onTaskFailed` and `clickup.onApprovalRequired` methods exist in `clickup.js` and are async functions that return promises.
+- The non-blocking pattern with `.catch()` prevents unhandled promise rejections.
+- Add logging to monitor ClickUp sync failures without blocking the main task flow.
+- Consider adding a retry mechanism (e.g., 3 retries with exponential backoff) for transient network errors.
+- Validate `LIST_ID` format (should be a string of digits) before making API calls.
+
+## Risks
+
+- If `clickup.js` methods throw synchronously, the `.catch()` may not catch it. Ensure they are async and return promises.
+- Rate limiting from ClickUp API could cause silent failures. Consider adding a simple queue or throttle.
+- Missing environment variable `CLICKUP_LIST_ID` will silently skip sync, which is intentional but should be logged at startup.
+
+## Next Steps
+
+1. Implement `onTaskFailed` and `onApprovalRequired` in `clickup.js` if not already present.
+2. Add unit tests for the non-blocking calls.
+3. Monitor logs for ClickUp sync errors post-deployment.

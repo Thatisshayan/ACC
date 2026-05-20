@@ -151,192 +151,49 @@ function getACC(p) {
   });
 }
 
-// ── executeAndReply: calls Task Bus, waits for real result, sends it back ─────
+// ── executeAndReply: Task Bus ONLY — polls for real result ──────────────────
 async function executeAndReply(chatId, agentType, prompt, language) {
+  var SHORT_CONTEXT = 'Keep answer SHORT (max 150 words). Bullet points. Practical. No fluff.';
   try {
-    var tbRes  = await callACC('/api/taskbus/task', {
+    var tbRes = await callACC('/api/taskbus/task', {
       title: prompt.slice(0, 80),
-      instruction: prompt,
+      instruction: prompt + '\n\nSYSTEM: ' + SHORT_CONTEXT,
       assigned_agent: 'claude',
       automation_mode: 'semi_auto',
       approval_required: false,
       created_by: 'bot',
     });
-
-    // The routing result is returned synchronously from Task Bus
     var routing = tbRes.routing || {};
     var out = routing.output || routing.summary;
-
-    // If we got a real result immediately — send it
     if (out && String(out).trim().length > 10) {
-      await sendMsg(chatId, String(out).slice(0, 3800));
+      await sendMsg(chatId, String(out).slice(0, 3500));
       return;
     }
-
-    // Otherwise poll the task result via taskId
     var taskId = tbRes.task && tbRes.task.id;
-    if (!taskId) {
-      await sendMsg(chatId, '⚠️ Task Bus unavailable. Try again in a moment.');
-      return;
-    }
-
-    var start   = Date.now();
-    var timeout = 28000;
-    while (Date.now() - start < timeout) {
-      await new Promise(function(r){ setTimeout(r, 1800); });
-      var tr      = await getACC('/api/taskbus/task/' + taskId);
-      var task    = tr.task || {};
+    if (!taskId) { await sendMsg(chatId, '✅ Done! Send /latesttask to see result.'); return; }
+    var start = Date.now();
+    while (Date.now() - start < 25000) {
+      await new Promise(function(r){ setTimeout(r, 2000); });
+      var tr = await getACC('/api/taskbus/task/' + taskId);
+      var task = tr.task || {};
       var results = tr.results || [];
-      if (!task.status) continue;
-
       if (task.status === 'done' || task.status === 'completed') {
-        // Get latest result
-        var latest  = results[results.length - 1] || {};
-        var answer  = latest.output || latest.summary || task.summary;
+        var latest = results[results.length - 1] || {};
+        var answer = latest.output || latest.summary;
         if (answer && String(answer).trim().length > 5) {
-          await sendMsg(chatId, String(answer).slice(0, 3800));
+          await sendMsg(chatId, String(answer).slice(0, 3500));
         } else {
-          await sendMsg(chatId, '✅ Done! Send /latesttask to see result.');
+          await sendMsg(chatId, '✅ Done! Send /latesttask for result.');
         }
         return;
       }
-      if (task.status === 'failed') {
-        await sendMsg(chatId, '❌ ' + (task.error || 'Task failed'));
-        return;
-      }
-      if (task.status === 'rate_limited') {
-        await sendMsg(chatId, '⏳ ' + (task.message || 'Rate limit. Try again in a few minutes.'));
-        return;
-      }
+      if (task.status === 'failed') { await sendMsg(chatId, '❌ ' + (task.error || 'Task failed')); return; }
+      if (task.status === 'rate_limited') { await sendMsg(chatId, '⏳ Rate limit. Try again in a few minutes.'); return; }
     }
-    await sendMsg(chatId, '⏳ Still working... Send /latesttask to check when ready.');
-  } catch(e) {
-    await sendMsg(chatId, '❌ Error: ' + e.message);
-  }
+    await sendMsg(chatId, '⏳ Still processing. Send /latesttask to check.');
+  } catch(e) { await sendMsg(chatId, '❌ ' + e.message); }
 }
 
-// ── Inline keyboards ──────────────────────────────────────────────────────────
-function mainMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'💼 پیدا کردن شغل',callback_data:'job_search'},{text:'📄 تنظیم رزومه',callback_data:'tailor_resume'}],
-    [{text:'🌐 صفحه فرود',callback_data:'landing_page'},{text:'🎬 اسکریپت ویدیو',callback_data:'video_script'}],
-    [{text:'📱 پست شبکه اجتماعی',callback_data:'social_post'},{text:'🌍 ترجمه',callback_data:'menu_translate'}],
-    [{text:'🍳 آشپز AI',callback_data:'menu_chef'},{text:'🔍 تحقیق',callback_data:'competitor_research'}],
-    [{text:'⚙️ بیشتر',callback_data:'menu_more'}],
-  ] : [
-    [{text:'💼 Find Jobs',callback_data:'job_search'},{text:'📄 Tailor Resume',callback_data:'tailor_resume'}],
-    [{text:'🌐 Landing Page',callback_data:'landing_page'},{text:'🎬 Video Script',callback_data:'video_script'}],
-    [{text:'📱 Social Post',callback_data:'social_post'},{text:'🌍 Translate',callback_data:'menu_translate'}],
-    [{text:'🍳 Chef AI',callback_data:'menu_chef'},{text:'🔍 Research',callback_data:'competitor_research'}],
-    [{text:'⚙️ More',callback_data:'menu_more'}],
-  ];
-}
-function jobsMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'🔍 جستجوی شغل',callback_data:'job_search'}],
-    [{text:'✉️ نامه پوششی',callback_data:'cover_letter'},{text:'🎯 آماده مصاحبه',callback_data:'interview_prep'}],
-    [{text:'💰 مذاکره حقوق',callback_data:'salary_coach'},{text:'📊 دنبال‌کن شغل',callback_data:'job_tracker'}],
-    [{text:'🔗 LinkedIn',callback_data:'connect_linkedin'},{text:'📧 ایمیل‌ها',callback_data:'email_monitor'}],
-    [{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'🔍 Find Jobs',callback_data:'job_search'}],
-    [{text:'✉️ Cover Letter',callback_data:'cover_letter'},{text:'🎯 Interview Prep',callback_data:'interview_prep'}],
-    [{text:'💰 Salary Coach',callback_data:'salary_coach'},{text:'📊 Job Tracker',callback_data:'job_tracker'}],
-    [{text:'🔗 LinkedIn',callback_data:'connect_linkedin'},{text:'📧 Email Monitor',callback_data:'email_monitor'}],
-    [{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function resumeMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'📤 آپلود رزومه',callback_data:'upload_resume'}],
-    [{text:'✏️ تنظیم رزومه',callback_data:'tailor_resume'},{text:'📋 بررسی ATS',callback_data:'ats_check'}],
-    [{text:'📄 مشاهده رزومه',callback_data:'view_resume'},{text:'🗂️ نسخه‌ها',callback_data:'resume_versions'}],
-    [{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'📤 Upload Resume',callback_data:'upload_resume'}],
-    [{text:'✏️ Tailor Resume',callback_data:'tailor_resume'},{text:'📋 ATS Check',callback_data:'ats_check'}],
-    [{text:'📄 View Resume',callback_data:'view_resume'},{text:'🗂️ Versions',callback_data:'resume_versions'}],
-    [{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function contentMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'🌐 صفحه فرود',callback_data:'landing_page'},{text:'📹 محتوای SEO',callback_data:'seo_content'}],
-    [{text:'📝 پست وبلاگ',callback_data:'blog_post'},{text:'🎬 اسکریپت',callback_data:'video_script'}],
-    [{text:'📱 رسانه اجتماعی',callback_data:'social_post'},{text:'📧 توالی ایمیل',callback_data:'email_sequence'}],
-    [{text:'▶️ یوتیوب',callback_data:'youtube_upload'},{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'🌐 Landing Page',callback_data:'landing_page'},{text:'📹 SEO Content',callback_data:'seo_content'}],
-    [{text:'📝 Blog Post',callback_data:'blog_post'},{text:'🎬 Video Script',callback_data:'video_script'}],
-    [{text:'📱 Social Post',callback_data:'social_post'},{text:'📧 Email Sequence',callback_data:'email_sequence'}],
-    [{text:'▶️ YouTube Upload',callback_data:'youtube_upload'},{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function notesMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'➕ یادداشت جدید',callback_data:'note_add'},{text:'📋 یادداشت‌هایم',callback_data:'note_list'}],
-    [{text:'🔍 جستجو',callback_data:'note_search'},{text:'🗑️ حذف',callback_data:'note_delete'}],
-    [{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'➕ New Note',callback_data:'note_add'},{text:'📋 My Notes',callback_data:'note_list'}],
-    [{text:'🔍 Search Notes',callback_data:'note_search'},{text:'🗑️ Delete Note',callback_data:'note_delete'}],
-    [{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function toolsMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'⚖️ حقوقی',callback_data:'legal_assistant'},{text:'📊 آمار',callback_data:'data_analysis'}],
-    [{text:'🔍 رقبا',callback_data:'competitor_research'},{text:'💡 ایده‌پردازی',callback_data:'brainstorm'}],
-    [{text:'📅 برنامه‌ریز',callback_data:'scheduler_tool'},{text:'📦 سبد خرید',callback_data:'shopping_list'}],
-    [{text:'💊 دارو',callback_data:'medication'},{text:'✈️ سفر',callback_data:'travel_planner'}],
-    [{text:'🎁 هدیه',callback_data:'gift_ideas'},{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'⚖️ Legal Help',callback_data:'legal_assistant'},{text:'📊 Data Analysis',callback_data:'data_analysis'}],
-    [{text:'🔍 Research',callback_data:'competitor_research'},{text:'💡 Brainstorm',callback_data:'brainstorm'}],
-    [{text:'📅 Planner',callback_data:'scheduler_tool'},{text:'🛒 Shopping List',callback_data:'shopping_list'}],
-    [{text:'💊 Medication',callback_data:'medication'},{text:'✈️ Travel Plan',callback_data:'travel_planner'}],
-    [{text:'🎁 Gift Ideas',callback_data:'gift_ideas'},{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function jobTypeMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'⏰ تمام‌وقت',callback_data:'jobtype_fulltime'},{text:'💻 ریموت',callback_data:'jobtype_remote'}],
-    [{text:'🕐 پاره‌وقت',callback_data:'jobtype_parttime'},{text:'📋 قراردادی',callback_data:'jobtype_contract'}],
-    [{text:'🏢 حضوری',callback_data:'jobtype_onsite'},{text:'🚀 استارتاپ',callback_data:'jobtype_startup'}],
-  ] : [
-    [{text:'⏰ Full-time',callback_data:'jobtype_fulltime'},{text:'💻 Remote',callback_data:'jobtype_remote'}],
-    [{text:'🕐 Part-time',callback_data:'jobtype_parttime'},{text:'📋 Contract',callback_data:'jobtype_contract'}],
-    [{text:'🏢 On-site',callback_data:'jobtype_onsite'},{text:'🚀 Startup',callback_data:'jobtype_startup'}],
-  ];
-}
-function langMenu() { return [[{text:'🇬🇧 English',callback_data:'lang_en'},{text:'🇮🇷 فارسی',callback_data:'lang_fa'}]]; }
-
-// ── Polling ───────────────────────────────────────────────────────────────────
-var offset = 0, running = true;
-
-function poll() {
-  if (!running) return;
-  tgGet('getUpdates', { offset: offset, timeout: 10 })
-    .then(function(updates) {
-      for (var i = 0; i < updates.length; i++) {
-        var u = updates[i];
-        offset = u.update_id + 1;
-        if (u.callback_query)       handleCallback(u.callback_query).catch(function(e){ log('[bot] cb err:', e.message); });
-        else if (u.message)         handleMessage(u.message).catch(function(e){ log('[bot] msg err:', e.message); });
-      }
-      if (running) setTimeout(poll, 100);
-    })
-    .catch(function(err) { log('[bot] poll err:', err.message); if (running) setTimeout(poll, 3000); });
-}
-
-// ── Message handler ───────────────────────────────────────────────────────────
 async function handleMessage(msg) {
   if (!msg) return;
   var chatId = msg.chat.id;
@@ -905,6 +762,91 @@ async function handleCallback(cb) {
 // ── Start everything ──────────────────────────────────────────────────────────
 log('[bot] ACC v2 Multi-User Bot — ' + users.getUserCount() + '/10 users');
 log('[bot] Features: Voice, Notes, JobTracker, Interview, EmailMonitor, Scheduler');
+
+
+// ── Menu builders ─────────────────────────────────────────────────────────────
+function mainMenu(userId) {
+  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
+  return fa ? [
+    [{text:'💼 شغل و رزومه',callback_data:'menu_jobs'},{text:'📝 یادداشت‌ها',callback_data:'menu_notes'}],
+    [{text:'📱 محتوا',callback_data:'menu_content'},{text:'🍳 آشپز AI',callback_data:'menu_chef'}],
+    [{text:'🌐 ترجمه',callback_data:'menu_translate'},{text:'⚙️ ابزار بیشتر',callback_data:'menu_more'}],
+  ] : [
+    [{text:'💼 Jobs & Resume',callback_data:'menu_jobs'},{text:'📝 Notes',callback_data:'menu_notes'}],
+    [{text:'📱 Content',callback_data:'menu_content'},{text:'🍳 Chef AI',callback_data:'menu_chef'}],
+    [{text:'🌐 Translate',callback_data:'menu_translate'},{text:'⚙️ More Tools',callback_data:'menu_more'}],
+  ];
+}
+function langMenu() { return [[{text:'🇺🇸 English',callback_data:'lang_en'},{text:'🇮🇷 فارسی',callback_data:'lang_fa'}]]; }
+function jobsMenu(userId) {
+  return [
+    [{text:'🔍 Job Search',callback_data:'job_search'},{text:'📄 Resume Tools',callback_data:'menu_resume'}],
+    [{text:'✉️ Cover Letter',callback_data:'cover_letter'},{text:'🎯 Interview Prep',callback_data:'interview_prep'}],
+    [{text:'💰 Salary Coach',callback_data:'salary_coach'},{text:'📊 Job Tracker',callback_data:'job_tracker'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function resumeMenu(userId) {
+  return [
+    [{text:'📤 Upload Resume',callback_data:'upload_resume'},{text:'✏️ Tailor Resume',callback_data:'tailor_resume'}],
+    [{text:'📋 ATS Check',callback_data:'ats_check'},{text:'👁 View',callback_data:'view_resume'}],
+    [{text:'◀️ Back',callback_data:'menu_jobs'}],
+  ];
+}
+function contentMenu(userId) {
+  return [
+    [{text:'📝 Blog Post',callback_data:'blog_post'},{text:'📱 Social Post',callback_data:'social_post'}],
+    [{text:'🎬 Video Script',callback_data:'video_script'},{text:'📧 Email Sequence',callback_data:'email_sequence'}],
+    [{text:'🌐 Landing Page',callback_data:'landing_page'},{text:'🔍 SEO Content',callback_data:'seo_content'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function notesMenu(userId) {
+  return [
+    [{text:'➕ New Note',callback_data:'note_add'},{text:'📋 List Notes',callback_data:'note_list'}],
+    [{text:'🔍 Search',callback_data:'note_search'},{text:'🗑 Delete',callback_data:'note_delete'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function toolsMenu(userId) {
+  return [
+    [{text:'⚖️ Legal Help',callback_data:'legal_assistant'},{text:'💡 Brainstorm',callback_data:'brainstorm'}],
+    [{text:'📊 Data Analysis',callback_data:'data_analysis'},{text:'🔍 Research',callback_data:'competitor_research'}],
+    [{text:'✈️ Travel Plan',callback_data:'travel_planner'},{text:'🎁 Gift Ideas',callback_data:'gift_ideas'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function jobTypeMenu(userId) {
+  return [
+    [{text:'⏱ Full-time',callback_data:'jobtype_full-time'},{text:'⏰ Part-time',callback_data:'jobtype_part-time'}],
+    [{text:'🏠 Remote',callback_data:'jobtype_remote'},{text:'🔀 Hybrid',callback_data:'jobtype_hybrid'}],
+    [{text:'📋 Contract',callback_data:'jobtype_contract'}],
+  ];
+}
+
+// ── Polling loop ──────────────────────────────────────────────────────────────
+var running = true;
+var lastOffset = 0;
+
+async function poll() {
+  while (running) {
+    try {
+      var updates = await tgGet('getUpdates', { offset: lastOffset, timeout: 20, allowed_updates: ['message','callback_query'] });
+      if (updates && updates.length) {
+        for (var i = 0; i < updates.length; i++) {
+          var u = updates[i];
+          lastOffset = u.update_id + 1;
+          try {
+            if (u.message)        await handleMessage(u.message);
+            if (u.callback_query) await handleCallback(u.callback_query);
+          } catch(e) { log('[bot] handler err:', e.message); }
+        }
+      }
+    } catch(e) {
+      if (running) { log('[bot] poll err:', e.message); await new Promise(function(r){ setTimeout(r, 3000); }); }
+    }
+  }
+}
 
 scheduler.start();
 emailMon.startPolling(5); // check email every 5 minutes
