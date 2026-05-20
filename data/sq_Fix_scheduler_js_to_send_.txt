@@ -1,0 +1,91 @@
+javascript
+// cloud/telegram/features/scheduler.js — sendBriefingForUser function
+
+const fs = require('fs').promises;
+const path = require('path');
+const { store } = require('../taskbus'); // adjust path as needed
+
+const AI_TIPS = [
+  "Start your week by setting 3 clear goals. Small wins build momentum.",
+  "Review yesterday's tasks. Incomplete items get rescheduled, not forgotten.",
+  "Midweek check: are you on track? Adjust priorities if needed.",
+  "Connect with one person in your network today — even a quick message counts.",
+  "Wrap up loose ends and plan next week. Friday prep = Monday clarity.",
+  "Rest is productive. Let your subconscious process the week.",
+  "Review your goals. What matters most next week?"
+];
+
+async function sendBriefingForUser(userId, type) {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  // 1. Task count (done in last 24h)
+  let tasksDone = 0;
+  try {
+    const tasks = store.getTasks ? await store.getTasks(userId) : [];
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    tasksDone = tasks.filter(t => t.status === 'done' && new Date(t.updatedAt || t.doneAt) >= yesterday).length;
+  } catch (e) {
+    console.error('Error fetching tasks:', e.message);
+  }
+
+  // 2. Notes count from user's folder
+  let notesCount = 0;
+  try {
+    const notesDir = path.join(__dirname, '..', '..', 'data', 'storage', String(userId));
+    const files = await fs.readdir(notesDir).catch(() => []);
+    notesCount = files.filter(f => f.endsWith('.md') || f.endsWith('.txt')).length;
+  } catch (e) {
+    console.error('Error reading notes:', e.message);
+  }
+
+  // 3. Job applications count
+  let jobApps = 0;
+  try {
+    const jobPath = path.join(__dirname, '..', '..', 'data', 'job-applications.json');
+    const data = await fs.readFile(jobPath, 'utf8').catch(() => '[]');
+    const apps = JSON.parse(data);
+    jobApps = Array.isArray(apps) ? apps.length : 0;
+  } catch (e) {
+    console.error('Error reading job apps:', e.message);
+  }
+
+  // 4. AI tip — deterministic by day of week
+  const tipIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // map Sun->6, Mon->0, ..., Sat->5
+  const tip = AI_TIPS[tipIndex];
+
+  // 5. Build briefing (max 8 lines)
+  const lines = [
+    `📅 ${dateStr} at ${timeStr}`,
+    '',
+    `✅ Tasks done (24h): ${tasksDone}`,
+    `📝 Notes saved: ${notesCount}`,
+    `💼 Job applications: ${jobApps}`,
+    '',
+    `💡 Tip: ${tip}`,
+    '— Your Daily Briefing'
+  ];
+
+  const text = lines.join('\n');
+
+  // Send via sendMsg (assumed available in scope)
+  if (typeof sendMsg === 'function') {
+    await sendMsg(userId, text);
+  } else {
+    console.error('sendMsg not available');
+  }
+}
+
+module.exports = { sendBriefingForUser };
+
+
+**Analysis & Recommendation:**
+- The function now generates a **unique briefing** every time because it uses `Date.now()` for the timestamp and reads live data.
+- **Real data sources**: task count from `store`, notes from filesystem, jobs from JSON file — all with error handling.
+- **Deterministic AI tip**: uses `dayOfWeek` index (no randomness), matching your array exactly.
+- **No fake data**: no weather, stocks, or placeholders.
+- **Format**: 8 lines max with emojis, short and scannable.
+- **Risk**: If `store.getTasks` doesn't exist or `sendMsg` isn't in scope, the function will fail gracefully with console errors. Ensure `sendMsg` is imported or passed as a dependency.
+- **Next step**: Test with a real user ID to verify data paths and store integration.

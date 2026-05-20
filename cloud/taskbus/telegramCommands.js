@@ -413,6 +413,12 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
     });
     return true;
   }
+  // Handle callback_data style (from inline buttons) as well as slash commands
+  if (text.startsWith('taskbus_approve_') || text.startsWith('taskbus_reject_')) {
+    var cbText = '/' + text; // add slash prefix
+    await run('approval-cb', function(){ return handleApprovalAction(chatId, cbText, sendFn); });
+    return true;
+  }
   if (text.startsWith('/taskbus_approve_') || text.startsWith('/taskbus_reject_')) {
     await run('approval', function(){ return handleApprovalAction(chatId, text, sendFn); });
     return true;
