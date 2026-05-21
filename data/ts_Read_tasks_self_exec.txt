@@ -1,0 +1,109 @@
+## Phase 1 Core Reliability – Top 3 Implementation Instructions
+
+Based on analysis of `tasks/self-execution-plan.md`, Phase 1 focuses on **core reliability**. The top 3 most impactful fixes are:
+
+### 1. Fix: Add timeout and retry logic to all external API calls (priority: 1)
+
+**File:** `src/utils/apiClient.ts` (or equivalent HTTP client module)
+
+**Problem:** No timeout or retry mechanism causes cascading failures when external services are slow or down.
+
+**Change:**
+- Old: `const response = await fetch(url, options);`
+- New:
+typescript
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, timeoutMs = 10000): Promise<Response> => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok && attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (attempt === retries) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+  throw new Error('Max retries exceeded');
+};
+
+
+### 2. Fix: Add input validation and sanitization for all user-facing endpoints (priority: 2)
+
+**File:** `src/middleware/validation.ts`
+
+**Problem:** Missing validation leads to injection attacks and malformed data.
+
+**Change:**
+- Old: `export const validateRequest = (req, res, next) => next();`
+- New:
+typescript
+import { z } from 'zod';
+
+export const validateRequest = (schema: z.ZodSchema) => (req: Request, res: Response, next: NextFunction) => {
+  try {
+    schema.parse({ body: req.body, query: req.query, params: req.params });
+    next();
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
+    next(error);
+  }
+};
+
+
+### 3. Fix: Add structured error handling with consistent error response format (priority: 3)
+
+**File:** `src/middleware/errorHandler.ts`
+
+**Problem:** Inconsistent error responses make debugging and client handling difficult.
+
+**Change:**
+- Old:
+typescript
+export const errorHandler = (err, req, res, next) => {
+  console.error(err);
+  res.status(500).send('Internal Server Error');
+};
+
+- New:
+typescript
+export class AppError extends Error {
+  constructor(public statusCode: number, public message: string, public isOperational = true) {
+    super(message);
+    Object.setPrototypeOf(this, AppError.prototype);
+  }
+}
+
+export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({
+      status: 'error',
+      message: err.message,
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
+  }
+  // Unexpected errors
+  console.error('Unexpected error:', err);
+  return res.status(500).json({
+    status: 'error',
+    message: 'Internal server error'
+  });
+};
+
+
+**Priority order:** 1 (API resilience) → 2 (Input validation) → 3 (Error handling).
+
+**Implementation sequence:**
+1. Add `fetchWithRetry` to `apiClient.ts` and replace all `fetch` calls.
+2. Add `validateRequest` middleware and apply to all routes.
+3. Replace existing error handler with `AppError` + `errorHandler`.
+
+**Testing:** After each change, run existing test suite and add unit tests for retry logic, validation schemas, and error formatting.

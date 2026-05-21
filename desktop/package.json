@@ -1,16 +1,18 @@
 {
-  "name": "acc-agent-command-center",
+  "name": "acc-v2-desktop",
   "version": "2.0.0",
-  "description": "ACC v2 — Personal AI Operating System",
+  "description": "ACC v2 Desktop Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder build --win",
-    "build:dir": "electron-builder build --win --dir",
-    "postinstall": "electron-builder install-app-deps"
+    "fix:electron": "node fix-electron.js",
+    "build": "electron-builder --win --publish never",
+    "build:dir": "electron-builder --win --dir --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:portable": "electron-builder --win portable --publish never"
   },
   "build": {
-    "appId": "com.acc.agentcommandcenter",
+    "appId": "com.acc.v2",
     "productName": "ACC v2",
     "directories": {
       "output": "dist"
@@ -18,59 +20,39 @@
     "files": [
       "main.js",
       "preload.js",
-      "package.json",
       "node_modules/**/*",
-      "!node_modules/.cache/**/*",
-      "!node_modules/electron/**/*"
+      "!node_modules/.cache"
     ],
-    "extraFiles": [
+    "extraResources": [
       {
-        "from": "ui/dist",
+        "from": "../ui/dist",
         "to": "ui/dist",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": ["x64"]
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
-      ],
-      "icon": null,
-      "signAndEditExecutable": false,
-      "sign": false
+      ]
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "ACC v2",
-      "installerIcon": null,
-      "uninstallerIcon": null,
-      "installerHeaderIcon": null,
-      "installerSidebar": null,
-      "uninstallDisplayName": "ACC v2",
-      "include": null,
-      "script": null,
-      "license": null,
-      "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true,
-      "warningsAsErrors": false
-    },
-    "asar": true,
-    "asarUnpack": [
-      "node_modules/**/*.node"
-    ],
-    "npmRebuild": true,
-    "nodeGypRebuild": false
-  },
-  "dependencies": {
-    "electron": "^28.0.0"
+      "uninstallDisplayName": "ACC v2 Agent Command Center"
+    }
   },
   "devDependencies": {
-    "electron-builder": "^24.9.1"
+    "electron": "28.3.3",
+    "electron-builder": "^26.8.1"
   }
 }

@@ -476,7 +476,7 @@ function extractRouteOutput(routeResult, taskId) {
 
 // ── createTaskFromMessage ─────────────────────────────────────────────────────
 async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatId) {
-  var isTaskCreate = /^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:)/i.test(text);
+  var isTaskCreate = /^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:)|tavily:|research:|tell tavily/i.test(text);
   if (!isTaskCreate) return false;
 
   var instruction = text.replace(/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:):?\s*/i, '').trim();
@@ -496,6 +496,9 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   if (/^crewai:/i.test(text))            agent = 'crewai';
   if (/^crew:/i.test(text))              agent = 'crewai';
   if (/^composio:/i.test(text))          agent = 'composio';
+  if (/^tavily:/i.test(text))            agent = 'tavily';
+  if (/^research:/i.test(text))          agent = 'tavily';
+  if (/^tell tavily/i.test(text))        agent = 'tavily';
   if (/^tell composio/i.test(text))      agent = 'composio';
   if (/^aider:/i.test(text))             agent = 'aider';
   if (/^tell aider/i.test(text))         agent = 'aider';

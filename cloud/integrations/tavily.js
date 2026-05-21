@@ -1,0 +1,80 @@
+// cloud/integrations/tavily.js — Tavily AI search connector for ACC v2
+const axios = require('axios');
+require('dotenv').config();
+
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+const TAVILY_URL = 'https://api.tavily.com/search';
+
+function enabled() {
+  return !!TAVILY_API_KEY;
+}
+
+async function checkHealth() {
+  if (!enabled()) return { status: 'disabled', message: 'TAVILY_API_KEY not set' };
+  try {
+    const res = await axios.post(TAVILY_URL, {
+      api_key: TAVILY_API_KEY,
+      query: 'test',
+      search_depth: 'basic',
+      max_results: 1,
+      include_answer: false
+    });
+    return { status: 'ok', message: `Tavily API responded: ${res.status}` };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
+async function search(query, depth = 'advanced') {
+  if (!enabled()) throw new Error('Tavily API key not configured');
+  const res = await axios.post(TAVILY_URL, {
+    api_key: TAVILY_API_KEY,
+    query,
+    search_depth: depth,
+    max_results: 10,
+    include_answer: true
+  });
+  return {
+    answer: res.data.answer || '',
+    results: (res.data.results || []).map(r => ({
+      title: r.title,
+      url: r.url,
+      content: r.content,
+      score: r.score
+    })),
+    query
+  };
+}
+
+function formatForTelegram(result) {
+  let msg = `🔍 *Tavily Search Results*\n*Query:* ${result.query}\n\n`;
+  if (result.answer) msg += `*Summary:* ${result.answer}\n\n`;
+  const top5 = result.results.slice(0, 5);
+  top5.forEach((r, i) => {
+    msg += `${i+1}. [${r.title}](${r.url})\n${r.content.substring(0, 200)}...\n\n`;
+  });
+  return msg;
+}
+
+async function sendTaskFromACC(accTask) {
+  const instruction = accTask.instruction || accTask.task?.instruction || '';
+  const queryMatch = instruction.match(/\[research\](.*?)(?:\n|$)/) || 
+                     instruction.match(/\[search\](.*?)(?:\n|$)/) ||
+                     instruction.match(/query[:\s]+(.+)/i);
+  const query = queryMatch ? queryMatch[1].trim() : instruction.trim();
+  if (!query) throw new Error('No search query found in task instruction');
+  
+  const result = await search(query);
+  return formatForTelegram(result);
+}
+
+// Router integration helper
+function shouldUseTavily(task) {
+  if (task.assigned_agent === 'tavily') return true;
+  const instruction = (task.instruction || task.task?.instruction || '').toLowerCase();
+  if (instruction.includes('[research]') || instruction.includes('[search]')) return true;
+  if (task.feature_ref === 'research' || task.feature_ref?.includes('research')) return true;
+  return false;
+}
+
+module.exports = { enabled, checkHealth, search, formatForTelegram, sendTaskFromACC, shouldUseTavily };

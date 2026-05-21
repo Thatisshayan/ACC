@@ -93,7 +93,22 @@ async function routeTask(taskId) {
     log('[router] BLOCKED — full_auto cannot execute high-risk external task');
     store.updateTask(taskId, { status: 'waiting_approval', automation_mode: 'sandbox' });
     var fullAutoApproval = store.createApproval(taskId, 'high_risk_execution');
-    store.addMessage(taskId, 'system', 'human', [
+    // ── Tavily — real-time AI research ──────────────────────────────────────────
+  if (task.assigned_agent === 'tavily') {
+    var tavily = require('../integrations/tavily.js');
+    if (tavily.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var tvResult = await tavily.sendTaskFromACC(task);
+      var tvR = store.addResult({ task_id: taskId, provider_used: 'tavily',
+        is_real_ai_result: true, cost_tier: 'low_cost',
+        output: tvResult.output || '', summary: tvResult.summary || 'Tavily search completed' });
+      store.updateTask(taskId, { status: tvResult.success?'done':'failed', provider_used: 'tavily' });
+      return { status: tvResult.success?'done':'failed', taskId, provider_used:'tavily', output: tvResult.output };
+    }
+    log('[router] Tavily not enabled — falling through');
+  }
+
+  store.addMessage(taskId, 'system', 'human', [
       'APPROVAL REQUIRED',
       'Task: ' + task.title,
       'Reason: full_auto is internal/local only and cannot execute high-risk external actions.',

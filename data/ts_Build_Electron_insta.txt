@@ -1,0 +1,68 @@
+
+{
+  "name": "acc-v2-desktop",
+  "version": "2.0.0",
+  "description": "ACC v2 Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "npx electron-builder --win",
+    "build:dir": "npx electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.acc.v2",
+    "productName": "ACC v2",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "node_modules/**/*",
+      "!node_modules/.cache"
+    ],
+    "extraResources": [
+      {
+        "from": "../ui/dist",
+        "to": "ui/dist",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ACC v2"
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {}
+}
+
+
+**Build Commands Sequence:**
+1. `cd C:\Users\Shaya\agent-command-center\desktop`
+2. `npm install electron-builder --save-dev`
+3. `npx electron-builder --win --dir` (fast build, no installer, output: `desktop\dist\win-unpacked\ACC v2.exe`)
+4. `npx electron-builder --win` (full installer, output: `desktop\dist\ACC v2 Setup 2.0.0.exe`)
+
+**Analysis and Recommendation:**
+- The `extraResources` configuration includes `../ui/dist` which points to the UI build output. Ensure the UI is built first (e.g., `cd ../ui && npm run build`) before packaging the desktop app.
+- The `main.js` entry point should load the UI from `extraResources` path: `path.join(process.resourcesPath, 'ui', 'dist', 'index.html')`.
+- For development, use `--dir` to skip installer creation and test the unpacked app directly.
+- For REDACTED, run the full build to generate the NSIS installer.
+- **Feature ref: token-save** – This configuration does not directly handle token saving. Consider adding a secure storage mechanism (e.g., `electron-store` with encryption) in `main.js` to persist tokens safely.
+- **Priority: critical** – Ensure the UI build is complete and the `main.js` correctly references the UI path before packaging.

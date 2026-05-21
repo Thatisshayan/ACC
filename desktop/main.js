@@ -9,38 +9,181 @@ const { spawn } = require('child_process');
 
 const ROOT    = path.join(__dirname, '..');
 const UI_DIST = path.join(ROOT, 'ui', 'dist', 'index.html');
-const PM2_CMD = 'C:\\Users\\Shaya\\AppData\\Roaming\\npm\\pm2.cmd';
+const BACKEND_PORT = 4000;
+const BACKEND_HEALTH_PATH = '/api/health';
+const BACKEND_START_TIMEOUT_MS = 30000;
+const BACKEND_CHECK_INTERVAL_MS = 1000;
+
+const BACKEND_STATUS = Object.freeze({
+  ONLINE: 'Online',
+  STARTING: 'Starting',
+  OFFLINE: 'Offline',
+  FAILED: 'Failed',
+});
 
 let win  = null;
 let tray = null;
+let backendProcess = null;
+let backendStartPromise = null;
+let backendState = {
+  status: BACKEND_STATUS.OFFLINE,
+  detail: 'Checking backend...',
+  lastCheckedAt: null,
+};
 
 // ── Health check ──────────────────────────────────────────────────────────────
-function serverOk(cb) {
-  const req = http.request(
-    { hostname: 'localhost', port: 4000, path: '/api/health', timeout: 2000 },
-    (res) => { res.resume(); cb(res.statusCode === 200); }
-  );
-  req.on('error', () => cb(false));
-  req.on('timeout', () => { req.destroy(); cb(false); });
-  req.end();
+function checkBackendHealth(timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const req = http.request(
+      { hostname: '127.0.0.1', port: BACKEND_PORT, path: BACKEND_HEALTH_PATH, timeout: timeoutMs },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode === 200);
+      }
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.end();
+  });
 }
 
 // ── Ensure backend is running via PM2 (or direct node) ───────────────────────
-function ensureBackend() {
-  serverOk((running) => {
-    if (running) { console.log('[acc] server already on :4000'); return; }
-    console.log('[acc] starting backend...');
-    // Try PM2 first
-    const pm2 = spawn(PM2_CMD, ['restart', 'all'], { shell: true, stdio: 'ignore', cwd: ROOT });
-    pm2.on('error', () => {
-      // Fallback: direct node
-      const srv = spawn(process.execPath.replace('electron.exe','node.exe').replace('electron','node'),
-        [path.join(ROOT, 'scripts', 'start.js')],
-        { stdio: 'ignore', detached: true, cwd: ROOT }
-      );
-      srv.unref();
-    });
+function notifyBackendStatus(status, detail, extra = {}) {
+  backendState = {
+    status,
+    detail,
+    lastCheckedAt: new Date().toISOString(),
+    ...extra,
+  };
+
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    browserWindow.webContents.send('backend-status', backendState);
+  }
+}
+
+function findBackendRoot() {
+  const pathCandidates = [
+    ROOT,
+    path.resolve(ROOT, '..'),
+    path.resolve(ROOT, '..', '..'),
+    path.resolve(ROOT, '..', '..', '..'),
+    path.resolve(ROOT, '..', '..', '..', '..'),
+  ];
+
+  if (process.resourcesPath) {
+    pathCandidates.push(
+      process.resourcesPath,
+      path.resolve(process.resourcesPath, '..'),
+      path.resolve(process.resourcesPath, '..', '..'),
+      path.resolve(process.resourcesPath, '..', '..', '..'),
+      path.resolve(process.resourcesPath, '..', '..', '..', '..'),
+    );
+  }
+
+  const seen = new Set();
+  for (const candidate of pathCandidates) {
+    const resolved = path.resolve(candidate);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+
+    const startScript = path.join(resolved, 'scripts', 'start.js');
+    const cloudServer = path.join(resolved, 'cloud', 'server.js');
+    const expressPkg = path.join(resolved, 'node_modules', 'express', 'package.json');
+
+    if (fs.existsSync(startScript) && fs.existsSync(cloudServer) && fs.existsSync(expressPkg)) {
+      return resolved;
+    }
+  }
+
+  return null;
+}
+
+function launchBackend(repoRoot) {
+  const startScript = path.join(repoRoot, 'scripts', 'start.js');
+  const child = spawn('node', [startScript], {
+    cwd: repoRoot,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
   });
+
+  child.unref();
+  return child;
+}
+
+async function ensureBackend() {
+  if (backendStartPromise) {
+    return backendStartPromise;
+  }
+
+  backendStartPromise = (async () => {
+    if (await checkBackendHealth()) {
+      notifyBackendStatus(BACKEND_STATUS.ONLINE, `Backend already listening on http://localhost:${BACKEND_PORT}.`);
+      return true;
+    }
+
+    notifyBackendStatus(BACKEND_STATUS.STARTING, `Starting the local backend on http://localhost:${BACKEND_PORT}...`);
+
+    const repoRoot = findBackendRoot();
+    if (!repoRoot) {
+      notifyBackendStatus(
+        BACKEND_STATUS.FAILED,
+        'Backend start script not found. Open the ACC repo root and run npm install there if needed.'
+      );
+      return false;
+    }
+
+    let backendReachedOnline = false;
+
+    try {
+      backendProcess = launchBackend(repoRoot);
+    } catch (err) {
+      notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend launch failed: ${err.message}`);
+      return false;
+    }
+
+    backendProcess.once('error', (err) => {
+      if (!backendReachedOnline) {
+        notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend launch failed: ${err.message}`);
+      }
+    });
+
+    backendProcess.once('exit', (code, signal) => {
+      const reason = signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`;
+      if (!backendReachedOnline) {
+        notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend exited before it became online (${reason}).`);
+      } else {
+        notifyBackendStatus(
+          BACKEND_STATUS.OFFLINE,
+          `Backend stopped after launch (${reason}). Restart ACC to bring it back online.`
+        );
+      }
+    });
+
+    const deadline = Date.now() + BACKEND_START_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (await checkBackendHealth()) {
+        backendReachedOnline = true;
+        notifyBackendStatus(BACKEND_STATUS.ONLINE, `Backend is online at http://localhost:${BACKEND_PORT}.`);
+        return true;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, BACKEND_CHECK_INTERVAL_MS));
+    }
+
+    notifyBackendStatus(
+      BACKEND_STATUS.FAILED,
+      `Backend did not respond on http://localhost:${BACKEND_PORT} after startup. Run npm run start in the repo root and retry.`
+    );
+    return false;
+  })().finally(() => {
+    backendStartPromise = null;
+  });
+
+  return backendStartPromise;
 }
 
 // ── Create window ─────────────────────────────────────────────────────────────
@@ -63,6 +206,9 @@ function createWindow() {
 
   // Always load from built dist — no dev server dependency
   win.loadFile(UI_DIST);
+  win.webContents.once('did-finish-load', () => {
+    win?.webContents.send('backend-status', backendState);
+  });
 
   win.once('ready-to-show', () => { win.show(); win.focus(); });
   win.on('closed', () => { win = null; });
@@ -134,13 +280,17 @@ function createTray() {
 }
 
 // ── IPC ───────────────────────────────────────────────────────────────────────
-ipcMain.handle('server-health', () => new Promise(serverOk));
+ipcMain.handle('server-health', () => checkBackendHealth());
+ipcMain.handle('backend-status:get', () => backendState);
+ipcMain.handle('backend-status:retry', () => ensureBackend());
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
-  ensureBackend();
   createTray();
   createWindow();
+  ensureBackend().catch((err) => {
+    notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend bootstrap failed: ${err.message}`);
+  });
 });
 
 app.on('window-all-closed', () => {

@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
 const API = 'http://localhost:4000';
+const DEFAULT_BACKEND_STATUS = {
+  status: 'Offline',
+  detail: 'Checking backend...',
+  lastCheckedAt: null,
+};
 
 const AGENTS = [
   { name: 'DeepSeek', icon: '🧠', desc: 'Primary AI — text, code, analysis' },
@@ -22,12 +27,34 @@ const NAV = [
   { id: 'settings',     label: 'Settings',      icon: '⚙️' },
 ];
 
-function StatusPill({ online }) {
+function normalizeBackendStatus(next) {
+  if (!next) return DEFAULT_BACKEND_STATUS;
+  if (typeof next === 'string') {
+    return { ...DEFAULT_BACKEND_STATUS, status: next };
+  }
+  return {
+    status: next.status || DEFAULT_BACKEND_STATUS.status,
+    detail: next.detail || DEFAULT_BACKEND_STATUS.detail,
+    lastCheckedAt: next.lastCheckedAt || DEFAULT_BACKEND_STATUS.lastCheckedAt,
+  };
+}
+
+function StatusPill({ backend }) {
+  const map = {
+    Online:  { wrap: 'bg-emerald-500/15 text-emerald-400', dot: 'bg-emerald-400', pulse: false },
+    Starting:{ wrap: 'bg-amber-500/15 text-amber-400', dot: 'bg-amber-400', pulse: true },
+    Offline: { wrap: 'bg-zinc-500/15 text-zinc-400', dot: 'bg-zinc-400', pulse: false },
+    Failed:  { wrap: 'bg-red-500/15 text-red-400', dot: 'bg-red-400', pulse: false },
+  };
+  const theme = map[backend.status] || map.Offline;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${online ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-400' : 'bg-red-400'} animate-pulse`}></span>
-      {online ? 'Online' : 'Offline'}
-    </span>
+    <div className={`rounded-xl border border-white/[0.06] px-3 py-2 ${theme.wrap}`}>
+      <div className="flex items-center gap-2">
+        <span className={`w-1.5 h-1.5 rounded-full ${theme.dot} ${theme.pulse ? 'animate-pulse' : ''}`}></span>
+        <span className="text-xs font-medium">{backend.status}</span>
+      </div>
+      <div className="text-[11px] leading-snug opacity-80 mt-1">{backend.detail}</div>
+    </div>
   );
 }
 
@@ -62,23 +89,72 @@ export default function App() {
   const [stats, setStats]       = useState({});
   const [tasks, setTasks]       = useState([]);
   const [integrations, setInt]  = useState({});
-  const [online, setOnline]     = useState(false);
+  const [backend, setBackend]   = useState(DEFAULT_BACKEND_STATUS);
 
   async function fetchAll() {
-    try {
-      const [s, t, i] = await Promise.all([
-        fetch(API + '/api/taskbus/stats').then(r => r.json()),
-        fetch(API + '/api/taskbus/tasks').then(r => r.json()),
-        fetch(API + '/api/taskbus/integrations/status').then(r => r.json()).catch(() => ({})),
-      ]);
-      setStats(s.stats || s);
-      setTasks(Array.isArray(t.tasks) ? t.tasks : Array.isArray(t) ? t : []);
-      setInt(i.integrations || {});
-      setOnline(true);
-    } catch { setOnline(false); }
+    const [s, t, i] = await Promise.all([
+      fetch(API + '/api/taskbus/stats').then(r => r.json()).catch(() => ({})),
+      fetch(API + '/api/taskbus/tasks').then(r => r.json()).catch(() => ({ tasks: [] })),
+      fetch(API + '/api/taskbus/integrations/status').then(r => r.json()).catch(() => ({})),
+    ]);
+
+    setStats(s.stats || s || {});
+    setTasks(Array.isArray(t.tasks) ? t.tasks : Array.isArray(t) ? t : []);
+    setInt(i.integrations || {});
   }
 
-  useEffect(() => { fetchAll(); const id = setInterval(fetchAll, 8000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    let active = true;
+    let cleanupBackend = () => {};
+
+    const syncBackendStatus = async () => {
+      if (window.electronAPI?.backendStatus) {
+        try {
+          const current = await window.electronAPI.backendStatus();
+          if (active) setBackend(normalizeBackendStatus(current));
+        } catch {
+          if (active) setBackend(DEFAULT_BACKEND_STATUS);
+        }
+
+        if (window.electronAPI?.onBackendStatus) {
+          cleanupBackend = window.electronAPI.onBackendStatus((next) => {
+            if (active) setBackend(normalizeBackendStatus(next));
+          });
+        }
+        return;
+      }
+
+      const refresh = async () => {
+        try {
+          const ok = await fetch(API + '/api/health').then((r) => r.ok).catch(() => false);
+          if (active) {
+            setBackend(ok
+              ? { status: 'Online', detail: 'Backend reachable at http://localhost:4000.', lastCheckedAt: new Date().toISOString() }
+              : { status: 'Offline', detail: 'Backend not reachable at http://localhost:4000.', lastCheckedAt: new Date().toISOString() }
+            );
+          }
+        } catch {
+          if (active) {
+            setBackend({ status: 'Failed', detail: 'Backend health check failed.', lastCheckedAt: new Date().toISOString() });
+          }
+        }
+      };
+
+      await refresh();
+      const id = setInterval(refresh, 5000);
+      cleanupBackend = () => clearInterval(id);
+    };
+
+    fetchAll();
+    const id = setInterval(fetchAll, 8000);
+    syncBackendStatus();
+
+    return () => {
+      active = false;
+      clearInterval(id);
+      cleanupBackend();
+    };
+  }, []);
 
   const pending = tasks.filter(t => t.status === 'waiting_approval');
 
@@ -88,7 +164,7 @@ export default function App() {
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">Dashboard</h2>
-          <StatusPill online={online} />
+          <StatusPill backend={backend} />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Tasks"  value={stats.total_tasks || 0}       color="text-white" />
@@ -224,7 +300,7 @@ export default function App() {
               <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">SET</span>
             </div>
           ))}
-          <div className="pt-2 text-xs text-zinc-600">Values hidden for security. Edit in .env file.</div>
+          <div className="pt-2 text-xs text-zinc-600">Values hidden for security. The desktop app starts the local backend automatically; Telegram still starts separately with <span className="font-mono">npm run cloud:telegram</span>.</div>
         </div>
       </div>
     );
@@ -255,8 +331,16 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="px-4 py-3 border-t border-white/[0.06]">
-          <StatusPill online={online} />
+        <div className="px-4 py-3 border-t border-white/[0.06] space-y-2">
+          <StatusPill backend={backend} />
+          {(backend.status === 'Failed' || backend.status === 'Offline') && window.electronAPI?.retryBackendStart && (
+            <button
+              onClick={() => window.electronAPI.retryBackendStart()}
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.06]"
+            >
+              Retry backend start
+            </button>
+          )}
         </div>
       </div>
 
