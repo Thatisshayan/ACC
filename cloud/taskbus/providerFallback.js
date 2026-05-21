@@ -131,6 +131,17 @@ async function tryDeepSeek(task) {
 }
 
 // ── Provider 2: Ollama ────────────────────────────────────────────────────────
+
+async function tryAlibaba(task) {
+  var ali = require('../integrations/alibaba.js');
+  if (!ali.enabled()) return null;
+  console.log('[provider] Trying Alibaba/Qwen...');
+  try {
+    var result = await ali.chat(task.instruction || task.title, 'qwen-plus');
+    if (!result.success) return null;
+    return { provider_used: 'alibaba_qwen', is_real_ai_result: true, cost_tier: 'low_cost', output: result.output, summary: result.output && result.output.slice(0, 200) };
+  } catch(e) { console.warn('[provider] Alibaba failed:', e.message); return null; }
+}
 async function tryOllama(task) {
   log('[provider] Trying Ollama at', ollama.BASE_URL, 'model:', ollama.MODEL);
   var result = await ollama.generate(buildUserPrompt(task), SYSTEM_PROMPT);

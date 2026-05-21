@@ -138,6 +138,32 @@ async function routeTask(taskId) {
     log('[router] Alibaba not configured — set ALIBABA_API_KEY');
   }
 
+  // ── Hunter.io — email finder ───────────────────────────────────────────────────
+  if (task.assigned_agent === 'hunter') {
+    var hunter = require('../integrations/hunter.js');
+    if (hunter.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var htResult = await hunter.sendTaskFromACC(task);
+      var htR = store.addResult({ task_id: taskId, provider_used: 'hunter', is_real_ai_result: true, cost_tier: 'api_call', output: htResult.output||'', summary: htResult.output&&htResult.output.slice(0,200)||'' });
+      store.updateTask(taskId, { status: htResult.success?'done':'failed', provider_used: 'hunter' });
+      return { status: htResult.success?'done':'failed', taskId, provider_used:'hunter', output: htResult.output };
+    }
+    log('[router] Hunter not configured');
+  }
+
+  // ── Resend — email sending (requires approval) ────────────────────────────────
+  if (task.assigned_agent === 'resend' || task.assigned_agent === 'email') {
+    var resend = require('../integrations/resend.js');
+    if (resend.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var rsResult = await resend.sendTaskFromACC(task);
+      var rsR = store.addResult({ task_id: taskId, provider_used: 'resend', is_real_ai_result: true, cost_tier: 'api_call', output: rsResult.output||'', summary: rsResult.output&&rsResult.output.slice(0,200)||'' });
+      store.updateTask(taskId, { status: rsResult.requires_approval?'waiting_approval':rsResult.success?'done':'failed', provider_used: 'resend' });
+      return { status: rsResult.requires_approval?'waiting_approval':rsResult.success?'done':'failed', taskId, provider_used:'resend', output: rsResult.output };
+    }
+    log('[router] Resend not configured');
+  }
+
   store.addMessage(taskId, 'system', 'human', [
       'APPROVAL REQUIRED',
       'Task: ' + task.title,

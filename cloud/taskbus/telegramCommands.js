@@ -502,6 +502,11 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   if (/^img:/i.test(text))               agent = 'imagegen';
   if (/^qwen:/i.test(text))              agent = 'alibaba';
   if (/^alibaba:/i.test(text))           agent = 'alibaba';
+  if (/^hunter:/i.test(text))            agent = 'hunter';
+  if (/^find email:/i.test(text))        agent = 'hunter';
+  if (/^resend:/i.test(text))            agent = 'resend';
+  if (/^send email:/i.test(text))        agent = 'resend';
+  if (/^email:/i.test(text))             agent = 'resend';
   if (/^research:/i.test(text))          agent = 'tavily';
   if (/^tell tavily/i.test(text))        agent = 'tavily';
   if (/^tell composio/i.test(text))      agent = 'composio';

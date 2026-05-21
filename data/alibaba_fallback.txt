@@ -1,0 +1,68 @@
+Here is the exact code to add to `cloud/taskbus/providerFallback.js`:
+
+### 1. Add the `tryAlibaba` function (insert after `tryDeepSeek` function):
+
+javascript
+async function tryAlibaba(task) {
+  try {
+    const alibaba = require('../integrations/alibaba.js');
+    if (alibaba.enabled()) {
+      console.log('[provider] Trying Alibaba/Qwen...');
+      const response = await alibaba.chat(task.instruction, 'qwen-plus');
+      return {
+        provider_used: 'alibaba',
+        is_real_ai_result: true,
+        cost_tier: 'low_cost',
+        output: response.output || response,
+        summary: response.summary || (typeof response === 'string' ? response.substring(0, 100) : 'Alibaba response')
+      };
+    }
+  } catch (err) {
+    console.warn('[provider] Alibaba/Qwen failed:', err.message);
+  }
+  return null;
+}
+
+
+### 2. Update the `executeWithProviderFallback` function to insert `tryAlibaba` between `tryDeepSeek` and `tryOllama`:
+
+Find this section:
+javascript
+  // Try DeepSeek first
+  let result = await tryDeepSeek(task);
+  if (result) return result;
+
+  // Fallback to Ollama
+  result = await tryOllama(task);
+  if (result) return result;
+
+
+Replace with:
+javascript
+  // Try DeepSeek first
+  let result = await tryDeepSeek(task);
+  if (result) return result;
+
+  // Fallback to Alibaba/Qwen
+  result = await tryAlibaba(task);
+  if (result) return result;
+
+  // Fallback to Ollama
+  result = await tryOllama(task);
+  if (result) return result;
+
+
+### 3. Ensure the `require` for alibaba.js is at the top of the file (if not already present):
+
+javascript
+const alibaba = require('../integrations/alibaba.js');
+
+
+**Note:** The `require` inside `tryAlibaba` is intentional to avoid loading the module if it's not needed, but if `alibaba.js` is already required elsewhere in the file, you can move it to the top and remove the inline require.
+
+### Analysis and Recommendation:
+
+- **Priority**: Critical - this enables a reliable cloud fallback when DeepSeek is unavailable.
+- **Risk**: Low - the function gracefully returns `null` on failure, preserving the existing fallback chain.
+- **Cost**: `low_cost` tier is appropriate for Qwen-plus which is competitively priced.
+- **Testing**: Verify that `alibaba.enabled()` returns `true` when API keys are configured, and that `alibaba.chat()` returns a consistent response format.
