@@ -24,11 +24,14 @@ async function checkHealth() {
 async function generateDallE(prompt) {
   try {
     var r = await axios.post('https://api.openai.com/v1/images/generations', {
-      model: 'dall-e-3', prompt: prompt, n: 1,
-      size: '1024x1024', response_format: 'url',
+      model: 'dall-e-3', prompt: prompt.slice(0, 900), n: 1, size: '1024x1024',
     }, { headers: { Authorization: 'Bearer ' + OPENAI_KEY, 'Content-Type': 'application/json' }, timeout: 60000 });
     return { success: true, url: r.data.data[0].url, revised_prompt: r.data.data[0].revised_prompt, provider: 'dall-e-3' };
-  } catch(e) { return { success: false, error: e.message }; }
+  } catch(e) {
+    var errMsg = e.response&&e.response.data ? JSON.stringify(e.response.data).slice(0,200) : e.message;
+    console.warn('[imageGen] DALL-E failed:', errMsg);
+    return { success: false, error: errMsg };
+  }
 }
 
 // Provider 2: Alibaba Wanx

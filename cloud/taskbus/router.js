@@ -80,6 +80,53 @@ async function routeTask(taskId) {
     '| agent:', task.assigned_agent,
     '| mode:', task.automation_mode);
 
+  // ── SPECIAL AGENTS — bypass safety gate, run immediately ──────────────────
+  var BYPASS_AGENTS = ['imagegen', 'image', 'tavily', 'hunter', 'alibaba', 'qwen'];
+  if (BYPASS_AGENTS.indexOf(task.assigned_agent) !== -1) {
+    // Skip safety gate and rate limit for these safe utility agents
+    if (task.assigned_agent === 'imagegen' || task.assigned_agent === 'image') {
+      var ig2 = require('../integrations/imageGen.js');
+      if (ig2.enabled()) {
+        store.updateTask(taskId, { status: 'in_progress' });
+        var ig2Result = await ig2.sendTaskFromACC(task);
+        var ig2R = store.addResult({ task_id: taskId, provider_used: ig2Result.provider||'imagegen', is_real_ai_result: true, cost_tier: 'low_cost', output: ig2Result.url || ig2Result.output || '', summary: ig2Result.summary || '' });
+        store.updateTask(taskId, { status: ig2Result.success?'done':'failed', provider_used: ig2Result.provider||'imagegen' });
+        return { status: ig2Result.success?'done':'failed', taskId, provider_used: ig2Result.provider, output: ig2Result.url, image_url: ig2Result.url, summary: ig2Result.summary };
+      }
+    }
+    if (task.assigned_agent === 'tavily') {
+      var tv2 = require('../integrations/tavily.js');
+      if (tv2.enabled()) {
+        store.updateTask(taskId, { status: 'in_progress' });
+        var tv2Result = await tv2.sendTaskFromACC(task);
+        var tv2R = store.addResult({ task_id: taskId, provider_used: 'tavily', is_real_ai_result: true, cost_tier: 'low_cost', output: tv2Result.output || '', summary: tv2Result.summary || '' });
+        store.updateTask(taskId, { status: tv2Result.success?'done':'failed', provider_used: 'tavily' });
+        return { status: tv2Result.success?'done':'failed', taskId, provider_used:'tavily', output: tv2Result.output };
+      }
+    }
+    if (task.assigned_agent === 'hunter') {
+      var ht2 = require('../integrations/hunter.js');
+      if (ht2.enabled()) {
+        store.updateTask(taskId, { status: 'in_progress' });
+        var ht2Result = await ht2.sendTaskFromACC(task);
+        var ht2R = store.addResult({ task_id: taskId, provider_used: 'hunter', is_real_ai_result: true, cost_tier: 'api_call', output: ht2Result.output || '', summary: ht2Result.output && ht2Result.output.slice(0,200) || '' });
+        store.updateTask(taskId, { status: ht2Result.success?'done':'failed', provider_used: 'hunter' });
+        return { status: ht2Result.success?'done':'failed', taskId, provider_used:'hunter', output: ht2Result.output };
+      }
+    }
+    if (task.assigned_agent === 'alibaba' || task.assigned_agent === 'qwen') {
+      var al2 = require('../integrations/alibaba.js');
+      if (al2.enabled()) {
+        store.updateTask(taskId, { status: 'in_progress' });
+        var al2Result = await al2.sendTaskFromACC(task);
+        var al2R = store.addResult({ task_id: taskId, provider_used: 'alibaba_qwen', is_real_ai_result: true, cost_tier: 'low_cost', output: al2Result.output || '', summary: al2Result.output && al2Result.output.slice(0,200) || '' });
+        store.updateTask(taskId, { status: al2Result.success?'done':'failed', provider_used: 'alibaba_qwen' });
+        return { status: al2Result.success?'done':'failed', taskId, provider_used:'alibaba_qwen', output: al2Result.output };
+      }
+    }
+    // If connector not enabled, fall through to normal routing below
+  }
+
   // ── 0. RATE LIMIT CHECK ────────────────────────────────────────────────────
   var rl = checkRateLimit(task.created_by || task.userId);
   if (!rl.allowed) {
@@ -93,77 +140,6 @@ async function routeTask(taskId) {
     log('[router] BLOCKED — full_auto cannot execute high-risk external task');
     store.updateTask(taskId, { status: 'waiting_approval', automation_mode: 'sandbox' });
     var fullAutoApproval = store.createApproval(taskId, 'high_risk_execution');
-    // ── Tavily — real-time AI research ──────────────────────────────────────────
-  if (task.assigned_agent === 'tavily') {
-    var tavily = require('../integrations/tavily.js');
-    if (tavily.enabled()) {
-      store.updateTask(taskId, { status: 'in_progress' });
-      var tvResult = await tavily.sendTaskFromACC(task);
-      var tvR = store.addResult({ task_id: taskId, provider_used: 'tavily',
-        is_real_ai_result: true, cost_tier: 'low_cost',
-        output: tvResult.output || '', summary: tvResult.summary || 'Tavily search completed' });
-      store.updateTask(taskId, { status: tvResult.success?'done':'failed', provider_used: 'tavily' });
-      return { status: tvResult.success?'done':'failed', taskId, provider_used:'tavily', output: tvResult.output };
-    }
-    log('[router] Tavily not enabled — falling through');
-  }
-
-  // ── ImageGen — multi-provider image generation ────────────────────────────────
-  if (task.assigned_agent === 'imagegen' || task.assigned_agent === 'image') {
-    var ig = require('../integrations/imageGen.js');
-    if (ig.enabled()) {
-      store.updateTask(taskId, { status: 'in_progress' });
-      var igResult = await ig.sendTaskFromACC(task);
-      var igR = store.addResult({ task_id: taskId, provider_used: igResult.provider||'imagegen',
-        is_real_ai_result: true, cost_tier: 'low_cost',
-        output: igResult.url || igResult.output || '', summary: igResult.summary || '' });
-      store.updateTask(taskId, { status: igResult.success?'done':'failed', provider_used: igResult.provider||'imagegen' });
-      return { status: igResult.success?'done':'failed', taskId, provider_used: igResult.provider, output: igResult.url, image_url: igResult.url };
-    }
-    log('[router] ImageGen not configured — need OPENAI_API_KEY or ALIBABA_API_KEY');
-  }
-
-  // ── Alibaba/Qwen — alternative AI provider ────────────────────────────────────
-  if (task.assigned_agent === 'alibaba' || task.assigned_agent === 'qwen') {
-    var ali = require('../integrations/alibaba.js');
-    if (ali.enabled()) {
-      store.updateTask(taskId, { status: 'in_progress' });
-      var aliResult = await ali.sendTaskFromACC(task);
-      var aliR = store.addResult({ task_id: taskId, provider_used: 'alibaba_qwen',
-        is_real_ai_result: true, cost_tier: 'low_cost',
-        output: aliResult.output || '', summary: aliResult.output && aliResult.output.slice(0,200) || '' });
-      store.updateTask(taskId, { status: aliResult.success?'done':'failed', provider_used: 'alibaba_qwen' });
-      return { status: aliResult.success?'done':'failed', taskId, provider_used:'alibaba_qwen', output: aliResult.output };
-    }
-    log('[router] Alibaba not configured — set ALIBABA_API_KEY');
-  }
-
-  // ── Hunter.io — email finder ───────────────────────────────────────────────────
-  if (task.assigned_agent === 'hunter') {
-    var hunter = require('../integrations/hunter.js');
-    if (hunter.enabled()) {
-      store.updateTask(taskId, { status: 'in_progress' });
-      var htResult = await hunter.sendTaskFromACC(task);
-      var htR = store.addResult({ task_id: taskId, provider_used: 'hunter', is_real_ai_result: true, cost_tier: 'api_call', output: htResult.output||'', summary: htResult.output&&htResult.output.slice(0,200)||'' });
-      store.updateTask(taskId, { status: htResult.success?'done':'failed', provider_used: 'hunter' });
-      return { status: htResult.success?'done':'failed', taskId, provider_used:'hunter', output: htResult.output };
-    }
-    log('[router] Hunter not configured');
-  }
-
-  // ── Resend — email sending (requires approval) ────────────────────────────────
-  if (task.assigned_agent === 'resend' || task.assigned_agent === 'email') {
-    var resend = require('../integrations/resend.js');
-    if (resend.enabled()) {
-      store.updateTask(taskId, { status: 'in_progress' });
-      var rsResult = await resend.sendTaskFromACC(task);
-      var rsR = store.addResult({ task_id: taskId, provider_used: 'resend', is_real_ai_result: true, cost_tier: 'api_call', output: rsResult.output||'', summary: rsResult.output&&rsResult.output.slice(0,200)||'' });
-      store.updateTask(taskId, { status: rsResult.requires_approval?'waiting_approval':rsResult.success?'done':'failed', provider_used: 'resend' });
-      return { status: rsResult.requires_approval?'waiting_approval':rsResult.success?'done':'failed', taskId, provider_used:'resend', output: rsResult.output };
-    }
-    log('[router] Resend not configured');
-  }
-
   store.addMessage(taskId, 'system', 'human', [
       'APPROVAL REQUIRED',
       'Task: ' + task.title,
@@ -194,7 +170,78 @@ async function routeTask(taskId) {
   if (task.automation_mode === 'manual' || isManualAgent(task.assigned_agent)) {
     log('[router] Manual — stored for', task.assigned_agent);
     store.updateTask(taskId, { status: 'pending' });
-    store.addMessage(taskId, 'system', task.assigned_agent,
+  // ── Tavily — real-time AI research ──────────────────────────────────────────
+  if (task.assigned_agent === 'tavily') {
+  var tavily = require('../integrations/tavily.js');
+  if (tavily.enabled()) {
+    store.updateTask(taskId, { status: 'in_progress' });
+    var tvResult = await tavily.sendTaskFromACC(task);
+    var tvR = store.addResult({ task_id: taskId, provider_used: 'tavily',
+      is_real_ai_result: true, cost_tier: 'low_cost',
+      output: tvResult.output || '', summary: tvResult.summary || 'Tavily search completed' });
+    store.updateTask(taskId, { status: tvResult.success?'done':'failed', provider_used: 'tavily' });
+    return { status: tvResult.success?'done':'failed', taskId, provider_used:'tavily', output: tvResult.output };
+  }
+  log('[router] Tavily not enabled — falling through');
+  }
+
+  // ── ImageGen — multi-provider image generation ────────────────────────────────
+  if (task.assigned_agent === 'imagegen' || task.assigned_agent === 'image') {
+  var ig = require('../integrations/imageGen.js');
+  if (ig.enabled()) {
+    store.updateTask(taskId, { status: 'in_progress' });
+    var igResult = await ig.sendTaskFromACC(task);
+    var igR = store.addResult({ task_id: taskId, provider_used: igResult.provider||'imagegen',
+      is_real_ai_result: true, cost_tier: 'low_cost',
+      output: igResult.url || igResult.output || '', summary: igResult.summary || '' });
+    store.updateTask(taskId, { status: igResult.success?'done':'failed', provider_used: igResult.provider||'imagegen' });
+    return { status: igResult.success?'done':'failed', taskId, provider_used: igResult.provider, output: igResult.url, image_url: igResult.url };
+  }
+  log('[router] ImageGen not configured — need OPENAI_API_KEY or ALIBABA_API_KEY');
+  }
+
+  // ── Alibaba/Qwen — alternative AI provider ────────────────────────────────────
+  if (task.assigned_agent === 'alibaba' || task.assigned_agent === 'qwen') {
+  var ali = require('../integrations/alibaba.js');
+  if (ali.enabled()) {
+    store.updateTask(taskId, { status: 'in_progress' });
+    var aliResult = await ali.sendTaskFromACC(task);
+    var aliR = store.addResult({ task_id: taskId, provider_used: 'alibaba_qwen',
+      is_real_ai_result: true, cost_tier: 'low_cost',
+      output: aliResult.output || '', summary: aliResult.output && aliResult.output.slice(0,200) || '' });
+    store.updateTask(taskId, { status: aliResult.success?'done':'failed', provider_used: 'alibaba_qwen' });
+    return { status: aliResult.success?'done':'failed', taskId, provider_used:'alibaba_qwen', output: aliResult.output };
+  }
+  log('[router] Alibaba not configured — set ALIBABA_API_KEY');
+  }
+
+  // ── Hunter.io — email finder ───────────────────────────────────────────────────
+  if (task.assigned_agent === 'hunter') {
+  var hunter = require('../integrations/hunter.js');
+  if (hunter.enabled()) {
+    store.updateTask(taskId, { status: 'in_progress' });
+    var htResult = await hunter.sendTaskFromACC(task);
+    var htR = store.addResult({ task_id: taskId, provider_used: 'hunter', is_real_ai_result: true, cost_tier: 'api_call', output: htResult.output||'', summary: htResult.output&&htResult.output.slice(0,200)||'' });
+    store.updateTask(taskId, { status: htResult.success?'done':'failed', provider_used: 'hunter' });
+    return { status: htResult.success?'done':'failed', taskId, provider_used:'hunter', output: htResult.output };
+  }
+  log('[router] Hunter not configured');
+  }
+
+  // ── Resend — email sending (requires approval) ────────────────────────────────
+  if (task.assigned_agent === 'resend' || task.assigned_agent === 'email') {
+  var resend = require('../integrations/resend.js');
+  if (resend.enabled()) {
+    store.updateTask(taskId, { status: 'in_progress' });
+    var rsResult = await resend.sendTaskFromACC(task);
+    var rsR = store.addResult({ task_id: taskId, provider_used: 'resend', is_real_ai_result: true, cost_tier: 'api_call', output: rsResult.output||'', summary: rsResult.output&&rsResult.output.slice(0,200)||'' });
+    store.updateTask(taskId, { status: rsResult.requires_approval?'waiting_approval':rsResult.success?'done':'failed', provider_used: 'resend' });
+    return { status: rsResult.requires_approval?'waiting_approval':rsResult.success?'done':'failed', taskId, provider_used:'resend', output: rsResult.output };
+  }
+  log('[router] Resend not configured');
+  }
+
+  store.addMessage(taskId, 'system', task.assigned_agent,
       'Task ready for manual pickup.\n' +
       'GET /api/taskbus/tasks?assigned_agent=' + task.assigned_agent + '&status=pending\n' +
       'Submit result: POST /api/taskbus/task/' + taskId + '/result');
