@@ -476,7 +476,7 @@ function extractRouteOutput(routeResult, taskId) {
 
 // ── createTaskFromMessage ─────────────────────────────────────────────────────
 async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatId) {
-  var isTaskCreate = /^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:)|tavily:|research:|tell tavily/i.test(text);
+  var isTaskCreate = /^((task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:)|tavily:|research:|tell tavily|image:|generate:|img:|qwen:|alibaba:)/i.test(text);
   if (!isTaskCreate) return false;
 
   var instruction = text.replace(/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:):?\s*/i, '').trim();
@@ -497,6 +497,11 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   if (/^crew:/i.test(text))              agent = 'crewai';
   if (/^composio:/i.test(text))          agent = 'composio';
   if (/^tavily:/i.test(text))            agent = 'tavily';
+  if (/^image:/i.test(text))             agent = 'imagegen';
+  if (/^generate:/i.test(text))          agent = 'imagegen';
+  if (/^img:/i.test(text))               agent = 'imagegen';
+  if (/^qwen:/i.test(text))              agent = 'alibaba';
+  if (/^alibaba:/i.test(text))           agent = 'alibaba';
   if (/^research:/i.test(text))          agent = 'tavily';
   if (/^tell tavily/i.test(text))        agent = 'tavily';
   if (/^tell composio/i.test(text))      agent = 'composio';

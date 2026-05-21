@@ -1,0 +1,47 @@
+## Analysis
+
+The issue is that Telegram inline keyboard buttons send callback_data without a leading slash (e.g., "taskbus_approve_XXXXXX"), but the command handler in bot.js expects a leading slash (e.g., "/taskbus_approve_XXXXXX"). This causes the approval flow to break when users click inline buttons.
+
+## Recommended Fixes
+
+### Fix 1: bot.js - handleCallback function
+
+Add the following code **before** the existing command checks in the `handleCallback` function:
+
+javascript
+// Handle taskbus approval/rejection callback data (no slash prefix)
+if (data.startsWith("taskbus_approve_") || data.startsWith("taskbus_reject_")) {
+  var cmdText = "/" + data; // add slash to match command handler
+  return handleTaskBusCommand(chatId, userId, cmdText, function(id, msg, opts) { 
+    return sendButtons(id, msg, opts && opts.reply_markup && opts.reply_markup.inline_keyboard || []); 
+  }, user);
+}
+
+
+### Fix 2: telegramCommands.js - handleApprovalAction function
+
+Update the regex parsing to handle both formats:
+
+javascript
+// Parse both "/taskbus_approve_XXXXXXXX" (slash+underscore) and "taskbus_approve_XXXXXXXX" (no slash)
+var sid = text.replace(/^\/?taskbus_(approve|reject)_/i, "").slice(0, 8);
+
+
+## Implementation Details
+
+1. **bot.js**: Insert the callback data handler at the beginning of `handleCallback`, before any existing command checks. This ensures inline button clicks are processed before falling through to text command parsing.
+
+2. **telegramCommands.js**: The regex `/^\/?taskbus_(approve|reject)_/i` uses `/?` to optionally match a leading slash, making it compatible with both callback data formats.
+
+## Testing
+
+- Test inline button clicks with callback_data "taskbus_approve_XXXXXXXX"
+- Test inline button clicks with callback_data "taskbus_reject_XXXXXXXX"
+- Verify that the approval/rejection flow completes successfully
+- Ensure existing slash-prefixed commands still work
+
+## Risk Assessment
+
+- Low risk: The changes are additive and backward-compatible
+- No breaking changes to existing functionality
+- The regex update is more permissive but still validates the expected pattern

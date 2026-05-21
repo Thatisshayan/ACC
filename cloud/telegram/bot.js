@@ -597,6 +597,16 @@ async function handleHelp(chatId, userId) {
 async function handleCallback(cb) {
   var chatId = cb.message.chat.id;
   var userId = String(cb.from.id);
+
+  // ── Approval inline button callbacks ────────────────────────────────────────
+  if (data.startsWith('taskbus_approve_') || data.startsWith('taskbus_reject_')) {
+    var slashCmd = '/' + data;
+    var tbCmd = require('./taskbus/telegramCommands.js');
+    var handled = await tbCmd.handleTaskBusCommand(chatId, userId, slashCmd, sendMsg, user);
+    if (!handled) await sendMsg(chatId, handled === false ? 'Approval processed.' : 'Could not process. Try /approvals');
+    return;
+  }
+
   var data   = cb.data;
   var user   = users.getUserProfile(userId) || {};
   await answerCB(cb.id);

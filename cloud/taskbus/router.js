@@ -108,6 +108,36 @@ async function routeTask(taskId) {
     log('[router] Tavily not enabled — falling through');
   }
 
+  // ── ImageGen — multi-provider image generation ────────────────────────────────
+  if (task.assigned_agent === 'imagegen' || task.assigned_agent === 'image') {
+    var ig = require('../integrations/imageGen.js');
+    if (ig.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var igResult = await ig.sendTaskFromACC(task);
+      var igR = store.addResult({ task_id: taskId, provider_used: igResult.provider||'imagegen',
+        is_real_ai_result: true, cost_tier: 'low_cost',
+        output: igResult.url || igResult.output || '', summary: igResult.summary || '' });
+      store.updateTask(taskId, { status: igResult.success?'done':'failed', provider_used: igResult.provider||'imagegen' });
+      return { status: igResult.success?'done':'failed', taskId, provider_used: igResult.provider, output: igResult.url, image_url: igResult.url };
+    }
+    log('[router] ImageGen not configured — need OPENAI_API_KEY or ALIBABA_API_KEY');
+  }
+
+  // ── Alibaba/Qwen — alternative AI provider ────────────────────────────────────
+  if (task.assigned_agent === 'alibaba' || task.assigned_agent === 'qwen') {
+    var ali = require('../integrations/alibaba.js');
+    if (ali.enabled()) {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var aliResult = await ali.sendTaskFromACC(task);
+      var aliR = store.addResult({ task_id: taskId, provider_used: 'alibaba_qwen',
+        is_real_ai_result: true, cost_tier: 'low_cost',
+        output: aliResult.output || '', summary: aliResult.output && aliResult.output.slice(0,200) || '' });
+      store.updateTask(taskId, { status: aliResult.success?'done':'failed', provider_used: 'alibaba_qwen' });
+      return { status: aliResult.success?'done':'failed', taskId, provider_used:'alibaba_qwen', output: aliResult.output };
+    }
+    log('[router] Alibaba not configured — set ALIBABA_API_KEY');
+  }
+
   store.addMessage(taskId, 'system', 'human', [
       'APPROVAL REQUIRED',
       'Task: ' + task.title,

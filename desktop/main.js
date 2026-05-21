@@ -30,6 +30,25 @@ let backendState = {
   detail: 'Checking backend...',
   lastCheckedAt: null,
 };
+let logFilePath = null;
+
+function ensureDesktopLogFile() {
+  if (logFilePath) return logFilePath;
+
+  const logsDir = path.join(app.getPath('userData'), 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
+  logFilePath = path.join(logsDir, 'desktop.log');
+  return logFilePath;
+}
+
+function appendDesktopLog(message) {
+  try {
+    const file = ensureDesktopLogFile();
+    fs.appendFileSync(file, `[${new Date().toISOString()}] ${message}\n`);
+  } catch (err) {
+    console.error('[acc] log write failed:', err.message);
+  }
+}
 
 // ── Health check ──────────────────────────────────────────────────────────────
 function checkBackendHealth(timeoutMs = 2000) {
@@ -58,6 +77,8 @@ function notifyBackendStatus(status, detail, extra = {}) {
     lastCheckedAt: new Date().toISOString(),
     ...extra,
   };
+
+  appendDesktopLog(`backend:${status} ${detail}`);
 
   for (const browserWindow of BrowserWindow.getAllWindows()) {
     browserWindow.webContents.send('backend-status', backendState);
@@ -105,6 +126,10 @@ function launchBackend(repoRoot) {
   const startScript = path.join(repoRoot, 'scripts', 'start.js');
   const child = spawn('node', [startScript], {
     cwd: repoRoot,
+    env: {
+      ...process.env,
+      PORT: String(BACKEND_PORT),
+    },
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
@@ -286,6 +311,7 @@ ipcMain.handle('backend-status:retry', () => ensureBackend());
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+  appendDesktopLog('desktop app launching');
   createTray();
   createWindow();
   ensureBackend().catch((err) => {
