@@ -1,1 +1,1 @@
-chore gitignore electron builds
+security: delete railway_vars.txt plaintext secrets, session handoff note
