@@ -31,3 +31,10 @@ serviceAccountKey.json
 *.pem
 *.key
 node_modules/  
+
+# Electron build artifacts
+desktop/dist/
+desktop/dist-verify/
+desktop/dist-verify2/
+desktop/dist-verify3/
+desktop/node_modules/
