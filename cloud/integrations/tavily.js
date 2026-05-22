@@ -62,10 +62,25 @@ async function sendTaskFromACC(accTask) {
                      instruction.match(/\[search\](.*?)(?:\n|$)/) ||
                      instruction.match(/query[:\s]+(.+)/i);
   const query = queryMatch ? queryMatch[1].trim() : instruction.trim();
-  if (!query) throw new Error('No search query found in task instruction');
-  
-  const result = await search(query);
-  return formatForTelegram(result);
+  if (!query) {
+    return { success: false, provider: 'tavily', error: 'No search query found in task instruction', summary: 'Missing Tavily query' };
+  }
+
+  try {
+    const result = await search(query);
+    const formatted = formatForTelegram(result);
+    return {
+      success: true,
+      provider: 'tavily',
+      query: result.query,
+      answer: result.answer || '',
+      results: result.results || [],
+      output: formatted,
+      summary: result.answer ? result.answer.slice(0, 200) : 'Tavily search completed',
+    };
+  } catch (err) {
+    return { success: false, provider: 'tavily', error: err.message, summary: 'Tavily search failed' };
+  }
 }
 
 // Router integration helper

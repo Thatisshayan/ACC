@@ -56,15 +56,15 @@ async function generateStability(prompt) {
   } catch(e) { return { success: false, error: e.message }; }
 }
 
-// Main: try providers in order
+// Main: try providers in order (Alibaba first - OpenAI billing may be capped)
 async function generate(prompt, options) {
-  if (OPENAI_KEY) {
-    var d = await generateDallE(prompt);
-    if (d.success) return d;
-  }
   if (ALIBABA_KEY) {
     var w = await generateWanx(prompt);
     if (w.success) return w;
+  }
+  if (OPENAI_KEY) {
+    var d = await generateDallE(prompt);
+    if (d.success) return d;
   }
   if (STABILITY_KEY) {
     var s = await generateStability(prompt);

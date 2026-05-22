@@ -1,6 +1,6 @@
-// cloud/taskbus/router.js
+﻿// cloud/taskbus/router.js
 // ACC v2 Task Bus Router
-// Execution chain: DeepSeek → Ollama → Claude → Smart Stub
+// Execution chain: DeepSeek â†’ Ollama â†’ Claude â†’ Smart Stub
 // Safety controls: always enforced before any execution attempt
 'use strict';
 
@@ -8,7 +8,7 @@ const store    = require('./store.js');
 const { log }  = require('../utils/logger.js');
 const { executeWithProviderFallback } = require('./providerFallback.js');
 
-// ── Safety patterns — NEVER modify or weaken these ───────────────────────────
+// â”€â”€ Safety patterns â€” NEVER modify or weaken these â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const HIGH_RISK_PATTERNS = [
   /post.*kijiji/i,       // marketplace live post
   /send.*email/i,        // external communication
@@ -37,8 +37,8 @@ function isFullAutoExternalRisk(task) {
   return isHighRisk(task);
 }
 
-// ── Manual agents — never auto-execute ───────────────────────────────────────
-// openhands is NOT manual — routed via OpenHands connector (§3b)
+// â”€â”€ Manual agents â€” never auto-execute â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// openhands is NOT manual â€” routed via OpenHands connector (Â§3b)
 var MANUAL_AGENTS = ['gemini', 'notebooklm', 'chatgpt'];
 
 function isManualAgent(agentId) {
@@ -46,7 +46,7 @@ function isManualAgent(agentId) {
   return MANUAL_AGENTS.indexOf(agentId) !== -1;
 }
 
-// ── Rate limiting ─────────────────────────────────────────────────────────────
+// â”€â”€ Rate limiting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var rateLimitMap = {};
 var MAX_PER_HOUR = parseInt(process.env.MAX_TASKS_PER_USER_PER_HOUR || '30');
 
@@ -67,7 +67,13 @@ function checkRateLimit(userId) {
   return { allowed: true, remaining: MAX_PER_HOUR - times.length - 1 };
 }
 
-// ── Main router ───────────────────────────────────────────────────────────────
+// â”€â”€ Main router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function findPendingApproval(taskId, action) {
+  return store.getPendingApprovals().find(function(a) {
+    return a.task_id === taskId && (!action || a.action === action);
+  }) || null;
+}
+
 async function routeTask(taskId) {
   var task = store.getTask(taskId);
   if (!task) {
@@ -80,7 +86,59 @@ async function routeTask(taskId) {
     '| agent:', task.assigned_agent,
     '| mode:', task.automation_mode);
 
-  // ── SPECIAL AGENTS — bypass safety gate, run immediately ──────────────────
+  if (task.assigned_agent === 'resend' || task.assigned_agent === 'email') {
+    var resend = require('../integrations/resend.js');
+    if (resend.enabled()) {
+      var resendApproved = store.hasApprovedApproval(taskId, 'high_risk_execution');
+      store.updateTask(taskId, { status: 'in_progress' });
+      var rsResult = await resend.sendTaskFromACC(task, { approved: resendApproved });
+
+      if (rsResult && rsResult.requires_approval) {
+        var resendApproval = findPendingApproval(taskId, 'high_risk_execution') || store.createApproval(taskId, 'high_risk_execution');
+        store.updateTask(taskId, { status: 'waiting_approval', provider_used: 'resend' });
+        store.addMessage(taskId, 'system', 'human', [
+          'APPROVAL REQUIRED',
+          'Task: ' + task.title,
+          'Reason: Sending email is a high-risk external action.',
+          'Approval ID: ' + resendApproval.id.slice(0, 8),
+          'Approve: /taskbus_approve_' + resendApproval.id.slice(0, 8),
+          'Reject:  /taskbus_reject_'  + resendApproval.id.slice(0, 8),
+        ].join('\n'));
+        return {
+          status: 'waiting_approval',
+          taskId: taskId,
+          approvalId: resendApproval.id,
+          provider_used: 'resend',
+          output: rsResult.output || '',
+          summary: rsResult.summary || 'Email awaiting approval',
+        };
+      }
+
+      if (rsResult && rsResult.success) {
+        var rsResultRow = store.addResult({
+          task_id: taskId,
+          provider_used: 'resend',
+          is_real_ai_result: true,
+          cost_tier: 'api_call',
+          output: rsResult.output || '',
+          summary: rsResult.summary || (rsResult.output && rsResult.output.slice(0, 200)) || '',
+        });
+        store.updateTask(taskId, { status: 'done', provider_used: 'resend' });
+        return {
+          status: 'done',
+          taskId: taskId,
+          provider_used: 'resend',
+          resultId: rsResultRow.id,
+          output: rsResult.output || '',
+          summary: rsResult.summary || '',
+        };
+      }
+
+      store.updateTask(taskId, { status: 'failed', provider_used: 'resend' });
+      return { status: 'failed', taskId: taskId, provider_used: 'resend', output: rsResult && rsResult.output || '', error: rsResult && rsResult.error || 'Resend failed' };
+    }
+    log('[router] Resend not configured');
+  // â”€â”€ 1. SAFETY GATE â€” runs before anything else â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   var BYPASS_AGENTS = ['imagegen', 'image', 'tavily', 'hunter', 'alibaba', 'qwen'];
   if (BYPASS_AGENTS.indexOf(task.assigned_agent) !== -1) {
     // Skip safety gate and rate limit for these safe utility agents
@@ -127,17 +185,71 @@ async function routeTask(taskId) {
     // If connector not enabled, fall through to normal routing below
   }
 
-  // ── 0. RATE LIMIT CHECK ────────────────────────────────────────────────────
+  // â”€â”€ 0. RATE LIMIT CHECK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   var rl = checkRateLimit(task.created_by || task.userId);
   if (!rl.allowed) {
     store.updateTask(taskId, { status: 'failed', error: 'Rate limit exceeded' });
     return { status: 'rate_limited', taskId: taskId,
-      message: '⏳ Slow down! Max ' + MAX_PER_HOUR + ' tasks/hour. Try again in ' + Math.ceil(rl.resetIn/60) + ' min.' };
+      message: 'â³ Slow down! Max ' + MAX_PER_HOUR + ' tasks/hour. Try again in ' + Math.ceil(rl.resetIn/60) + ' min.' };
   }
 
-  // ── 1. SAFETY GATE — runs before anything else ─────────────────────────────
+  if (task.assigned_agent === 'resend' || task.assigned_agent === 'email') {
+    var resend = require('../integrations/resend.js');
+    if (resend.enabled()) {
+      var resendApproved = store.hasApprovedApproval(taskId, 'high_risk_execution');
+      store.updateTask(taskId, { status: 'in_progress' });
+      var rsResult = await resend.sendTaskFromACC(task, { approved: resendApproved });
+
+      if (rsResult && rsResult.requires_approval) {
+        var resendApproval = findPendingApproval(taskId, 'high_risk_execution') || store.createApproval(taskId, 'high_risk_execution');
+        store.updateTask(taskId, { status: 'waiting_approval', provider_used: 'resend' });
+        store.addMessage(taskId, 'system', 'human', [
+          'APPROVAL REQUIRED',
+          'Task: ' + task.title,
+          'Reason: Sending email is a high-risk external action.',
+          'Approval ID: ' + resendApproval.id.slice(0, 8),
+          'Approve: /taskbus_approve_' + resendApproval.id.slice(0, 8),
+          'Reject:  /taskbus_reject_'  + resendApproval.id.slice(0, 8),
+        ].join('\n'));
+        return {
+          status: 'waiting_approval',
+          taskId: taskId,
+          approvalId: resendApproval.id,
+          provider_used: 'resend',
+          output: rsResult.output || '',
+          summary: rsResult.summary || 'Email awaiting approval',
+        };
+      }
+
+      if (rsResult && rsResult.success) {
+        var rsResultRow = store.addResult({
+          task_id: taskId,
+          provider_used: 'resend',
+          is_real_ai_result: true,
+          cost_tier: 'api_call',
+          output: rsResult.output || '',
+          summary: rsResult.summary || (rsResult.output && rsResult.output.slice(0, 200)) || '',
+        });
+        store.updateTask(taskId, { status: 'done', provider_used: 'resend' });
+        return {
+          status: 'done',
+          taskId: taskId,
+          provider_used: 'resend',
+          resultId: rsResultRow.id,
+          output: rsResult.output || '',
+          summary: rsResult.summary || '',
+        };
+      }
+
+      store.updateTask(taskId, { status: 'failed', provider_used: 'resend' });
+      return { status: 'failed', taskId: taskId, provider_used: 'resend', output: rsResult && rsResult.output || '', error: rsResult && rsResult.error || 'Resend failed' };
+    }
+    log('[router] Resend not configured');
+  }
+  }
+  // â”€â”€ 1. SAFETY GATE â€” runs before anything else â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (isFullAutoExternalRisk(task)) {
-    log('[router] BLOCKED — full_auto cannot execute high-risk external task');
+    log('[router] BLOCKED â€” full_auto cannot execute high-risk external task');
     store.updateTask(taskId, { status: 'waiting_approval', automation_mode: 'sandbox' });
     var fullAutoApproval = store.createApproval(taskId, 'high_risk_execution');
   store.addMessage(taskId, 'system', 'human', [
@@ -151,7 +263,7 @@ async function routeTask(taskId) {
   }
 
   if (isHighRisk(task) && !store.hasApprovedApproval(taskId, 'high_risk_execution')) {
-    log('[router] BLOCKED — high-risk task requires approval');
+    log('[router] BLOCKED â€” high-risk task requires approval');
     store.updateTask(taskId, { status: 'waiting_approval' });
     var approval = store.createApproval(taskId, 'high_risk_execution');
     store.addMessage(taskId, 'system', 'human', [
@@ -166,11 +278,11 @@ async function routeTask(taskId) {
     return { status: 'waiting_approval', taskId: taskId, approvalId: approval.id };
   }
 
-  // ── 2. MANUAL MODE — store only, no execution ──────────────────────────────
+  // â”€â”€ 2. MANUAL MODE â€” store only, no execution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.automation_mode === 'manual' || isManualAgent(task.assigned_agent)) {
-    log('[router] Manual — stored for', task.assigned_agent);
+    log('[router] Manual â€” stored for', task.assigned_agent);
     store.updateTask(taskId, { status: 'pending' });
-  // ── Tavily — real-time AI research ──────────────────────────────────────────
+  // â”€â”€ Tavily â€” real-time AI research â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'tavily') {
   var tavily = require('../integrations/tavily.js');
   if (tavily.enabled()) {
@@ -182,10 +294,10 @@ async function routeTask(taskId) {
     store.updateTask(taskId, { status: tvResult.success?'done':'failed', provider_used: 'tavily' });
     return { status: tvResult.success?'done':'failed', taskId, provider_used:'tavily', output: tvResult.output };
   }
-  log('[router] Tavily not enabled — falling through');
+  log('[router] Tavily not enabled â€” falling through');
   }
 
-  // ── ImageGen — multi-provider image generation ────────────────────────────────
+  // â”€â”€ ImageGen â€” multi-provider image generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'imagegen' || task.assigned_agent === 'image') {
   var ig = require('../integrations/imageGen.js');
   if (ig.enabled()) {
@@ -197,10 +309,10 @@ async function routeTask(taskId) {
     store.updateTask(taskId, { status: igResult.success?'done':'failed', provider_used: igResult.provider||'imagegen' });
     return { status: igResult.success?'done':'failed', taskId, provider_used: igResult.provider, output: igResult.url, image_url: igResult.url };
   }
-  log('[router] ImageGen not configured — need OPENAI_API_KEY or ALIBABA_API_KEY');
+  log('[router] ImageGen not configured â€” need OPENAI_API_KEY or ALIBABA_API_KEY');
   }
 
-  // ── Alibaba/Qwen — alternative AI provider ────────────────────────────────────
+  // â”€â”€ Alibaba/Qwen â€” alternative AI provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'alibaba' || task.assigned_agent === 'qwen') {
   var ali = require('../integrations/alibaba.js');
   if (ali.enabled()) {
@@ -212,10 +324,10 @@ async function routeTask(taskId) {
     store.updateTask(taskId, { status: aliResult.success?'done':'failed', provider_used: 'alibaba_qwen' });
     return { status: aliResult.success?'done':'failed', taskId, provider_used:'alibaba_qwen', output: aliResult.output };
   }
-  log('[router] Alibaba not configured — set ALIBABA_API_KEY');
+  log('[router] Alibaba not configured â€” set ALIBABA_API_KEY');
   }
 
-  // ── Hunter.io — email finder ───────────────────────────────────────────────────
+  // â”€â”€ Hunter.io â€” email finder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'hunter') {
   var hunter = require('../integrations/hunter.js');
   if (hunter.enabled()) {
@@ -228,7 +340,7 @@ async function routeTask(taskId) {
   log('[router] Hunter not configured');
   }
 
-  // ── Resend — email sending (requires approval) ────────────────────────────────
+  // â”€â”€ Resend â€” email sending (requires approval) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'resend' || task.assigned_agent === 'email') {
   var resend = require('../integrations/resend.js');
   if (resend.enabled()) {
@@ -248,15 +360,15 @@ async function routeTask(taskId) {
     return { status: 'assigned', taskId: taskId, agent: task.assigned_agent, note: 'Awaiting manual pickup' };
   }
 
-  // ── 3. ClickUp — special case (if key missing, manual) ────────────────────
+  // â”€â”€ 3. ClickUp â€” special case (if key missing, manual) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'clickup' && !process.env.CLICKUP_API_KEY) {
-    log('[router] ClickUp key missing — storing as manual');
+    log('[router] ClickUp key missing â€” storing as manual');
     store.updateTask(taskId, { status: 'pending' });
     store.addMessage(taskId, 'system', 'clickup', 'ClickUp task stored. Add CLICKUP_API_KEY to .env to auto-sync.');
-    return { status: 'assigned', taskId: taskId, agent: 'clickup', note: 'CLICKUP_API_KEY missing — manual' };
+    return { status: 'assigned', taskId: taskId, agent: 'clickup', note: 'CLICKUP_API_KEY missing â€” manual' };
   }
 
-  // ── 3b. OpenHands — AI coding agent ───────────────────────────────────────
+  // â”€â”€ 3b. OpenHands â€” AI coding agent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'openhands') {
     var oh = require('../integrations/openhands.js');
     if (oh.enabled()) {
@@ -275,10 +387,10 @@ async function routeTask(taskId) {
         provider_used: 'openhands', output: ohResult.output || ohR.output || '',
         summary: ohR.summary || '', is_real_ai_result: true, pr_url: ohResult.pr_url };
     }
-    log('[router] OpenHands not configured — falling through to provider chain');
+    log('[router] OpenHands not configured â€” falling through to provider chain');
   }
 
-  // ── 3c. CrewAI — multi-agent Python framework ─────────────────────────────
+  // â”€â”€ 3c. CrewAI â€” multi-agent Python framework â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'crewai') {
     var crewai = require('../integrations/crewai.js');
     if (crewai.enabled()) {
@@ -297,10 +409,10 @@ async function routeTask(taskId) {
         provider_used: 'crewai', output: crResult.output || crR.output || '',
         summary: crR.summary || crResult.summary || '', is_real_ai_result: true };
     }
-    log('[router] CrewAI not enabled — falling through to provider chain');
+    log('[router] CrewAI not enabled â€” falling through to provider chain');
   }
 
-  // ── 3d. Composio — 250+ tool integrations ─────────────────────────────────
+  // â”€â”€ 3d. Composio â€” 250+ tool integrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'composio') {
     var composio = require('../integrations/composio.js');
     if (composio.enabled()) {
@@ -314,10 +426,10 @@ async function routeTask(taskId) {
       return { status: coResult.success ? 'done' : 'failed', taskId, provider_used: 'composio',
         output: coR.output, summary: coR.summary };
     }
-    log('[router] Composio not configured — falling through to provider chain');
+    log('[router] Composio not configured â€” falling through to provider chain');
   }
 
-  // ── 3e. Aider — CLI coding agent ──────────────────────────────────────────
+  // â”€â”€ 3e. Aider â€” CLI coding agent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'aider') {
     var aider = require('../integrations/aider.js');
     if (aider.enabled()) {
@@ -329,10 +441,10 @@ async function routeTask(taskId) {
       store.updateTask(taskId, { status: aiResult.success ? 'done' : 'failed', provider_used: 'aider' });
       return { status: aiResult.success?'done':'failed', taskId, provider_used:'aider', output: aiResult.output };
     }
-    log('[router] Aider not enabled — falling through');
+    log('[router] Aider not enabled â€” falling through');
   }
 
-  // ── 3f. Devika — AI coding agent server ───────────────────────────────────
+  // â”€â”€ 3f. Devika â€” AI coding agent server â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'devika') {
     var devika = require('../integrations/devika.js');
     if (devika.enabled()) {
@@ -344,10 +456,10 @@ async function routeTask(taskId) {
       store.updateTask(taskId, { status: dvResult.success?'done':'failed', provider_used: 'devika' });
       return { status: dvResult.success?'done':'failed', taskId, provider_used:'devika', output: dvResult.output };
     }
-    log('[router] Devika not running — falling through');
+    log('[router] Devika not running â€” falling through');
   }
 
-  // ── 3g. Alphonso — local Ollama agent ecosystem ───────────────────────────
+  // â”€â”€ 3g. Alphonso â€” local Ollama agent ecosystem â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (task.assigned_agent === 'alphonso') {
     var alphonso = require('../integrations/alphonso.js');
     if (alphonso.enabled()) {
@@ -359,11 +471,11 @@ async function routeTask(taskId) {
       store.updateTask(taskId, { status: alResult.success?'done':'failed', provider_used: 'alphonso_ollama' });
       return { status: alResult.success?'done':'failed', taskId, provider_used:'alphonso_ollama', output: alResult.output };
     }
-    log('[router] Alphonso/Ollama not enabled — falling through');
+    log('[router] Alphonso/Ollama not enabled â€” falling through');
   }
 
   store.addMessage(taskId, 'system', task.assigned_agent,
-    'Executing | mode: ' + task.automation_mode + ' | chain: deepseek→ollama→claude→smart_stub');
+    'Executing | mode: ' + task.automation_mode + ' | chain: deepseekâ†’ollamaâ†’claudeâ†’smart_stub');
 
   var exec = await executeWithProviderFallback(task);
 
@@ -410,7 +522,7 @@ async function routeTask(taskId) {
     '| real_ai:', exec.is_real_ai_result,
     '| cost:', exec.cost_tier);
 
-  // ── Auto-sync to Airtable + ClickUp (non-blocking) ────────────────────────
+  // â”€â”€ Auto-sync to Airtable + ClickUp (non-blocking) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   try {
     var at = require('../connectors/airtable.js');
     if (at.enabled()) at.syncTask(task, r).catch(function(){});
@@ -438,3 +550,4 @@ async function routeTask(taskId) {
 }
 
 module.exports = { routeTask, isHighRisk };
+

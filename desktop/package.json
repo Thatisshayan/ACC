@@ -30,6 +30,18 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../cloud",
+        "to": "cloud"
+      },
+      {
+        "from": "../scripts",
+        "to": "scripts"
+      },
+      {
+        "from": "../node_modules",
+        "to": "node_modules"
       }
     ],
     "win": {

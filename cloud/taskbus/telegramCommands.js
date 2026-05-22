@@ -252,6 +252,15 @@ async function handleApprovalAction(chatId, text, sendFn) {
   }
   store.resolveApproval(approval.id, isApprove ? 'approved' : 'rejected', 'Shayan', '');
   var task = store.getTask(approval.task_id);
+  if (isApprove && task) {
+    var routeResult = await router.routeTask(task.id);
+    var delivered = extractRouteOutput(routeResult, task.id);
+    if (delivered.text.length > 3) {
+      await safeSend(chatId, 'Rerouted after approval.\n\n' + delivered.text.slice(0, 3500), sendFn);
+    } else {
+      await safeSend(chatId, 'Rerouted after approval.\n\nTask: ' + (task ? task.title.slice(0,50) : approval.task_id), sendFn);
+    }
+  }
   await safeSend(chatId,
     (isApprove ? 'Approved!' : 'Rejected!') + '\n' +
     'Task: ' + (task ? task.title.slice(0,50) : approval.task_id) + '\n' +

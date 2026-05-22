@@ -7,8 +7,7 @@ const http  = require('http');
 const fs    = require('fs');
 const { spawn } = require('child_process');
 
-const ROOT    = path.join(__dirname, '..');
-const UI_DIST = path.join(ROOT, 'ui', 'dist', 'index.html');
+const DEV_ROOT = path.resolve(__dirname, '..');
 const BACKEND_PORT = 4000;
 const BACKEND_HEALTH_PATH = '/api/health';
 const BACKEND_START_TIMEOUT_MS = 30000;
@@ -50,6 +49,14 @@ function appendDesktopLog(message) {
   }
 }
 
+function resolveUiDistPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'ui', 'dist', 'index.html');
+  }
+
+  return path.join(DEV_ROOT, 'ui', 'dist', 'index.html');
+}
+
 // ── Health check ──────────────────────────────────────────────────────────────
 function checkBackendHealth(timeoutMs = 2000) {
   return new Promise((resolve) => {
@@ -87,11 +94,9 @@ function notifyBackendStatus(status, detail, extra = {}) {
 
 function findBackendRoot() {
   const pathCandidates = [
-    ROOT,
-    path.resolve(ROOT, '..'),
-    path.resolve(ROOT, '..', '..'),
-    path.resolve(ROOT, '..', '..', '..'),
-    path.resolve(ROOT, '..', '..', '..', '..'),
+    DEV_ROOT,
+    path.resolve(DEV_ROOT, '..'),
+    path.resolve(DEV_ROOT, '..', '..'),
   ];
 
   if (process.resourcesPath) {
@@ -124,10 +129,11 @@ function findBackendRoot() {
 
 function launchBackend(repoRoot) {
   const startScript = path.join(repoRoot, 'scripts', 'start.js');
-  const child = spawn('node', [startScript], {
+  const child = spawn(process.execPath, [startScript], {
     cwd: repoRoot,
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
       PORT: String(BACKEND_PORT),
     },
     detached: true,
@@ -230,7 +236,7 @@ function createWindow() {
   });
 
   // Always load from built dist — no dev server dependency
-  win.loadFile(UI_DIST);
+  win.loadFile(resolveUiDistPath());
   win.webContents.once('did-finish-load', () => {
     win?.webContents.send('backend-status', backendState);
   });

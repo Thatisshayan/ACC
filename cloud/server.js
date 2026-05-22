@@ -1,5 +1,6 @@
 // cloud/server.js
 const express      = require("express");
+const path         = require("path");
 const cors         = require("cors");
 const rateLimit    = require("express-rate-limit");
 const { enqueueTask, getTask } = require("./queue.js");
@@ -17,6 +18,7 @@ const cloudRouter  = require("./router.js");
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
+const UI_DIST_PATH = path.join(__dirname, "../ui/dist");
 
 // Rate limiting
 const limiter = rateLimit({
@@ -79,9 +81,17 @@ app.get("/api/task/:id", (req, res) => {
   });
 });
 
+// ---------- Frontend static hosting (if ui/dist exists) ----------
+// Keeps API-only mode working while allowing Railway root domain to render the UI.
+app.use(express.static(UI_DIST_PATH));
+
 // ---------- Orchestrate (Module 6) ----------
 app.get("/", (req, res) => {
-  res.json({ status: "ACC Cloud Server OK", port: PORT });
+  res.sendFile(path.join(UI_DIST_PATH, "index.html"), (err) => {
+    if (err) {
+      res.json({ status: "ACC Cloud Server OK", port: PORT });
+    }
+  });
 });
 
 app.post("/orchestrate", (req, res) => {
@@ -106,6 +116,14 @@ app.use("/api", webhookHandler);
 
 // ---------- UI Routes ----------
 app.use("/api/ui", uiRoutes);
+
+// SPA fallback for non-API routes.
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  res.sendFile(path.join(UI_DIST_PATH, "index.html"), (err) => {
+    if (err) next();
+  });
+});
 
 const httpServer = app.listen(PORT, () => {
   console.log(`[server] ACC Cloud listening on http://localhost:${PORT}`);

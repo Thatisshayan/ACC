@@ -1,6 +1,6 @@
 // cloud/taskbus/providerFallback.js
 // ACC v2 Provider Fallback Chain
-// Order: DeepSeek → Ollama → Claude → Smart Stub
+// Order: DeepSeek → Ollama → Alibaba/Qwen → Claude → Smart Stub
 // Every result includes full provider metadata
 // Safety controls NOT in this file — handled by router.js before calling here
 'use strict';
@@ -13,7 +13,7 @@ const { buildSmartStub } = require('./smartStub.js');
 
 // ── Provider order from env or default ────────────────────────────────────────
 // Claude REMOVED — credits depleted. Chain: DeepSeek → Ollama → Smart Stub
-var DEFAULT_ORDER = ['deepseek', 'ollama', 'smart_stub'];
+var DEFAULT_ORDER = ['deepseek', 'ollama', 'alibaba', 'smart_stub'];
 function getProviderOrder() {
   var env = process.env.TASKBUS_PROVIDER_ORDER;
   if (!env) return DEFAULT_ORDER;
@@ -139,7 +139,7 @@ async function tryAlibaba(task) {
   try {
     var result = await ali.chat(task.instruction || task.title, 'qwen-plus');
     if (!result.success) return null;
-    return { provider_used: 'alibaba_qwen', is_real_ai_result: true, cost_tier: 'low_cost', output: result.output, summary: result.output && result.output.slice(0, 200) };
+    return { provider: 'alibaba_qwen', provider_used: 'alibaba_qwen', is_real_ai_result: true, cost_tier: 'low_cost', output: result.output, summary: result.output && result.output.slice(0, 200) };
   } catch(e) { console.warn('[provider] Alibaba failed:', e.message); return null; }
 }
 async function tryOllama(task) {
@@ -189,9 +189,11 @@ function useSmartStub(task) {
 
 // ── Health check for all providers ───────────────────────────────────────────
 async function getProvidersStatus() {
-  var ollamaHealth = await ollama.checkHealth();
-  return {
-    perplexity: {
+    var ollamaHealth = await ollama.checkHealth();
+    var alibaba = require('../integrations/alibaba.js');
+    var alibabaHealth = await alibaba.checkHealth().catch(function() { return { status: 'error' }; });
+    return {
+      perplexity: {
       name:      'Perplexity',
       status:    perplexity.enabled() ? 'key_set' : 'no_key',
       note:      perplexity.enabled()
@@ -209,8 +211,8 @@ async function getProvidersStatus() {
       cost_tier: 'low_cost',
       role:      'primary',
     },
-    ollama: {
-      name:            'Ollama',
+      ollama: {
+        name:            'Ollama',
       status:          ollamaHealth.status,
       running:         ollamaHealth.running,
       model:           ollamaHealth.model,
@@ -219,12 +221,21 @@ async function getProvidersStatus() {
       note:            ollamaHealth.message,
       cost_tier:       'local_free',
       role:            'local_fallback',
-      install_cmd:     ollamaHealth.running && !ollamaHealth.model_available
-                         ? 'ollama pull ' + ollama.MODEL
-                         : ollamaHealth.running ? null : 'Download from https://ollama.ai',
-    },
-    claude: {
-      name:      'Claude',
+        install_cmd:     ollamaHealth.running && !ollamaHealth.model_available
+                          ? 'ollama pull ' + ollama.MODEL
+                          : ollamaHealth.running ? null : 'Download from https://ollama.ai',
+      },
+      alibaba: {
+        name:      'Alibaba/Qwen',
+        status:    alibabaHealth.status,
+        note:      alibabaHealth.status === 'connected'
+                     ? 'Key loaded — compatible-mode API ready'
+                     : 'Set ALIBABA_API_KEY or DASHSCOPE_API_KEY',
+        cost_tier: 'low_cost',
+        role:      'alternate_fallback',
+      },
+      claude: {
+        name:      'Claude',
       status:    process.env.CLAUDE_API_KEY ? 'key_set' : 'no_key',
       note:      process.env.CLAUDE_API_KEY
                    ? 'Key loaded — check balance at console.anthropic.com'
@@ -261,6 +272,7 @@ async function executeWithProviderFallback(task) {
 
     if (provider === 'deepseek') result = await tryDeepSeek(task);
     else if (provider === 'ollama') result = await tryOllama(task);
+    else if (provider === 'alibaba') result = await tryAlibaba(task);
     else if (provider === 'claude') result = await tryClaude(task);
     else if (provider === 'smart_stub') result = useSmartStub(task);
     else continue;

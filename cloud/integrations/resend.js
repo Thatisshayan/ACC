@@ -15,6 +15,15 @@ if (!KEY) console.warn('[resend] RESEND_API_KEY not set. Get at: resend.com/api-
 
 function enabled() { return !!KEY; }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function checkHealth() {
   if (!enabled()) return { status: 'disabled', note: 'Set RESEND_API_KEY at resend.com/api-keys' };
   try {
@@ -35,6 +44,19 @@ async function sendPlainText(to, subject, text) {
   return sendEmail(to, subject, '<pre>' + text + '</pre>');
 }
 
+function parseEmailTask(instruction) {
+  var toMatch      = instruction.match(/to\s+([\w.@+-]+@[\w.+-]+)/i);
+  var subjectMatch = instruction.match(/subject[:\s]+(.+?)(?:\s+body|\s+saying|\s+about|$)/i);
+  var bodyMatch    = instruction.match(/(?:body|saying|about)[:\s]+(.+)$/i);
+  if (!toMatch) return null;
+
+  var to = toMatch[1];
+  var subject = subjectMatch ? subjectMatch[1].trim() : 'Message from ACC';
+  var body = bodyMatch ? bodyMatch[1].trim() : instruction;
+
+  return { to: to, subject: subject, body: body };
+}
+
 function loadTemplate(name) {
   try {
     return fs.readFileSync(path.join(TMPL_DIR, name + '.html'), 'utf8');
@@ -52,25 +74,40 @@ async function sendWithTemplate(to, templateName, variables) {
   return sendEmail(to, variables.subject || 'Message from ACC', html);
 }
 
-async function sendTaskFromACC(accTask) {
+async function sendTaskFromACC(accTask, options) {
   if (!enabled()) return { success: false, error: 'RESEND_API_KEY not set. Get at resend.com/api-keys' };
   var instruction = accTask.instruction || accTask.title || '';
-  // Always flag for approval
-  var toMatch      = instruction.match(/to\s+([\w.@+-]+@[\w.+-]+)/i);
-  var subjectMatch = instruction.match(/subject[:\s]+(.+?)(?:\s+body|\s+saying|\s+about|$)/i);
-  var bodyMatch    = instruction.match(/(?:body|saying|about)[:\s]+(.+)$/i);
-  if (!toMatch) return { success: false, error: 'Could not find recipient. Use: "send email to john@company.com subject: Hello body: message"' };
-  var to      = toMatch[1];
-  var subject = subjectMatch ? subjectMatch[1].trim() : 'Message via ACC';
-  var body    = bodyMatch ? bodyMatch[1].trim() : instruction;
-  // Return approval request instead of sending directly
+  var details = parseEmailTask(instruction);
+  if (!details) {
+    return { success: false, provider: 'resend', error: 'Could not find recipient. Use: "send email to john@company.com subject: Hello body: message"', summary: 'Email parse failed' };
+  }
+
+  if (options && options.approved === true) {
+    var html = '<pre style="font-family:inherit;white-space:pre-wrap">' + escapeHtml(details.body) + '</pre>';
+    var sent = await sendEmail(details.to, details.subject, html);
+    if (!sent.success) {
+      return { success: false, provider: 'resend', error: sent.error, summary: 'Email send failed', output: sent.error };
+    }
+    return {
+      success: true,
+      provider: 'resend',
+      to: details.to,
+      subject: details.subject,
+      output: 'Email sent to ' + details.to + '\nSubject: ' + details.subject + '\nFrom: ' + FROM,
+      summary: 'Email sent to ' + details.to,
+    };
+  }
+
   return {
     success: false,
     requires_approval: true,
-    preview: { to, subject, body: body.slice(0, 200) },
-    error: 'Email requires approval. Check /approvals to send to: ' + to,
-    output: 'EMAIL PENDING APPROVAL\nTo: ' + to + '\nSubject: ' + subject + '\nPreview: ' + body.slice(0, 100) + '...\n\nApprove in Telegram: /approvals',
+    action: 'high_risk_execution',
+    provider: 'resend',
+    preview: { to: details.to, subject: details.subject, body: details.body.slice(0, 200) },
+    error: 'Email requires approval. Check /approvals to send to: ' + details.to,
+    output: 'EMAIL PENDING APPROVAL\nTo: ' + details.to + '\nSubject: ' + details.subject + '\nPreview: ' + details.body.slice(0, 100) + '...\n\nApprove in Telegram: /approvals',
+    summary: 'Email awaiting approval for ' + details.to,
   };
 }
 
-module.exports = { enabled, checkHealth, sendEmail, sendPlainText, sendWithTemplate, sendTaskFromACC };
+module.exports = { enabled, checkHealth, sendEmail, sendPlainText, sendWithTemplate, sendTaskFromACC, parseEmailTask };

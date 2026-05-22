@@ -1,0 +1,17 @@
+# Large local desktop artifacts not needed for cloud deploys
+desktop/
+
+# Local dependencies and build outputs
+node_modules/
+ui/node_modules/
+ui/dist/
+
+# Runtime and local data
+data/
+*.log
+bot.log
+
+# VCS and editor metadata
+.git/
+.cursor/
+.codex/

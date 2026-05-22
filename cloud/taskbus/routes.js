@@ -8,6 +8,7 @@ const store   = require('./store.js');
 const router  = require('./router.js');
 const { getProvidersStatus } = require('./providerFallback.js');
 const { log } = require('../utils/logger.js');
+const outreachCrm = require('../workflows/accOutreachCrmModule.js');
 const app     = express.Router();
 
 // ── GET /api/taskbus/agents ───────────────────────────────────────────────────
@@ -57,6 +58,35 @@ app.get('/providers/status', async function(req, res) {
     var order  = (process.env.TASKBUS_PROVIDER_ORDER || 'deepseek,ollama,claude,smart_stub').split(',');
     res.json({ success: true, provider_order: order, providers: status });
   } catch(e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— GET /api/taskbus/workflow/outreach-crm/health ——————————————————————————————
+app.get('/workflow/outreach-crm/health', function(req, res) {
+  try {
+    res.json({ success: true, health: outreachCrm.health() });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— POST /api/taskbus/workflow/outreach-crm/bootstrap ——————————————————————————
+// Body: { sheetCsvUrl?, maxLeads?, sink?: none|airtable|clickup|both, clickupListId?, createdBy? }
+app.post('/workflow/outreach-crm/bootstrap', async function(req, res) {
+  try {
+    const requestId = req.headers['x-request-id'] || req.body.requestId || ('req-' + Date.now());
+    const result = await outreachCrm.bootstrapOutreachCrm({
+      requestId: requestId,
+      sheetCsvUrl: req.body.sheetCsvUrl,
+      maxLeads: req.body.maxLeads,
+      sink: req.body.sink || 'none',
+      clickupListId: req.body.clickupListId,
+      createdBy: req.body.createdBy || 'chatgpt'
+    });
+    if (!result.success) return res.status(500).json(result);
+    res.json(result);
+  } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -153,11 +183,21 @@ app.get('/approvals', function(req, res) {
 // ── POST /api/taskbus/approval/:id ───────────────────────────────────────────
 // Body: { decision: 'approved'|'rejected', notes }
 app.post('/approval/:id', function(req, res) {
-  const approver = req.headers['x-approver'] || 'Shayan';
-  if (approver !== 'Shayan') return res.status(403).json({ success: false, error: 'Only Shayan can approve' });
-  const approval = store.resolveApproval(req.params.id, req.body.decision, approver, req.body.notes);
-  if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
-  res.json({ success: true, approval });
+  (async function() {
+    const approver = req.headers['x-approver'] || 'Shayan';
+    if (approver !== 'Shayan') return res.status(403).json({ success: false, error: 'Only Shayan can approve' });
+    const approval = store.resolveApproval(req.params.id, req.body.decision, approver, req.body.notes);
+    if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
+
+    if (req.body.decision === 'approved') {
+      const routeResult = await router.routeTask(approval.task_id);
+      return res.json({ success: true, approval, routeResult });
+    }
+
+    return res.json({ success: true, approval });
+  })().catch(function(e) {
+    res.status(500).json({ success: false, error: e.message });
+  });
 });
 
 // ── GET /api/taskbus/results ──────────────────────────────────────────────────

@@ -92,6 +92,8 @@ function createTask(opts) {
     automation_mode:  opts.automation_mode || 'sandbox',
     feature_ref:      opts.feature_ref || null,   // e.g. "#7 — Job Tracker"
     created_by:       opts.created_by || 'chatgpt',
+    request_id:       opts.request_id || null,
+    meta:             opts.meta || null,
     created_at:       new Date().toISOString(),
     updated_at:       new Date().toISOString(),
   };
@@ -160,6 +162,9 @@ function addResult(opts) {
     files_changed: opts.files_changed || [],
     risks:         opts.risks         || [],
     next_request:  opts.next_request  || '',
+    request_id:    opts.request_id    || null,
+    receipt:       opts.receipt       || null,
+    failure_class: opts.failure_class || null,
 
     timestamp: new Date().toISOString(),
   };
