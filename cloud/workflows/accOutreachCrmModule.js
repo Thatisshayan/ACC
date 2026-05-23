@@ -207,7 +207,7 @@ async function bootstrapOutreachCrm(params) {
         }
       }
       if (sink === 'clickup' || sink === 'both') {
-        const c = await mirrorLeadToClickUp(lead, clickupListId);
+        const c = await mirrorLeadToClickUp(lead, CLICKUP_LEADS_LIST_ID);
         if (c.status === 'ok') receipt.mirrored.clickup_ok += 1;
         else if (c.status === 'failed') {
           receipt.mirrored.clickup_failed += 1;
