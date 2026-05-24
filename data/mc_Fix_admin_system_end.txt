@@ -1,0 +1,81 @@
+## Analysis
+
+The current `/admin/system` endpoint returns `activeBot: null` even when the bot is running because there is no mechanism to detect the bot's runtime status. The bot process (PM2) may be running, but the admin endpoint has no way to confirm the bot is actively polling Telegram.
+
+## Recommended Solution
+
+Implement a heartbeat file system:
+
+1. **In `cloud/telegram/bot.js`**: Add a 30-second interval that writes a heartbeat JSON file containing the process PID, last poll timestamp, and online status.
+
+2. **In the `/admin/system` route handler**: Read the heartbeat file and check if the last poll timestamp is within the last 60 seconds. If so, return the bot status as online with its PID and last poll time.
+
+## Exact Changes
+
+### File 1: `cloud/telegram/bot.js`
+
+Add the following at the end of the file (after bot initialization, before module.exports):
+
+javascript
+// Heartbeat file for admin status
+const fs = require('fs');
+const path = require('path');
+
+setInterval(() => {
+  try {
+    const heartbeatDir = path.join(__dirname, '..', '..', 'data');
+    if (!fs.existsSync(heartbeatDir)) {
+      fs.mkdirSync(heartbeatDir, { recursive: true });
+    }
+    fs.writeFileSync(
+      path.join(heartbeatDir, 'bot-heartbeat.json'),
+      JSON.stringify({
+        pid: process.pid,
+        lastPoll: Date.now(),
+        online: true
+      })
+    );
+  } catch (err) {
+    console.error('Failed to write bot heartbeat:', err.message);
+  }
+}, 30000); // Every 30 seconds
+
+
+### File 2: `cloud/server.js` or `cloud/admin/system.js`
+
+In the `/admin/system` route handler, replace the `activeBot` assignment with:
+
+javascript
+const fs = require('fs');
+const path = require('path');
+
+// ... inside the route handler
+let heartbeat = {};
+try {
+  const heartbeatPath = path.join(__dirname, '..', '..', 'data', 'bot-heartbeat.json');
+  heartbeat = JSON.parse(fs.readFileSync(heartbeatPath, 'utf8'));
+} catch (e) {
+  // Heartbeat file not found or invalid - bot is offline
+}
+
+const botOnline = heartbeat.lastPoll && (Date.now() - heartbeat.lastPoll) < 60000;
+const activeBot = botOnline
+  ? {
+      pid: heartbeat.pid,
+      lastPoll: new Date(heartbeat.lastPoll).toISOString()
+    }
+  : null;
+
+// Then use activeBot in the response object
+
+
+## Risks
+
+1. **File permission issues**: The `data/` directory must be writable by the bot process. Ensure it exists and has correct permissions.
+2. **Race condition on startup**: The heartbeat file won't exist until the first 30-second interval completes. The admin endpoint will show `null` for up to 30 seconds after bot start.
+3. **False negatives if bot is busy**: If the bot is processing a long-running task and misses the heartbeat interval, it could temporarily show as offline. The 60-second threshold mitigates this.
+4. **File system I/O overhead**: Writing a small JSON file every 30 seconds is negligible, but ensure the filesystem isn't read-only in containerized environments.
+
+## Recommendation
+
+Implement this fix immediately. It's simple, reliable, and provides real-time bot status without complex process monitoring. For REDACTED, consider adding a fallback: if the heartbeat file is missing, also check if the PM2 process is running via `pm2 list` or a PID file.

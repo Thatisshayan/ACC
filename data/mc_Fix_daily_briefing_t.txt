@@ -1,0 +1,90 @@
+## Analysis
+
+The current `sendBriefingForUser` function in `cloud/telegram/features/scheduler.js` returns hardcoded zeros for tasks and notes because it reads from incorrect or non-existent paths. The fix requires:
+
+1. **Task count**: Use `taskbus/store.js` to get tasks and filter by `status === 'done'` with `updated_at` after today's start.
+2. **Notes count**: Read `.json` files from `data/storage/<userId>/` directory.
+3. **Job applications**: Parse `data/job-applications.json` for count.
+4. **Weather**: Fetch live data from `wttr.in/Toronto` with format `%C+%t+%h`.
+5. **Day tip**: Select from a fixed array of 7 tips using `new Date().getDay()`.
+6. **Format**: Short (≤8 lines), emoji-led, no fake data.
+
+## Recommendation
+
+Replace the existing `sendBriefingForUser` function with the implementation below. Ensure the module-level `sendMsgFn` is available and the required dependencies (`fs`, `path`, `fetch`) are imported at the top of `scheduler.js`.
+
+## Complete Fixed Function
+
+javascript
+async function sendBriefingForUser(userId, type) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  // 1. Task count (today done)
+  const store = require('../taskbus/store.js');
+  const tasks = store.getTasks();
+  const todayDone = tasks.filter(t => t.status === 'done' && new Date(t.updated_at) > startOfToday).length;
+
+  // 2. Notes count
+  const noteDir = path.join(__dirname, '../../../data/storage/', userId);
+  let noteCount = 0;
+  try {
+    noteCount = fs.readdirSync(noteDir).filter(f => f.endsWith('.json')).length;
+  } catch (e) {
+    // directory may not exist
+  }
+
+  // 3. Job applications count
+  const appsFile = path.join(__dirname, '../../../data/job-applications.json');
+  let apps = [];
+  try {
+    apps = JSON.parse(fs.readFileSync(appsFile, 'utf8'));
+  } catch (e) {
+    // file may not exist
+  }
+  const appCount = apps.length;
+
+  // 4. Real weather (Toronto)
+  let weather = '☀️ Unknown';
+  try {
+    const res = await fetch('https://wttr.in/Toronto?format=%C+%t+%h');
+    weather = await res.text();
+  } catch (e) {
+    // fallback
+  }
+
+  // 5. Day tip (7 tips, one per weekday)
+  const tips = [
+    '💡 Start your week with a clear plan.',
+    '💡 Tackle the hardest task first.',
+    '💡 Review your progress mid-week.',
+    '💡 Network or reach out to a contact.',
+    '💡 Wrap up loose ends before Friday.',
+    '💡 Reflect on your wins this week.',
+    '💡 Plan next week and rest.'
+  ];
+  const tip = tips[new Date().getDay()];
+
+  // 6. Build short briefing (max 8 lines, emoji-led)
+  const lines = [
+    `📋 Daily Briefing for ${userId}`,
+    `✅ Tasks done today: ${todayDone}`,
+    `📝 Notes saved: ${noteCount}`,
+    `💼 Job applications: ${appCount}`,
+    `🌤 Weather: ${weather}`,
+    tip,
+    `⚡ Keep going!`
+  ];
+
+  const message = lines.join('\n');
+
+  // Send via module-level sendMsgFn
+  if (typeof sendMsgFn === 'function') {
+    await sendMsgFn(userId, message);
+  } else {
+    console.error('sendMsgFn not available');
+  }
+}
+
+
+**Note**: Ensure `fs`, `path`, and `fetch` are imported at the top of `scheduler.js`. If `fetch` is not available (Node <18), use `node-fetch` or `axios`.
