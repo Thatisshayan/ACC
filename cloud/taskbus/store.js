@@ -48,6 +48,13 @@ const AGENTS = {
     enabled: true,
     capabilities: ['task_management', 'sprints', 'reporting', 'dependencies'],
   },
+  lead_collector: {
+    id: 'lead_collector', name: 'Lead Collector', provider: 'acc',
+    role: 'Lead intake, qualification, and outreach prep',
+    automation_mode: 'semi_auto',
+    enabled: true,
+    capabilities: ['lead_intake', 'lead_qualification', 'outreach_prep', 'crm_sync'],
+  },
   human: {
     id: 'human', name: 'Shayan', provider: 'human',
     role: 'Founder / Final Decision Maker',

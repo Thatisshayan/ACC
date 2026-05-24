@@ -38,6 +38,9 @@ Body:
   "sheetCsvUrl": "https://docs.google.com/spreadsheets/d/.../export?format=csv",
   "maxLeads": 50,
   "sink": "airtable",
+  "minScore": 40,
+  "onlyNew": true,
+  "clickupListId": "901416694269",
   "createdBy": "chatgpt"
 }
 ```
@@ -53,6 +56,26 @@ Response includes:
 - created `task_ids`
 - run `receipt` (counts, mirror status, failures)
 
+## 3) Manual poller run trigger
+`POST /api/taskbus/workflow/outreach-crm/poller/run`
+
+Runs one lead collector cycle immediately.
+
+## Lead Collector Criteria (built-in)
+- A lead is considered valid if at least one exists: `email` or `company` or `website`.
+- Lead score is computed (0-100):
+  - `+35` has email
+  - `+20` has company
+  - `+15` has website
+  - `+10` has phone
+  - `+10` notes length >= 20
+  - `+10` business-like domain (`.com/.io/.co/.ai/.ca/.net`)
+- Default qualification threshold: `minScore = 40`
+- Dedupe is enabled by default (`onlyNew=true`) via fingerprint:
+  - `email|company|website|phone`
+
+Qualified leads create approval-gated tasks assigned to `lead_collector`.
+
 ## Example cURL
 ```bash
 curl -X POST http://localhost:4000/api/taskbus/workflow/outreach-crm/bootstrap ^
@@ -64,6 +87,15 @@ curl -X POST http://localhost:4000/api/taskbus/workflow/outreach-crm/bootstrap ^
 ## Policy behavior
 - Created tasks are `approval_required: true`
 - Outbound messaging should only happen after explicit approval resolution.
+
+## Automatic Poller
+Enabled via env:
+- `LEAD_COLLECTOR_POLLER_ENABLED=true`
+- `LEAD_COLLECTOR_POLL_INTERVAL_MS=900000` (15 min default)
+- `LEAD_COLLECTOR_MAX_LEADS_PER_RUN=100`
+- `LEAD_COLLECTOR_MIN_SCORE=40`
+- `LEAD_COLLECTOR_SINK=clickup` (`none|airtable|clickup|both`)
+- `CLICKUP_LEADS_LIST_ID=...` (or fallback `CLICKUP_LIST_ID`)
 
 ## Notes
 - This module intentionally activates only outreach/CRM subset.

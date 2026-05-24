@@ -1,0 +1,59 @@
+[📋] SECTION 1: SYSTEM STATE
+[📋] SECTION 2: CONFIGURATION
+[📄] .env file loaded — 57 variables
+[📋] SECTION 3: API KEYS & CONNECTORS
+[✅] ENV: CLAUDE_API_KEY — SET (sk-ant-api03-ri_6gsX...)
+[✅] ENV: DEEPSEEK_API_KEY — SET (sk-6124cec375914dc5b...)
+[✅] ENV: OPENAI_API_KEY — SET (sk-proj-MaLyLtFo0ZxF...)
+[✅] ENV: NOTION_API_KEY — SET (ntn_600324402142LJEe...)
+[✅] ENV: CLICKUP_API_KEY — SET (pk_204268313_TZ8XYCI...)
+[❌] ENV: Tavily_API_KEY — NOT SET
+[✅] ENV: HUNTER_API_KEY — SET (73187cefa1f1b9d58925...)
+[✅] ENV: RESEND_API_KEY — SET (re_MMfQAyeu_M9ycxxNy...)
+[✅] ENV: ALIBABA_API_KEY — SET (sk-a32fe989ee924b5da...)
+[✅] ENV: SUPABASE_URL — SET (https://xacfnatsovux...)
+[📋] SECTION 4: CORE FILES
+[✅] PM2 Config — EXISTS
+[✅] API Server — EXISTS
+[✅] Worker — EXISTS
+[✅] GraphRunner — EXISTS
+[✅] Executor — EXISTS
+[📋] SECTION 5: BOT FILES
+[✅] Bot: bot.js — EXISTS
+[❌] Bot: handlers.js — MISSING
+[❌] Bot: buttons.js — MISSING
+[📋] SECTION 6: BOT HANDLERS
+[❌] handlers.js — ENOENT: no such file or directory, open 'C:\Users\Shaya\agent-command-center\cloud\telegram\handlers.js'
+[📋] SECTION 7: DASHBOARD FILES
+[✅] UI: App.jsx — EXISTS
+[❌] UI: Dashboard.jsx — MISSING
+[❌] UI: Approvals.jsx — MISSING
+[❌] UI: useApi.js — MISSING
+[📋] SECTION 8: DASHBOARD HANDLERS
+[✅] Dashboard: onClick handlers — FOUND
+[✅] Dashboard: useState — FOUND
+[✅] Dashboard: useEffect — FOUND
+[✅] Dashboard: API calls — FOUND
+[✅] Dashboard: Button components — FOUND
+[📋] SECTION 9: CONNECTORS
+[⚠️] Connector: Notion — NO enabled()
+[✅] Connector: Hunter — HAS enabled()
+[✅] Connector: Resend — HAS enabled()
+[✅] Connector: Alibaba — HAS enabled()
+[📋] SECTION 10: API ENDPOINTS
+[✅] API: /api/health — Status 200
+[✅] API: /api/ui/dashboard — Status 200
+[✅] API: /api/ui/approvals — Status 200
+[⚠️] API: /api/ui/audit — Status 404
+[✅] API: /admin/system — Status 200
+[📋] SECTION 11: LOGS
+[⚠️] Bot Log — STALE (old)
+[⚠️] Server Log — STALE (old)
+[📋] SECTION 12: CRITICAL ISSUES
+[🔴] CRITICAL ISSUE — Telegram buttons.js missing
+[📋] SECTION 13: RECOMMENDATIONS
+[🔧] 1. Check Telegram button wiring in handlers.js
+[🔧] 2. Verify dashboard onClick handlers in App.jsx
+[🔧] 3. Test API endpoints manually with curl
+[🔧] 4. Check browser console for JavaScript errors
+[🔧] 5. Restart services: start-REDACTED.bat

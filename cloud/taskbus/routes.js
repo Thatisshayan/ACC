@@ -9,6 +9,7 @@ const router  = require('./router.js');
 const { getProvidersStatus } = require('./providerFallback.js');
 const { log } = require('../utils/logger.js');
 const outreachCrm = require('../workflows/accOutreachCrmModule.js');
+const { runLeadCollectorPollerOnce } = require('../workflows/leadCollectorPoller.js');
 const app     = express.Router();
 
 // ── GET /api/taskbus/agents ───────────────────────────────────────────────────
@@ -86,6 +87,16 @@ app.post('/workflow/outreach-crm/bootstrap', async function(req, res) {
     });
     if (!result.success) return res.status(500).json(result);
     res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— POST /api/taskbus/workflow/outreach-crm/poller/run ———————————————————————
+app.post('/workflow/outreach-crm/poller/run', async function(req, res) {
+  try {
+    await runLeadCollectorPollerOnce();
+    res.json({ success: true, message: 'Lead collector poller run triggered.' });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

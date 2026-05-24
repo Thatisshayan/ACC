@@ -9,6 +9,8 @@ const clickup = require('../connectors/clickup.js');
 const LEADS_TABLE = process.env.AIRTABLE_LEADS_TABLE || 'Leads';
 const CLICKUP_LEADS_LIST_ID = process.env.CLICKUP_LEADS_LIST_ID || '';
 const DEFAULT_SHEET_CSV_URL = process.env.GOOGLE_SHEETS_LEADS_CSV_URL || '';
+const DATA_DIR = require('path').join(__dirname, '../../data/taskbus');
+const SEEN_LEADS_FILE = require('path').join(DATA_DIR, 'lead_collector_seen.json');
 
 function classifyFailure(err) {
   const msg = (err && err.message) ? err.message.toLowerCase() : '';
@@ -80,6 +82,40 @@ function validLead(lead) {
   return !!(lead && (lead.email || lead.company || lead.website));
 }
 
+function leadFingerprint(lead) {
+  const v = [lead.email || '', lead.company || '', lead.website || '', lead.phone || ''].join('|').toLowerCase().trim();
+  return v;
+}
+
+function computeLeadScore(lead) {
+  let score = 0;
+  const reasons = [];
+  if (lead.email) { score += 35; reasons.push('has_email'); }
+  if (lead.company) { score += 20; reasons.push('has_company'); }
+  if (lead.website) { score += 15; reasons.push('has_website'); }
+  if (lead.phone) { score += 10; reasons.push('has_phone'); }
+  if ((lead.notes || '').length >= 20) { score += 10; reasons.push('rich_notes'); }
+  if ((lead.website || '').match(/\.(com|io|co|ai|ca|net)$/i)) { score += 10; reasons.push('business_domain'); }
+  return { score: Math.min(score, 100), reasons };
+}
+
+function loadSeenSet() {
+  try {
+    const fs = require('fs');
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (!fs.existsSync(SEEN_LEADS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(SEEN_LEADS_FILE, 'utf8')) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveSeenSet(seen) {
+  const fs = require('fs');
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(SEEN_LEADS_FILE, JSON.stringify(seen, null, 2), 'utf8');
+}
+
 async function fetchLeadsFromSheet(sheetCsvUrl) {
   if (!sheetCsvUrl) {
     throw new Error('GOOGLE_SHEETS_LEADS_CSV_URL not configured and no sheetCsvUrl provided');
@@ -89,10 +125,10 @@ async function fetchLeadsFromSheet(sheetCsvUrl) {
   return rows.map(normalizeLead).filter(validLead);
 }
 
-function buildTaskFromLead(lead, requestId, createdBy) {
+function buildTaskFromLead(lead, requestId, createdBy, criteria) {
   const leadLabel = lead.company || lead.email || ('lead-' + lead.idx);
   const instruction = [
-    'Outreach/CRM lead processing task.',
+    'Outreach/CRM lead processing task (Lead Collector Agent).',
     'Lead source: Google Sheets.',
     'Lead:',
     '- Name: ' + (lead.name || ''),
@@ -101,6 +137,8 @@ function buildTaskFromLead(lead, requestId, createdBy) {
     '- Phone: ' + (lead.phone || ''),
     '- Website: ' + (lead.website || ''),
     '- Notes: ' + (lead.notes || ''),
+    '- Lead Score: ' + criteria.score + '/100',
+    '- Qualification Reasons: ' + criteria.reasons.join(', '),
     '',
     'Required policy:',
     '- Any outbound messaging requires approval.',
@@ -114,7 +152,7 @@ function buildTaskFromLead(lead, requestId, createdBy) {
   return store.createTask({
     title: '[Outreach/CRM] ' + leadLabel,
     instruction: instruction,
-    assigned_agent: 'claude',
+    assigned_agent: 'lead_collector',
     priority: 'high',
     required_output: 'Personalized outreach draft + CRM action plan + evidence receipt',
     approval_required: true,
@@ -125,7 +163,8 @@ function buildTaskFromLead(lead, requestId, createdBy) {
     meta: {
       workflow: 'acc_outreach_crm',
       source: 'google_sheets',
-      lead: lead
+      lead: lead,
+      criteria: criteria
     }
   });
 }
@@ -173,14 +212,23 @@ async function bootstrapOutreachCrm(params) {
   const maxLeads = Math.max(1, Math.min(Number((params && params.maxLeads) || 25), 500));
   const createdBy = (params && params.createdBy) || 'chatgpt';
   const sheetCsvUrl = (params && params.sheetCsvUrl) || DEFAULT_SHEET_CSV_URL;
+  const clickupListId = (params && params.clickupListId) || '';
+  const onlyNew = (params && typeof params.onlyNew === 'boolean') ? params.onlyNew : true;
+  const minScore = Math.max(0, Math.min(Number((params && params.minScore) || 40), 100));
+  const seen = loadSeenSet();
 
   const receipt = {
     workflow: 'acc_outreach_crm',
     request_id: requestId,
     sink: sink,
     max_leads: maxLeads,
+    min_score: minScore,
+    only_new: onlyNew,
     started_at: new Date().toISOString(),
     leads_loaded: 0,
+    leads_qualified: 0,
+    leads_skipped_seen: 0,
+    leads_skipped_low_score: 0,
     tasks_created: 0,
     mirrored: { airtable_ok: 0, airtable_failed: 0, clickup_ok: 0, clickup_failed: 0 },
     failures: []
@@ -194,9 +242,21 @@ async function bootstrapOutreachCrm(params) {
     const taskIds = [];
     for (let i = 0; i < limited.length; i += 1) {
       const lead = limited[i];
-      const task = buildTaskFromLead(lead, requestId, createdBy);
+      const fp = leadFingerprint(lead);
+      if (onlyNew && fp && seen[fp]) {
+        receipt.leads_skipped_seen += 1;
+        continue;
+      }
+      const criteria = computeLeadScore(lead);
+      if (criteria.score < minScore) {
+        receipt.leads_skipped_low_score += 1;
+        continue;
+      }
+      receipt.leads_qualified += 1;
+      const task = buildTaskFromLead(lead, requestId, createdBy, criteria);
       taskIds.push(task.id);
       receipt.tasks_created += 1;
+      if (fp) seen[fp] = { first_seen_at: new Date().toISOString(), request_id: requestId, score: criteria.score };
 
       if (sink === 'airtable' || sink === 'both') {
         const a = await mirrorLeadToAirtable(lead);
@@ -207,7 +267,7 @@ async function bootstrapOutreachCrm(params) {
         }
       }
       if (sink === 'clickup' || sink === 'both') {
-        const c = await mirrorLeadToClickUp(lead, CLICKUP_LEADS_LIST_ID);
+        const c = await mirrorLeadToClickUp(lead, clickupListId);
         if (c.status === 'ok') receipt.mirrored.clickup_ok += 1;
         else if (c.status === 'failed') {
           receipt.mirrored.clickup_failed += 1;
@@ -215,6 +275,7 @@ async function bootstrapOutreachCrm(params) {
         }
       }
     }
+    saveSeenSet(seen);
 
     receipt.completed_at = new Date().toISOString();
 
@@ -251,7 +312,8 @@ function health() {
     google_sheets_csv_configured: !!DEFAULT_SHEET_CSV_URL,
     airtable_enabled: !!airtable.enabled(),
     clickup_enabled: !!clickup.enabled(),
-    clickup_leads_list_configured: !!CLICKUP_LEADS_LIST_ID
+    clickup_leads_list_configured: !!CLICKUP_LEADS_LIST_ID,
+    seen_leads_file: SEEN_LEADS_FILE
   };
 }
 

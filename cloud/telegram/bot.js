@@ -597,6 +597,10 @@ async function handleHelp(chatId, userId) {
 async function handleCallback(cb) {
   var chatId = cb.message.chat.id;
   var userId = String(cb.from.id);
+  var data   = cb.data || '';
+  var user   = users.getUserProfile(userId) || {};
+  await answerCB(cb.id);
+  clearState(userId);
 
   // ── Approval inline button callbacks ────────────────────────────────────────
   if (data.startsWith('taskbus_approve_') || data.startsWith('taskbus_reject_')) {
@@ -606,11 +610,6 @@ async function handleCallback(cb) {
     if (!handled) await sendMsg(chatId, handled === false ? 'Approval processed.' : 'Could not process. Try /approvals');
     return;
   }
-
-  var data   = cb.data;
-  var user   = users.getUserProfile(userId) || {};
-  await answerCB(cb.id);
-  clearState(userId);
 
   // Language
   if (data==='lang_en'||data==='lang_fa') {
@@ -855,7 +854,13 @@ async function poll() {
         }
       }
     } catch(e) {
-      if (running) { log('[bot] poll err:', e.message); await new Promise(function(r){ setTimeout(r, 3000); }); }
+      if (running) {
+        var detail = e && (e.response && e.response.data && e.response.data.description
+          ? e.response.data.description
+          : e.code || e.message || String(e));
+        log('[bot] poll err:', detail);
+        await new Promise(function(r){ setTimeout(r, 3000); });
+      }
     }
   }
 }

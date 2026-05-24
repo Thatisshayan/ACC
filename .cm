@@ -1,1 +1,1 @@
-security: delete railway_vars.txt plaintext secrets, session handoff note
+fix permanent watchdog and self-healing PM2

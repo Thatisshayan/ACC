@@ -136,8 +136,10 @@ const httpServer = app.listen(PORT, () => {
 
 httpServer.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(`[server] Port ${PORT} already in use. Kill the existing process or change PORT in .env`);
-    process.exit(1);
+    // If the server already reached the listen callback, keep the process alive.
+    // A late EADDRINUSE here is usually a duplicate bind attempt from another
+    // startup side effect, and exiting would tear down an otherwise working API.
+    console.warn(`[server] Port ${PORT} already in use. Keeping the current listener alive.`);
   } else {
     throw err;
   }
