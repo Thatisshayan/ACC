@@ -8,6 +8,8 @@
 var store  = require('./store.js');
 var router = require('./router.js');
 var { getProvidersStatus } = require('./providerFallback.js');
+var workflowDispatcher = require('../workflows/dispatcher.js');
+var workflowRegistry = require('../workflows/registry.js');
 
 // ── Safe text — strip Markdown chars that break Telegram's parser ─────────────
 // IDs, titles, and dynamic content must be sanitized before embedding in messages
@@ -34,6 +36,74 @@ function logCmd(cmd) { console.log('[taskbus] received:', cmd); }
 function logMatch(handler) { console.log('[taskbus] matched:', handler); }
 function logReply(chatId, len) { console.log('[taskbus] replied to', chatId, '— chars:', len); }
 function logErr(handler, err) { console.log('[taskbus] ERROR in', handler, '—', err && err.message || String(err)); }
+
+function sortWorkflows(workflows) {
+  return (Array.isArray(workflows) ? workflows.slice() : []).sort(function(a, b) {
+    return String(a.category || '').localeCompare(String(b.category || '')) ||
+      String(a.name || '').localeCompare(String(b.name || '')) ||
+      String(a.key || '').localeCompare(String(b.key || ''));
+  });
+}
+
+function trimLabel(label, maxLen) {
+  var text = String(label || '').trim();
+  if (text.length <= maxLen) return text;
+  return text.slice(0, Math.max(0, maxLen - 1)).trim() + '…';
+}
+
+function buildWorkflowButtons(workflows) {
+  return sortWorkflows(workflows).map(function(workflow, index) {
+    return [{
+      text: trimLabel((workflow.category ? workflow.category + ': ' : '') + workflow.name, 34),
+      callback_data: 'wf_pick:' + index
+    }];
+  });
+}
+
+function buildTaskButtons(tasks) {
+  var rows = (Array.isArray(tasks) ? tasks : []).slice(0, 5).map(function(task) {
+    return [{
+      text: trimLabel((task.approval_required ? '🛡️ ' : '') + task.title, 34),
+      callback_data: 'task_open:' + task.id.slice(0, 8)
+    }];
+  });
+  rows.push([
+    { text: '📊 Stats', callback_data: 'task_stats' },
+    { text: '🧭 Workflows', callback_data: 'workflow_menu' }
+  ]);
+  rows.push([
+    { text: '✅ Approvals', callback_data: 'task_approvals' },
+    { text: '🤖 Agents', callback_data: 'task_agents' }
+  ]);
+  return rows;
+}
+
+function buildApprovalButtons(approvals) {
+  var rows = (Array.isArray(approvals) ? approvals : []).slice(0, 5).map(function(approval) {
+    return [{
+      text: trimLabel('🕒 ' + approval.action + ' ' + approval.id.slice(0, 8), 34),
+      callback_data: 'approval_open:' + approval.id.slice(0, 8)
+    }];
+  });
+  rows.push([
+    { text: '✅ Review Pending', callback_data: 'task_approvals' },
+    { text: '📋 Recent Tasks', callback_data: 'task_tasks' }
+  ]);
+  return rows;
+}
+
+function buildTaskStatsButtons() {
+  return [
+    [
+      { text: '📋 Recent Tasks', callback_data: 'task_tasks' },
+      { text: '✅ Approvals', callback_data: 'task_approvals' }
+    ],
+    [
+      { text: '🧭 Workflows', callback_data: 'workflow_menu' },
+      { text: '🤖 Agents', callback_data: 'task_agents' }
+    ]
+  ];
+}
 
 // ── Safe send — no parse_mode, guaranteed delivery ───────────────────────────
 // sendFn from bot.js uses Markdown which can fail on special chars in IDs.
@@ -64,6 +134,7 @@ async function handleHelp(chatId, sendFn) {
     '/taskstats      - Task counts by status',
     '/agents         - Agent + provider status',
     '/approvals      - Pending approvals',
+    '/workflows      - List available workflows',
     '/latesttask     - Newest task',
     '/latestresult   - Newest completed result',
     '/task_<id>      - Task detail by short ID',
@@ -71,16 +142,25 @@ async function handleHelp(chatId, sendFn) {
     '/taskbus_approve_<id>  - Approve a task',
     '/taskbus_reject_<id>   - Reject a task',
     '',
+    'Workflow commands:',
+    'task: run workflow: <workflow>',
+    'crew: use-workflow <workflow>',
+    'workflow: parallel <workflow1>, <workflow2>',
+    'Use /workflows to list the live workflow catalog.',
+    '',
     'Create tasks:',
     'task: <instruction>',
+    'task: run workflow: <workflow>',
     'tell claude: <instruction>',
     'tell gemini: <instruction>',
+    'crew: use-workflow <workflow>',
+    'video: <prompt>',
   ].join('\n');
   await safeSend(chatId, msg, sendFn);
 }
 
 // ── /tasks ────────────────────────────────────────────────────────────────────
-async function handleTasks(chatId, sendFn) {
+async function handleTasks(chatId, sendFn, sendButtonsFn) {
   logMatch('/tasks');
   var tasks = store.getTasks().slice(0, 10);
   if (!tasks.length) {
@@ -96,10 +176,13 @@ async function handleTasks(chatId, sendFn) {
   });
   lines.push('Use /task_<id> for full detail');
   await safeSend(chatId, lines.join('\n'), sendFn);
+  if (typeof sendButtonsFn === 'function') {
+    await sendButtonsFn(chatId, 'Quick actions:', buildTaskButtons(tasks));
+  }
 }
 
 // ── /taskstats ────────────────────────────────────────────────────────────────
-async function handleTaskStats(chatId, sendFn) {
+async function handleTaskStats(chatId, sendFn, sendButtonsFn) {
   logMatch('/taskstats');
   var s = store.getStats();
   var lines = [
@@ -118,6 +201,9 @@ async function handleTaskStats(chatId, sendFn) {
     });
   }
   await safeSend(chatId, lines.join('\n'), sendFn);
+  if (typeof sendButtonsFn === 'function') {
+    await sendButtonsFn(chatId, 'Open a panel:', buildTaskStatsButtons());
+  }
 }
 
 // ── /latesttask ───────────────────────────────────────────────────────────────
@@ -208,7 +294,7 @@ async function handleAgents(chatId, sendFn) {
   lines.push('[ALWAYS ON] Smart Stub — zero cost, not real AI');
   lines.push('');
   lines.push('Team agents (manual):');
-  ['chatgpt','gemini','notebooklm','clickup'].forEach(function(id) {
+  ['chatgpt','gemini','notebooklm','clickup','crewai','lead_collector'].forEach(function(id) {
     var a = store.AGENTS[id];
     if (a) lines.push('  ' + a.name + ' — ' + a.role);
   });
@@ -219,7 +305,7 @@ async function handleAgents(chatId, sendFn) {
 }
 
 // ── /approvals ────────────────────────────────────────────────────────────────
-async function handleApprovals(chatId, sendFn) {
+async function handleApprovals(chatId, sendFn, sendButtonsFn) {
   logMatch('/approvals');
   var pending = store.getPendingApprovals();
   if (!pending.length) {
@@ -237,6 +323,9 @@ async function handleApprovals(chatId, sendFn) {
     lines.push('');
   });
   await safeSend(chatId, lines.join('\n'), sendFn);
+  if (typeof sendButtonsFn === 'function') {
+    await sendButtonsFn(chatId, 'Review approvals:', buildApprovalButtons(pending));
+  }
 }
 
 // ── /taskbus_approve_ / reject_ ───────────────────────────────────────────────
@@ -252,6 +341,15 @@ async function handleApprovalAction(chatId, text, sendFn) {
   }
   store.resolveApproval(approval.id, isApprove ? 'approved' : 'rejected', 'Shayan', '');
   var task = store.getTask(approval.task_id);
+  if (isApprove && task) {
+    var routeResult = await router.routeTask(task.id);
+    var delivered = extractRouteOutput(routeResult, task.id);
+    if (delivered.text.length > 3) {
+      await safeSend(chatId, 'Rerouted after approval.\n\n' + delivered.text.slice(0, 3500), sendFn);
+    } else {
+      await safeSend(chatId, 'Rerouted after approval.\n\nTask: ' + (task ? task.title.slice(0,50) : approval.task_id), sendFn);
+    }
+  }
   await safeSend(chatId,
     (isApprove ? 'Approved!' : 'Rejected!') + '\n' +
     'Task: ' + (task ? task.title.slice(0,50) : approval.task_id) + '\n' +
@@ -330,7 +428,7 @@ function formatResultDetail(r) {
 }
 
 // ── MASTER HANDLER ────────────────────────────────────────────────────────────
-async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
+async function handleTaskBusCommand(chatId, userId, text, sendFn, user, sendButtonsFn) {
   logCmd(text);
 
   // Wrap every handler in try/catch — never go silent
@@ -348,12 +446,21 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
   }
 
   // ── Exact matches ──────────────────────────────────────────────────────────
-  if (text === '/tasks')        { await run('/tasks',       function(){ return handleTasks(chatId, sendFn); });       return true; }
-  if (text === '/taskstats')    { await run('/taskstats',   function(){ return handleTaskStats(chatId, sendFn); });   return true; }
+  if (text === '/tasks')        { await run('/tasks',       function(){ return handleTasks(chatId, sendFn, sendButtonsFn); });       return true; }
+  if (text === '/taskstats')    { await run('/taskstats',   function(){ return handleTaskStats(chatId, sendFn, sendButtonsFn); });   return true; }
   if (text === '/agents')       { await run('/agents',      function(){ return handleAgents(chatId, sendFn); });      return true; }
-  if (text === '/approvals')    { await run('/approvals',   function(){ return handleApprovals(chatId, sendFn); });   return true; }
+  if (text === '/approvals')    { await run('/approvals',   function(){ return handleApprovals(chatId, sendFn, sendButtonsFn); });   return true; }
   if (text === '/latesttask')   { await run('/latesttask',  function(){ return handleLatestTask(chatId, sendFn); });  return true; }
   if (text === '/latestresult') { await run('/latestresult',function(){ return handleLatestResult(chatId, sendFn); });return true; }
+  if (text === '/workflows') {
+    await run('/workflows', async function() {
+      await safeSend(chatId, workflowDispatcher.describeWorkflowCatalog(), sendFn);
+      if (typeof sendButtonsFn === 'function') {
+        await sendButtonsFn(chatId, 'Choose a workflow to launch, or type its command directly.', buildWorkflowButtons(workflowRegistry.listWorkflows()));
+      }
+    });
+    return true;
+  }
   if (text === '/briefing' || text === '/brief') {
     await run('/briefing', async function() {
       var scheduler = require('../telegram/features/scheduler.js');
@@ -413,6 +520,24 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
     });
     return true;
   }
+  // Handle callback_data style (from inline buttons) as well as slash commands
+  if (text.startsWith('taskbus_approve_') || text.startsWith('taskbus_reject_')) {
+    var cbText = '/' + text; // add slash prefix
+    await run('approval-cb', function(){ return handleApprovalAction(chatId, cbText, sendFn); });
+    return true;
+  }
+  if (text === '/task_tasks') {
+    await run('/task_tasks', function(){ return handleTasks(chatId, sendFn, sendButtonsFn); });
+    return true;
+  }
+  if (text === '/task_approvals') {
+    await run('/task_approvals', function(){ return handleApprovals(chatId, sendFn, sendButtonsFn); });
+    return true;
+  }
+  if (text === '/task_agents') {
+    await run('/task_agents', function(){ return handleAgents(chatId, sendFn); });
+    return true;
+  }
   if (text.startsWith('/taskbus_approve_') || text.startsWith('/taskbus_reject_')) {
     await run('approval', function(){ return handleApprovalAction(chatId, text, sendFn); });
     return true;
@@ -469,11 +594,75 @@ function extractRouteOutput(routeResult, taskId) {
 }
 
 // ── createTaskFromMessage ─────────────────────────────────────────────────────
-async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatId) {
-  var isTaskCreate = /^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:)/i.test(text);
+async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatId, sendButtonsFn) {
+  var workflowCommand = workflowDispatcher.inferWorkflowFromCommand(text);
+  if (workflowCommand) {
+    if (workflowCommand.type === 'list') {
+      await safeSend(chatId, workflowDispatcher.describeWorkflowCatalog(), sendFn);
+      if (typeof sendButtonsFn === 'function') {
+        await sendButtonsFn(chatId, 'Choose a workflow to launch, or type its command directly.', buildWorkflowButtons(workflowRegistry.listWorkflows()));
+      }
+      return true;
+    }
+
+    if (workflowCommand.type === 'parallel') {
+      var batchResult = await workflowDispatcher.launchWorkflowsInParallel(workflowCommand.workflowRefs, {
+        input: workflowCommand.input,
+        role: workflowCommand.role,
+        searchQuery: workflowCommand.searchQuery,
+        created_by: 'telegram:' + userId,
+        approval_required: true,
+      });
+      await safeSend(chatId, [
+        'Parallel workflows launched.',
+        'Batch: ' + batchResult.batch_id,
+        '',
+        JSON.stringify(batchResult.results.map(function(item) {
+          return {
+            success: !!item.success,
+            workflow: item.workflow ? item.workflow.key : item.workflow_ref,
+            status: item.status || (item.routing && item.routing.status) || 'unknown',
+            task_id: item.task ? item.task.id.slice(0, 8) : null,
+          };
+        }), null, 2)
+      ].join('\n'), sendFn);
+      return true;
+    }
+
+    var workflowRef = workflowCommand.workflowRef;
+    var launchResult = await workflowDispatcher.launchWorkflow(workflowRef, {
+      input: workflowCommand.input || workflowCommand.role || workflowCommand.searchQuery || text,
+      role: workflowCommand.role,
+      searchQuery: workflowCommand.searchQuery,
+      created_by: 'telegram:' + userId,
+      approval_required: true,
+      preferKind: workflowCommand.preferKind,
+    });
+    if (!launchResult.success) {
+      await safeSend(chatId, 'Workflow not found: ' + workflowRef, sendFn);
+      return true;
+    }
+    var wfTask = launchResult.task;
+    var wfRoute = launchResult.routing || {};
+    var wfLines = [
+      'Workflow queued.',
+      'Workflow: ' + launchResult.workflow.name + ' (' + launchResult.workflow.key + ')',
+      'Task ID: ' + wfTask.id.slice(0, 8),
+      'Status: ' + (wfRoute.status || 'pending'),
+    ];
+    if (wfRoute.approvalId) wfLines.push('Approval: /taskbus_approve_' + wfRoute.approvalId.slice(0, 8));
+    if (wfRoute.output) {
+      wfLines.push('');
+      wfLines.push(String(wfRoute.output).slice(0, 3500));
+    }
+    await safeSend(chatId, wfLines.join('\n'), sendFn);
+    return true;
+  }
+
+  var isTaskCreate = /^((task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:|video:|generate video:)|tavily:|research:|tell tavily|image:|generate:|img:|qwen:|alibaba:)/i.test(text);
   if (!isTaskCreate) return false;
 
-  var instruction = text.replace(/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:):?\s*/i, '').trim();
+  var instruction = text.replace(/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|tell openhands|openhands:|code:|video:|generate video:):?\s*/i, '').trim();
   if (!instruction.length) {
     await safeSend(chatId, 'Please provide an instruction after task:\n\nExample: task: summarize the latest system status', sendFn);
     return true;
@@ -490,9 +679,24 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   if (/^crewai:/i.test(text))            agent = 'crewai';
   if (/^crew:/i.test(text))              agent = 'crewai';
   if (/^composio:/i.test(text))          agent = 'composio';
+  if (/^tavily:/i.test(text))            agent = 'tavily';
+  if (/^image:/i.test(text))             agent = 'imagegen';
+  if (/^generate:/i.test(text))          agent = 'imagegen';
+  if (/^img:/i.test(text))               agent = 'imagegen';
+  if (/^qwen:/i.test(text))              agent = 'alibaba';
+  if (/^alibaba:/i.test(text))           agent = 'alibaba';
+  if (/^hunter:/i.test(text))            agent = 'hunter';
+  if (/^find email:/i.test(text))        agent = 'hunter';
+  if (/^resend:/i.test(text))            agent = 'resend';
+  if (/^send email:/i.test(text))        agent = 'resend';
+  if (/^email:/i.test(text))             agent = 'resend';
+  if (/^research:/i.test(text))          agent = 'tavily';
+  if (/^tell tavily/i.test(text))        agent = 'tavily';
   if (/^tell composio/i.test(text))      agent = 'composio';
   if (/^aider:/i.test(text))             agent = 'aider';
   if (/^tell aider/i.test(text))         agent = 'aider';
+  if (/^video:/i.test(text))             agent = 'replicate_video';
+  if (/^generate video:/i.test(text))    agent = 'replicate_video';
   if (/^devika:/i.test(text))            agent = 'devika';
   if (/^tell devika/i.test(text))        agent = 'devika';
   if (/^alphonso:/i.test(text))          agent = 'alphonso';
@@ -503,7 +707,7 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
     title:             instruction.slice(0, 80),
     instruction:       instruction,
     assigned_agent:    agent,
-    automation_mode:   (agent === 'claude' || agent === 'openhands' || agent === 'crewai') ? 'semi_auto' : 'manual',
+    automation_mode:   (agent === 'claude' || agent === 'openhands' || agent === 'crewai' || agent === 'replicate_video') ? 'semi_auto' : 'manual',
     approval_required: false,
     created_by:        'telegram:' + userId,
     priority:          'normal',
@@ -523,6 +727,14 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
 
       if (routeResult && routeResult.status === 'rate_limited') {
         await safeSend(chatId, routeResult.message || 'Rate limit hit. Try again in a few minutes.', sendFn);
+        return true;
+      }
+      if (routeResult && (routeResult.status === 'in_progress' || routeResult.status === 'processing')) {
+        var trackUrl = routeResult.web_url || routeResult.output || '';
+        await safeSend(chatId, [
+          'Video preview is still processing.',
+          trackUrl ? ('Track it here: ' + trackUrl) : 'Check /latesttask for the latest task state.',
+        ].join('\n'), sendFn);
         return true;
       }
       if (routeResult && routeResult.status === 'waiting_approval') {

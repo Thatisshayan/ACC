@@ -48,6 +48,27 @@ const AGENTS = {
     enabled: true,
     capabilities: ['task_management', 'sprints', 'reporting', 'dependencies'],
   },
+  crewai: {
+    id: 'crewai', name: 'CrewAI', provider: 'crewai',
+    role: 'Multi-agent workflow runtime',
+    automation_mode: 'semi_auto',
+    enabled: true,
+    capabilities: ['workflow_execution', 'parallel_branches', 'crew_orchestration', 'approval_gating'],
+  },
+  replicate_video: {
+    id: 'replicate_video', name: 'Replicate Video', provider: 'replicate',
+    role: 'Video generation / teaser clips',
+    automation_mode: 'semi_auto',
+    enabled: true,
+    capabilities: ['video_generation', 'promo_clips', 'youtube_preview'],
+  },
+  lead_collector: {
+    id: 'lead_collector', name: 'Lead Collector', provider: 'acc',
+    role: 'Lead intake, qualification, and outreach prep',
+    automation_mode: 'semi_auto',
+    enabled: true,
+    capabilities: ['lead_intake', 'lead_qualification', 'outreach_prep', 'crm_sync'],
+  },
   human: {
     id: 'human', name: 'Shayan', provider: 'human',
     role: 'Founder / Final Decision Maker',
@@ -92,6 +113,8 @@ function createTask(opts) {
     automation_mode:  opts.automation_mode || 'sandbox',
     feature_ref:      opts.feature_ref || null,   // e.g. "#7 — Job Tracker"
     created_by:       opts.created_by || 'chatgpt',
+    request_id:       opts.request_id || null,
+    meta:             opts.meta || null,
     created_at:       new Date().toISOString(),
     updated_at:       new Date().toISOString(),
   };
@@ -160,6 +183,9 @@ function addResult(opts) {
     files_changed: opts.files_changed || [],
     risks:         opts.risks         || [],
     next_request:  opts.next_request  || '',
+    request_id:    opts.request_id    || null,
+    receipt:       opts.receipt       || null,
+    failure_class: opts.failure_class || null,
 
     timestamp: new Date().toISOString(),
   };
@@ -189,7 +215,8 @@ function getLatestResult(taskId) {
 }
 
 // ── APPROVALS ─────────────────────────────────────────────────────────────────
-function createApproval(taskId, action) {
+function createApproval(taskId, action, opts) {
+  var options = opts || {};
   const approval = {
     id:          uuid(),
     task_id:     taskId,
@@ -197,6 +224,8 @@ function createApproval(taskId, action) {
     status:      'pending',  // pending | approved | rejected
     approved_by: null,
     notes:       '',
+    request_id:  options.request_id || null,
+    meta:        options.meta || null,
     timestamp:   new Date().toISOString(),
   };
   return append('approvals', approval);

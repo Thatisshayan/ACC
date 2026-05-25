@@ -1,5 +1,6 @@
 // cloud/server.js
 const express      = require("express");
+const path         = require("path");
 const cors         = require("cors");
 const rateLimit    = require("express-rate-limit");
 const { enqueueTask, getTask } = require("./queue.js");
@@ -9,6 +10,7 @@ const dlqRoutes                = require("./admin/dlqRoutes.js");
 const securityApproval         = require("./api/securityApproval.js");
 const telegramWebhook          = require("./api/telegramWebhook.js");
 const webhookHandler           = require("./telegram/webhookHandler.js");
+const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const uiRoutes                 = require("./api/uiRoutes.js");
 const taskbusRoutes            = require("./taskbus/routes.js");
 const { startWSServer }        = require("./ws/server.js");
@@ -17,6 +19,7 @@ const cloudRouter  = require("./router.js");
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
+const UI_DIST_PATH = path.join(__dirname, "../ui/dist");
 
 // Rate limiting
 const limiter = rateLimit({
@@ -79,9 +82,17 @@ app.get("/api/task/:id", (req, res) => {
   });
 });
 
+// ---------- Frontend static hosting (if ui/dist exists) ----------
+// Keeps API-only mode working while allowing Railway root domain to render the UI.
+app.use(express.static(UI_DIST_PATH));
+
 // ---------- Orchestrate (Module 6) ----------
 app.get("/", (req, res) => {
-  res.json({ status: "ACC Cloud Server OK", port: PORT });
+  res.sendFile(path.join(UI_DIST_PATH, "index.html"), (err) => {
+    if (err) {
+      res.json({ status: "ACC Cloud Server OK", port: PORT });
+    }
+  });
 });
 
 app.post("/orchestrate", (req, res) => {
@@ -103,23 +114,35 @@ app.use("/api/taskbus", taskbusRoutes);
 app.use("/api", securityApproval);
 app.use("/api", telegramWebhook);
 app.use("/api", webhookHandler);
+app.use("/api/alphonso-bridge", alphonsoBridge);
 
 // ---------- UI Routes ----------
 app.use("/api/ui", uiRoutes);
+
+// SPA fallback for non-API routes.
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  res.sendFile(path.join(UI_DIST_PATH, "index.html"), (err) => {
+    if (err) next();
+  });
+});
 
 const httpServer = app.listen(PORT, () => {
   console.log(`[server] ACC Cloud listening on http://localhost:${PORT}`);
   console.log(`[server] Routes: GET /api/health  POST /api/execute  GET /api/task/:id  POST /orchestrate`);
   console.log(`[server] Admin:  GET /admin/users  /admin/graphs  /admin/tasks  /admin/system`);
   console.log(`[server] UI:     GET /api/ui/dashboard  /api/ui/snapshots  /api/ui/approvals`);
+  console.log(`[server] Bridge: GET /api/alphonso-bridge/status  POST /api/alphonso-bridge`);
   console.log(`[server] WS:     ws://localhost:${PORT}/ws`);
   startWSServer(httpServer);
 });
 
 httpServer.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(`[server] Port ${PORT} already in use. Kill the existing process or change PORT in .env`);
-    process.exit(1);
+    // If the server already reached the listen callback, keep the process alive.
+    // A late EADDRINUSE here is usually a duplicate bind attempt from another
+    // startup side effect, and exiting would tear down an otherwise working API.
+    console.warn(`[server] Port ${PORT} already in use. Keeping the current listener alive.`);
   } else {
     throw err;
   }

@@ -124,6 +124,12 @@ async function checkHealth() {
     await axios.get(BASE_URL + '/' + BASE_ID, { headers: headers(), timeout: 5000 });
     return { status: 'connected', base_id: BASE_ID };
   } catch(e) {
+    if (e.response && e.response.status === 404) {
+      return { status: 'error', error: 'invalid base id or base not accessible' };
+    }
+    if (e.response && (e.response.status === 401 || e.response.status === 403)) {
+      return { status: 'error', error: 'airtable api key unauthorized or missing access' };
+    }
     return { status: 'error', error: e.response ? e.response.status : e.message };
   }
 }

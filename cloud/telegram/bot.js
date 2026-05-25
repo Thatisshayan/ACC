@@ -22,6 +22,8 @@ var interview  = require('./features/interview.js');
 var emailMon   = require('./features/emailMonitor.js');
 var lifeTools  = require('./features/lifeTools.js');
 var taskbus    = require('../taskbus/telegramCommands.js');
+var workflowRegistry = require('../workflows/registry.js');
+var replicateVideo = require('../integrations/replicate.js');
 
 var TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
 var CHAT_ID  = process.env.SHAYAN_TELEGRAM_CHAT_ID || '1328432692';
@@ -78,6 +80,78 @@ function sendDocument(chatId, filePath, caption) {
   if (caption) form.append('caption', caption);
   return axios.post(BASE + '/sendDocument', form, { headers: form.getHeaders(), timeout: 60000 })
     .then(function(r) { if (r.data.ok) return r.data.result; throw new Error(r.data.description); });
+}
+
+function sendVideo(chatId, videoUrl, caption, extra) {
+  var payload = Object.assign({ chat_id: chatId, video: String(videoUrl), caption: caption || '' }, extra || {});
+  return tgPost('sendVideo', payload);
+}
+
+function dashboardMenu() {
+  return [
+    [
+      { text: '📋 Live Task Lanes', callback_data: 'dash_lanes' },
+      { text: '✅ Approvals Inbox', callback_data: 'task_approvals' }
+    ],
+    [
+      { text: '🧭 Workflow Launcher', callback_data: 'workflow_menu' },
+      { text: '📣 Content Studio', callback_data: 'menu_content' }
+    ],
+    [
+      { text: '💼 Job-Apply Assistant', callback_data: 'job_apply_guided' },
+      { text: '🛠️ Tools', callback_data: 'menu_more' }
+    ],
+    [
+      { text: '🔄 Refresh Dashboard', callback_data: 'menu_dashboard' },
+      { text: '🟦 System Status', callback_data: 'menu_status' }
+    ],
+  ];
+}
+
+function statusMenu() {
+  return dashboardMenu();
+}
+
+function laneTitle(status) {
+  var map = {
+    pending: '⏳ Pending Tasks',
+    in_progress: '🔄 In Progress',
+    waiting_approval: '👁️ Waiting Approval',
+    done: '✅ Completed',
+    failed: '❌ Failed',
+    cancelled: '🚫 Cancelled',
+  };
+  return map[status] || ('📌 ' + status);
+}
+
+function taskLaneButtons(status, tasks) {
+  var rows = (Array.isArray(tasks) ? tasks : []).slice(0, 5).map(function(task) {
+    return [{ text: (task.approval_required ? '🛡️ ' : '') + trimWorkflowLabel(task.title, 34), callback_data: 'task_open:' + task.id.slice(0, 8) }];
+  });
+  rows.push([
+    { text: '📋 Other Lanes', callback_data: 'dash_lanes' },
+    { text: '✅ Approvals', callback_data: 'task_approvals' }
+  ]);
+  rows.push([
+    { text: '🔄 Refresh', callback_data: 'dash_lane:' + status },
+    { text: '🟦 Dashboard', callback_data: 'menu_dashboard' }
+  ]);
+  return rows;
+}
+
+async function showTaskLane(chatId, status, userId) {
+  var result = await getACC('/api/taskbus/tasks?status=' + encodeURIComponent(status)).catch(function() { return {}; });
+  var tasks = result && result.tasks ? result.tasks : [];
+  var msg = [
+    laneTitle(status),
+    '',
+    tasks.length ? ('Showing ' + tasks.length + ' task' + (tasks.length === 1 ? '' : 's') + ' in this lane.') : 'No tasks in this lane right now.',
+    '',
+    tasks.slice(0, 5).map(function(task) {
+      return (task.approval_required ? '🛡️ ' : '') + task.title.slice(0, 60) + '\nID: ' + task.id.slice(0, 8) + ' | ' + task.assigned_agent + ' | ' + task.priority;
+    }).join('\n\n') || 'Try a different lane or launch a new workflow.',
+  ].join('\n');
+  await sendButtons(chatId, msg, taskLaneButtons(status, tasks));
 }
 
 function downloadFile(fileId) {
@@ -151,192 +225,49 @@ function getACC(p) {
   });
 }
 
-// ── executeAndReply: calls Task Bus, waits for real result, sends it back ─────
+// ── executeAndReply: Task Bus ONLY — polls for real result ──────────────────
 async function executeAndReply(chatId, agentType, prompt, language) {
+  var SHORT_CONTEXT = 'Keep answer SHORT (max 150 words). Bullet points. Practical. No fluff.';
   try {
-    var tbRes  = await callACC('/api/taskbus/task', {
+    var tbRes = await callACC('/api/taskbus/task', {
       title: prompt.slice(0, 80),
-      instruction: prompt,
+      instruction: prompt + '\n\nSYSTEM: ' + SHORT_CONTEXT,
       assigned_agent: 'claude',
       automation_mode: 'semi_auto',
       approval_required: false,
       created_by: 'bot',
     });
-
-    // The routing result is returned synchronously from Task Bus
     var routing = tbRes.routing || {};
     var out = routing.output || routing.summary;
-
-    // If we got a real result immediately — send it
     if (out && String(out).trim().length > 10) {
-      await sendMsg(chatId, String(out).slice(0, 3800));
+      await sendMsg(chatId, String(out).slice(0, 3500));
       return;
     }
-
-    // Otherwise poll the task result via taskId
     var taskId = tbRes.task && tbRes.task.id;
-    if (!taskId) {
-      await sendMsg(chatId, '⚠️ Task Bus unavailable. Try again in a moment.');
-      return;
-    }
-
-    var start   = Date.now();
-    var timeout = 28000;
-    while (Date.now() - start < timeout) {
-      await new Promise(function(r){ setTimeout(r, 1800); });
-      var tr      = await getACC('/api/taskbus/task/' + taskId);
-      var task    = tr.task || {};
+    if (!taskId) { await sendMsg(chatId, '✅ Done! Send /latesttask to see result.'); return; }
+    var start = Date.now();
+    while (Date.now() - start < 25000) {
+      await new Promise(function(r){ setTimeout(r, 2000); });
+      var tr = await getACC('/api/taskbus/task/' + taskId);
+      var task = tr.task || {};
       var results = tr.results || [];
-      if (!task.status) continue;
-
       if (task.status === 'done' || task.status === 'completed') {
-        // Get latest result
-        var latest  = results[results.length - 1] || {};
-        var answer  = latest.output || latest.summary || task.summary;
+        var latest = results[results.length - 1] || {};
+        var answer = latest.output || latest.summary;
         if (answer && String(answer).trim().length > 5) {
-          await sendMsg(chatId, String(answer).slice(0, 3800));
+          await sendMsg(chatId, String(answer).slice(0, 3500));
         } else {
-          await sendMsg(chatId, '✅ Done! Send /latesttask to see result.');
+          await sendMsg(chatId, '✅ Done! Send /latesttask for result.');
         }
         return;
       }
-      if (task.status === 'failed') {
-        await sendMsg(chatId, '❌ ' + (task.error || 'Task failed'));
-        return;
-      }
-      if (task.status === 'rate_limited') {
-        await sendMsg(chatId, '⏳ ' + (task.message || 'Rate limit. Try again in a few minutes.'));
-        return;
-      }
+      if (task.status === 'failed') { await sendMsg(chatId, '❌ ' + (task.error || 'Task failed')); return; }
+      if (task.status === 'rate_limited') { await sendMsg(chatId, '⏳ Rate limit. Try again in a few minutes.'); return; }
     }
-    await sendMsg(chatId, '⏳ Still working... Send /latesttask to check when ready.');
-  } catch(e) {
-    await sendMsg(chatId, '❌ Error: ' + e.message);
-  }
+    await sendMsg(chatId, '⏳ Still processing. Send /latesttask to check.');
+  } catch(e) { await sendMsg(chatId, '❌ ' + e.message); }
 }
 
-// ── Inline keyboards ──────────────────────────────────────────────────────────
-function mainMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'💼 پیدا کردن شغل',callback_data:'job_search'},{text:'📄 تنظیم رزومه',callback_data:'tailor_resume'}],
-    [{text:'🌐 صفحه فرود',callback_data:'landing_page'},{text:'🎬 اسکریپت ویدیو',callback_data:'video_script'}],
-    [{text:'📱 پست شبکه اجتماعی',callback_data:'social_post'},{text:'🌍 ترجمه',callback_data:'menu_translate'}],
-    [{text:'🍳 آشپز AI',callback_data:'menu_chef'},{text:'🔍 تحقیق',callback_data:'competitor_research'}],
-    [{text:'⚙️ بیشتر',callback_data:'menu_more'}],
-  ] : [
-    [{text:'💼 Find Jobs',callback_data:'job_search'},{text:'📄 Tailor Resume',callback_data:'tailor_resume'}],
-    [{text:'🌐 Landing Page',callback_data:'landing_page'},{text:'🎬 Video Script',callback_data:'video_script'}],
-    [{text:'📱 Social Post',callback_data:'social_post'},{text:'🌍 Translate',callback_data:'menu_translate'}],
-    [{text:'🍳 Chef AI',callback_data:'menu_chef'},{text:'🔍 Research',callback_data:'competitor_research'}],
-    [{text:'⚙️ More',callback_data:'menu_more'}],
-  ];
-}
-function jobsMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'🔍 جستجوی شغل',callback_data:'job_search'}],
-    [{text:'✉️ نامه پوششی',callback_data:'cover_letter'},{text:'🎯 آماده مصاحبه',callback_data:'interview_prep'}],
-    [{text:'💰 مذاکره حقوق',callback_data:'salary_coach'},{text:'📊 دنبال‌کن شغل',callback_data:'job_tracker'}],
-    [{text:'🔗 LinkedIn',callback_data:'connect_linkedin'},{text:'📧 ایمیل‌ها',callback_data:'email_monitor'}],
-    [{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'🔍 Find Jobs',callback_data:'job_search'}],
-    [{text:'✉️ Cover Letter',callback_data:'cover_letter'},{text:'🎯 Interview Prep',callback_data:'interview_prep'}],
-    [{text:'💰 Salary Coach',callback_data:'salary_coach'},{text:'📊 Job Tracker',callback_data:'job_tracker'}],
-    [{text:'🔗 LinkedIn',callback_data:'connect_linkedin'},{text:'📧 Email Monitor',callback_data:'email_monitor'}],
-    [{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function resumeMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'📤 آپلود رزومه',callback_data:'upload_resume'}],
-    [{text:'✏️ تنظیم رزومه',callback_data:'tailor_resume'},{text:'📋 بررسی ATS',callback_data:'ats_check'}],
-    [{text:'📄 مشاهده رزومه',callback_data:'view_resume'},{text:'🗂️ نسخه‌ها',callback_data:'resume_versions'}],
-    [{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'📤 Upload Resume',callback_data:'upload_resume'}],
-    [{text:'✏️ Tailor Resume',callback_data:'tailor_resume'},{text:'📋 ATS Check',callback_data:'ats_check'}],
-    [{text:'📄 View Resume',callback_data:'view_resume'},{text:'🗂️ Versions',callback_data:'resume_versions'}],
-    [{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function contentMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'🌐 صفحه فرود',callback_data:'landing_page'},{text:'📹 محتوای SEO',callback_data:'seo_content'}],
-    [{text:'📝 پست وبلاگ',callback_data:'blog_post'},{text:'🎬 اسکریپت',callback_data:'video_script'}],
-    [{text:'📱 رسانه اجتماعی',callback_data:'social_post'},{text:'📧 توالی ایمیل',callback_data:'email_sequence'}],
-    [{text:'▶️ یوتیوب',callback_data:'youtube_upload'},{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'🌐 Landing Page',callback_data:'landing_page'},{text:'📹 SEO Content',callback_data:'seo_content'}],
-    [{text:'📝 Blog Post',callback_data:'blog_post'},{text:'🎬 Video Script',callback_data:'video_script'}],
-    [{text:'📱 Social Post',callback_data:'social_post'},{text:'📧 Email Sequence',callback_data:'email_sequence'}],
-    [{text:'▶️ YouTube Upload',callback_data:'youtube_upload'},{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function notesMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'➕ یادداشت جدید',callback_data:'note_add'},{text:'📋 یادداشت‌هایم',callback_data:'note_list'}],
-    [{text:'🔍 جستجو',callback_data:'note_search'},{text:'🗑️ حذف',callback_data:'note_delete'}],
-    [{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'➕ New Note',callback_data:'note_add'},{text:'📋 My Notes',callback_data:'note_list'}],
-    [{text:'🔍 Search Notes',callback_data:'note_search'},{text:'🗑️ Delete Note',callback_data:'note_delete'}],
-    [{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function toolsMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'⚖️ حقوقی',callback_data:'legal_assistant'},{text:'📊 آمار',callback_data:'data_analysis'}],
-    [{text:'🔍 رقبا',callback_data:'competitor_research'},{text:'💡 ایده‌پردازی',callback_data:'brainstorm'}],
-    [{text:'📅 برنامه‌ریز',callback_data:'scheduler_tool'},{text:'📦 سبد خرید',callback_data:'shopping_list'}],
-    [{text:'💊 دارو',callback_data:'medication'},{text:'✈️ سفر',callback_data:'travel_planner'}],
-    [{text:'🎁 هدیه',callback_data:'gift_ideas'},{text:'◀️ برگشت',callback_data:'back_main'}],
-  ] : [
-    [{text:'⚖️ Legal Help',callback_data:'legal_assistant'},{text:'📊 Data Analysis',callback_data:'data_analysis'}],
-    [{text:'🔍 Research',callback_data:'competitor_research'},{text:'💡 Brainstorm',callback_data:'brainstorm'}],
-    [{text:'📅 Planner',callback_data:'scheduler_tool'},{text:'🛒 Shopping List',callback_data:'shopping_list'}],
-    [{text:'💊 Medication',callback_data:'medication'},{text:'✈️ Travel Plan',callback_data:'travel_planner'}],
-    [{text:'🎁 Gift Ideas',callback_data:'gift_ideas'},{text:'◀️ Back',callback_data:'back_main'}],
-  ];
-}
-function jobTypeMenu(userId) {
-  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
-  return fa ? [
-    [{text:'⏰ تمام‌وقت',callback_data:'jobtype_fulltime'},{text:'💻 ریموت',callback_data:'jobtype_remote'}],
-    [{text:'🕐 پاره‌وقت',callback_data:'jobtype_parttime'},{text:'📋 قراردادی',callback_data:'jobtype_contract'}],
-    [{text:'🏢 حضوری',callback_data:'jobtype_onsite'},{text:'🚀 استارتاپ',callback_data:'jobtype_startup'}],
-  ] : [
-    [{text:'⏰ Full-time',callback_data:'jobtype_fulltime'},{text:'💻 Remote',callback_data:'jobtype_remote'}],
-    [{text:'🕐 Part-time',callback_data:'jobtype_parttime'},{text:'📋 Contract',callback_data:'jobtype_contract'}],
-    [{text:'🏢 On-site',callback_data:'jobtype_onsite'},{text:'🚀 Startup',callback_data:'jobtype_startup'}],
-  ];
-}
-function langMenu() { return [[{text:'🇬🇧 English',callback_data:'lang_en'},{text:'🇮🇷 فارسی',callback_data:'lang_fa'}]]; }
-
-// ── Polling ───────────────────────────────────────────────────────────────────
-var offset = 0, running = true;
-
-function poll() {
-  if (!running) return;
-  tgGet('getUpdates', { offset: offset, timeout: 10 })
-    .then(function(updates) {
-      for (var i = 0; i < updates.length; i++) {
-        var u = updates[i];
-        offset = u.update_id + 1;
-        if (u.callback_query)       handleCallback(u.callback_query).catch(function(e){ log('[bot] cb err:', e.message); });
-        else if (u.message)         handleMessage(u.message).catch(function(e){ log('[bot] msg err:', e.message); });
-      }
-      if (running) setTimeout(poll, 100);
-    })
-    .catch(function(err) { log('[bot] poll err:', err.message); if (running) setTimeout(poll, 3000); });
-}
-
-// ── Message handler ───────────────────────────────────────────────────────────
 async function handleMessage(msg) {
   if (!msg) return;
   var chatId = msg.chat.id;
@@ -386,7 +317,7 @@ async function handleMessage(msg) {
 
   // System commands
   if (text === '/menu')        { await sendButtons(chatId, t(userId,'main_menu',{name:(user.name||'friend')}), mainMenu(userId)); return; }
-  if (text === '/status')      { await handleStatus(chatId, userId); return; }
+  if (text === '/dashboard' || text === '/status') { await handleStatus(chatId, userId); return; }
   if (text === '/help')        { await handleHelp(chatId, userId); return; }
   if (text === '/briefing' || text === '/briefing afternoon' || text === '/briefing morning') {
     var bType = /morning/i.test(text) ? 'morning' : 'afternoon';
@@ -402,12 +333,21 @@ async function handleMessage(msg) {
   if (text === '/notes')       { await sendButtons(chatId, '📝 *Notes Vault*', notesMenu(userId)); return; }
   if (text === '/tracker')     { await sendMsg(chatId, jobTracker.formatTracker(userId, user.language)); return; }
   if (text === '/jobs')        { await sendButtons(chatId, t(userId,'main_menu',{name:user.name||'friend'}), jobsMenu(userId)); return; }
+  if (/^(job[\s_-]?apply[\s_-]?guided|\/jobapply|\/job-apply)$/i.test(text)) {
+    await handleCallback({
+      id: 'text_job_apply_guided_' + Date.now(),
+      data: 'job_apply_guided',
+      message: { chat: { id: chatId } },
+      from: { id: userId }
+    });
+    return;
+  }
 
   // ── Task Bus commands — strict prefix routing ─────────────────────────────
-  var taskbusPrefixes = ['/tasks','/taskstats','/taskhelp','/task_','/taskdetails_','/taskbus_','/agents','/approvals','/latesttask','/latestresult','/result_','/notebook'];
+  var taskbusPrefixes = ['/tasks','/taskstats','/taskhelp','/workflows','/task_','/taskdetails_','/taskbus_','/agents','/approvals','/latesttask','/latestresult','/result_','/notebook'];
   var isMaybeTaskbus = taskbusPrefixes.some(function(p) { return text === p || text.startsWith(p); });
   if (isMaybeTaskbus) {
-    var tbHandled = await taskbus.handleTaskBusCommand(chatId, userId, text, sendMsg, user);
+    var tbHandled = await taskbus.handleTaskBusCommand(chatId, userId, text, sendMsg, user, sendButtons);
     if (tbHandled) return;
     await sendMsg(chatId, '❓ Unknown command: `' + text + '`\n\nSend /help for valid commands.');
     return;
@@ -437,11 +377,11 @@ async function handleMessage(msg) {
 
   // State machine
   var state = getState(userId);
-  if (state) { await handleStateInput(chatId, userId, text, state); return; }
+  if (state) { await handleStateInput(chatId, userId, text, state, sendButtons); return; }
 
   // ── task: / tell claude: prefix — route to Task Bus BEFORE generic handler ──
-  if (/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm)\b/i.test(text)) {
-    var tbCreated = await taskbus.createTaskFromMessage(userId, text, 'claude', sendMsg, chatId);
+  if (/^(task|create task|new task|tell claude|tell gemini|tell chatgpt|tell notebooklm|video:|generate video:)/i.test(text)) {
+    var tbCreated = await taskbus.createTaskFromMessage(userId, text, 'claude', sendMsg, chatId, sendButtons);
     if (tbCreated) return;
   }
 
@@ -550,11 +490,41 @@ async function handleInterviewAnswer(chatId, userId, text, session) {
 }
 
 // ── State input handler ───────────────────────────────────────────────────────
-async function handleStateInput(chatId, userId, text, state) {
+async function handleStateInput(chatId, userId, text, state, sendButtons) {
   var user = users.getUserProfile(userId) || {};
   clearState(userId);
 
   switch (state.action) {
+    case 'awaiting_job_apply_role':
+      users.updateUser(userId, { jobPrefs: Object.assign({}, user.jobPrefs, { role: text }) });
+      await sendButtons(
+        chatId,
+        '📍 *Optional location*\n\nType a city, country, or remote preference. If you want, you can skip this step and go straight to workflow mode.',
+        jobApplyLocationMenu()
+      );
+      setState(userId, 'awaiting_job_apply_location', { role: text });
+      break;
+
+    case 'awaiting_job_apply_location':
+      users.updateUser(userId, { jobPrefs: Object.assign({}, user.jobPrefs, { location: text }) });
+      await sendButtons(chatId, 'Choose how you want ACC to handle this role:', jobWorkflowModeMenu());
+      setState(userId, 'awaiting_job_apply_mode', {
+        role: state.data.role,
+        location: text
+      });
+      break;
+
+    case 'awaiting_job_apply_mode':
+      // Mode is chosen via buttons. Keep the menu visible if the user types text.
+      await sendButtons(chatId, 'Pick a workflow mode from the buttons below:', jobWorkflowModeMenu());
+      setState(userId, 'awaiting_job_apply_mode', state.data || {});
+      break;
+
+    case 'awaiting_job_apply_confirm':
+      await sendButtons(chatId, 'Review the launch details below, then tap Launch.', jobApplyReviewMenu());
+      setState(userId, 'awaiting_job_apply_confirm', state.data || {});
+      break;
+
     case 'awaiting_job_role':
       users.updateUser(userId, { jobPrefs: Object.assign({}, user.jobPrefs, { role: text }) });
       await sendMsg(chatId, '📍 ' + (user.language==='fa' ? 'شهر یا کشور؟' : 'Which city or country?'));
@@ -631,10 +601,43 @@ async function handleStateInput(chatId, userId, text, state) {
         schedule: 'Create a detailed schedule/plan for: ' + text + '. Include time blocks, priorities, and actionable steps.',
         kijiji:   'Write a compelling marketplace listing for: ' + text + '. Include attention-grabbing title, detailed description, condition, and suggested price.',
         data:     'Analyze this data and provide insights: ' + text + '. Identify trends, anomalies, and actionable recommendations.',
-        youtube:  'Create a complete YouTube content package for: ' + text + '. Include: video title (SEO), description, tags, thumbnail concept, and full script.',
+        youtube:  'Create a complete YouTube content package for: ' + text + '. Include: video title (SEO), description, tags, thumbnail concept, full script, and a concise promo-video concept.',
+        replicate_video: 'Create a short, cinematic promo-video concept for: ' + text + '. Focus on one scene, clear motion, and strong visual direction.',
       }[ctype] || text;
       await sendMsg(chatId, t(userId,'processing',{task:text.slice(0,60)}));
       await executeAndReply(chatId, 'writer', cprompt, user.language);
+      if (ctype === 'youtube' || ctype === 'replicate_video') {
+        try {
+          if (!replicateVideo.enabled()) {
+            await sendMsg(chatId, 'ℹ️ Replicate video is not configured yet. Add REPLICATE_API_TOKEN or REPLICATE_API_KEY to enable clip generation.');
+            break;
+          }
+          await sendMsg(chatId, '🎬 _Generating a short video preview with Replicate..._');
+          var videoPrompt = ctype === 'youtube'
+            ? 'Cinematic YouTube promo clip about: ' + text
+            : 'Short cinematic promo video for: ' + text;
+          var rv = await replicateVideo.generateVideo(videoPrompt, {
+            duration: 5,
+            resolution: '720p',
+            aspect_ratio: '16:9',
+            fps: 24,
+            camera_fixed: false,
+          });
+          if (rv && rv.success && rv.video_url) {
+            try {
+              await sendVideo(chatId, rv.video_url, '🎬 Replicate video preview');
+            } catch(sendErr) {
+              await sendMsg(chatId, '🎬 Video preview ready: ' + rv.video_url);
+            }
+          } else if (rv && rv.web_url) {
+            await sendMsg(chatId, '🎬 Replicate is still processing. Track the preview here:\n' + rv.web_url);
+          } else {
+            await sendMsg(chatId, '⚠️ Replicate video generation failed: ' + ((rv && rv.error) || 'unknown error'));
+          }
+        } catch(e) {
+          await sendMsg(chatId, '⚠️ Replicate video generation failed: ' + e.message);
+        }
+      }
       break;
 
     case 'awaiting_landing_desc':
@@ -663,6 +666,16 @@ async function handleStateInput(chatId, userId, text, state) {
       await executeAndReply(chatId, 'writer', 'Generate 10 creative ideas for: ' + text + '. Include pros/cons for top 3.', user.language);
       break;
 
+    case 'awaiting_workflow_input':
+      var commandPrefix = String(state.data && state.data.commandPrefix || '').trim();
+      if (!commandPrefix) {
+        await sendMsg(chatId, '⚠️ Workflow command missing. Open /workflows and try again.');
+        break;
+      }
+      await sendMsg(chatId, '🔁 Launching workflow...\n\n' + commandPrefix + text);
+      await taskbus.createTaskFromMessage(userId, commandPrefix + text, 'claude', sendMsg, chatId, sendButtons);
+      break;
+
     default:
       await sendButtons(chatId, t(userId,'main_menu',{name:user.name||'friend'}), mainMenu(userId));
   }
@@ -671,18 +684,33 @@ async function handleStateInput(chatId, userId, text, state) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function handleStatus(chatId, userId) {
   var h     = await callACC('/api/health', {});
+  var stats = await getACC('/api/taskbus/stats').catch(function() { return {}; });
+  var workflows = await getACC('/api/taskbus/workflows').catch(function() { return {}; });
+  var bridge = await getACC('/alphonso-bridge/status').catch(function() { return {}; });
+  var rep   = replicateVideo && typeof replicateVideo.checkHealth === 'function' ? await replicateVideo.checkHealth().catch(function() { return null; }) : null;
   var count = users.getUserCount();
   var files = users.listUserFiles(userId).length;
   var user  = users.getUserProfile(userId) || {};
+  var taskStats = stats && stats.stats ? stats.stats : {};
+  var totalTasks = taskStats.total_tasks || 0;
+  var pendingApprovals = taskStats.pending_approvals || 0;
+  var byStatus = taskStats.by_status || {};
+  var totalWorkflows = workflows && workflows.total ? workflows.total : (workflows && workflows.workflows ? workflows.workflows.length : 0);
   var msg   = '📊 *ACC v2 Status*\n\n' +
     '🟢 Server: ' + (h.ok ? 'Online' : 'Offline') + '\n' +
+    '🎥 Replicate video: ' + (rep && rep.status === 'available' ? 'Ready' : 'Not configured') + '\n' +
+    '🔗 Alphonso bridge: ' + (bridge && bridge.bridge && bridge.bridge.status ? bridge.bridge.status : 'setup_required') + '\n' +
+    '🧭 Workflows: ' + totalWorkflows + '\n' +
+    '📋 Tasks: ' + totalTasks + '\n' +
+    '🛡️ Pending approvals: ' + pendingApprovals + '\n' +
+    '📦 Lanes: pending ' + (byStatus.pending || 0) + ' · progress ' + (byStatus.in_progress || 0) + ' · waiting ' + (byStatus.waiting_approval || 0) + ' · done ' + (byStatus.done || 0) + ' · failed ' + (byStatus.failed || 0) + '\n' +
     '🤖 Bot: Running\n' +
     '👥 Users: ' + count + '/10\n' +
     '📁 Your files: ' + files + '\n' +
     '📝 Your notes: ' + notes.getNotes(userId).length + '\n' +
     '💼 Jobs tracked: ' + jobTracker.getJobs(userId).length + '\n' +
     '🕐 Last seen: ' + new Date().toLocaleTimeString();
-  await sendMsg(chatId, msg);
+  await sendButtons(chatId, msg, statusMenu());
 }
 
 async function handleSettings(chatId, userId) {
@@ -708,6 +736,7 @@ async function handleHelp(chatId, userId) {
   msg += '*Bot & Features:*\n';
   msg += '`/start`    — Main menu\n';
   msg += '`/menu`     — Feature categories\n';
+  msg += '`/dashboard`— Premium dashboard\n';
   msg += '`/status`   — System health\n';
   msg += '`/jobs`     — Job search\n';
   msg += '`/notes`    — Encrypted notes\n';
@@ -727,6 +756,16 @@ async function handleHelp(chatId, userId) {
   msg += '`/taskbus_approve_<id>` — Approve task\n';
   msg += '`/taskbus_reject_<id>`  — Reject task\n\n';
 
+  msg += '*Workflows:*\n';
+  msg += '`/workflows`               â€” List all registered workflows\n';
+  msg += '`task: run workflow: <id>`  â€” Launch a workflow by name\n';
+  msg += '`crew: use-workflow <id>`   â€” Launch a CrewAI workflow explicitly\n';
+  msg += '`workflow: parallel <a, b>` â€” Run workflows side by side\n';
+  msg += '`video: <prompt>`           â€” Generate a Replicate clip\n\n';
+  msg += '*Job Apply:*\n';
+  msg += '`apply for jobs for this role for me: <role>` â€” Guided job workflow\n';
+  msg += '`job apply guided` â€” Open the interactive assistant\n\n';
+
   msg += '*Create tasks (free text):*\n';
   msg += '`task: <instruction>`         — Claude task\n';
   msg += '`tell claude: <instruction>`  — Claude task\n';
@@ -740,10 +779,230 @@ async function handleHelp(chatId, userId) {
 async function handleCallback(cb) {
   var chatId = cb.message.chat.id;
   var userId = String(cb.from.id);
-  var data   = cb.data;
+  var data   = cb.data || '';
   var user   = users.getUserProfile(userId) || {};
   await answerCB(cb.id);
   clearState(userId);
+
+  // ── Approval inline button callbacks ────────────────────────────────────────
+  if (data.startsWith('taskbus_approve_') || data.startsWith('taskbus_reject_')) {
+    var slashCmd = '/' + data;
+    var tbCmd = require('./taskbus/telegramCommands.js');
+    var handled = await tbCmd.handleTaskBusCommand(chatId, userId, slashCmd, sendMsg, user, sendButtons);
+    if (!handled) await sendMsg(chatId, handled === false ? 'Approval processed.' : 'Could not process. Try /approvals');
+    return;
+  }
+
+  if (data === 'workflow_list') {
+    var tbCmd2 = require('./taskbus/telegramCommands.js');
+    await tbCmd2.handleTaskBusCommand(chatId, userId, '/workflows', sendMsg, user, sendButtons);
+    return;
+  }
+
+  if (data === 'task_tasks' || data === 'task_approvals' || data === 'task_stats' || data === 'task_agents') {
+    var tbCmd3 = require('./taskbus/telegramCommands.js');
+    var cmdMap = { task_tasks: '/tasks', task_approvals: '/approvals', task_stats: '/taskstats', task_agents: '/agents' };
+    await tbCmd3.handleTaskBusCommand(chatId, userId, cmdMap[data], sendMsg, user, sendButtons);
+    return;
+  }
+
+  if (data && data.indexOf('task_open:') === 0) {
+    var taskId = data.split(':')[1];
+    var tbCmd4 = require('./taskbus/telegramCommands.js');
+    await tbCmd4.handleTaskBusCommand(chatId, userId, '/task_' + taskId, sendMsg, user, sendButtons);
+    return;
+  }
+
+  if (data && data.indexOf('approval_open:') === 0) {
+    var approvalId = data.split(':')[1];
+    var tbCmd5 = require('./taskbus/telegramCommands.js');
+    await tbCmd5.handleTaskBusCommand(chatId, userId, '/approvals', sendMsg, user, sendButtons);
+    await sendMsg(chatId, 'Use /taskbus_approve_' + approvalId + ' or /taskbus_reject_' + approvalId + ' for a quick decision.');
+    return;
+  }
+
+  if (data === 'workflow_menu') {
+    await sendButtons(chatId, '🧭 *Workflow Launcher*\n\nPick a workflow to run.', workflowMenu(userId));
+    return;
+  }
+
+  if (data === 'menu_dashboard' || data === 'dashboard_menu') {
+    await handleStatus(chatId, userId);
+    return;
+  }
+
+  if (data === 'dash_lanes') {
+    var statsForLanes = await getACC('/api/taskbus/stats').catch(function() { return {}; });
+    var byStatus = (statsForLanes && statsForLanes.stats && statsForLanes.stats.by_status) ? statsForLanes.stats.by_status : {};
+    var rows = [
+      [{ text: '⏳ Pending (' + (byStatus.pending || 0) + ')', callback_data: 'dash_lane:pending' }, { text: '🔄 In Progress (' + (byStatus.in_progress || 0) + ')', callback_data: 'dash_lane:in_progress' }],
+      [{ text: '👁️ Approval (' + (byStatus.waiting_approval || 0) + ')', callback_data: 'dash_lane:waiting_approval' }, { text: '✅ Done (' + (byStatus.done || 0) + ')', callback_data: 'dash_lane:done' }],
+      [{ text: '❌ Failed (' + (byStatus.failed || 0) + ')', callback_data: 'dash_lane:failed' }, { text: '🟦 Dashboard', callback_data: 'menu_dashboard' }],
+    ];
+    await sendButtons(chatId, '📋 *Live Task Lanes*\n\nPick a lane to inspect real tasks, not summaries.', rows);
+    return;
+  }
+
+  if (data && data.indexOf('dash_lane:') === 0) {
+    await showTaskLane(chatId, data.split(':')[1], userId);
+    return;
+  }
+
+  if (data === 'career_workflows' || data === 'workflow_career') {
+    await sendButtons(chatId, '💼 *Career Workflows*\n\nChoose the job flow you want.', careerWorkflowMenu(userId));
+    return;
+  }
+
+  if (data === 'job_apply_guided') {
+    var savedRole = (user.jobPrefs && user.jobPrefs.role) ? String(user.jobPrefs.role).trim() : '';
+    if (savedRole) {
+      await sendButtons(chatId, '🪄 *Guided Job Apply*\n\nUse your saved role, or type a new one.', [
+        [{ text: 'Use saved role: ' + trimWorkflowLabel(savedRole, 24), callback_data: 'job_apply_saved_role' }],
+        [{ text: 'Type a new role', callback_data: 'job_apply_type_role' }],
+        [{ text: '🔙 Back', callback_data: 'menu_jobs' }],
+      ]);
+    } else {
+      await sendMsg(chatId, '🪄 *Guided Job Apply*\n\nType the role you want to apply for. I’ll then ask which workflow mode to use.');
+      setState(userId, 'awaiting_job_apply_role', {});
+    }
+    return;
+  }
+
+  if (data === 'job_apply_saved_role') {
+    var roleFromProfile = (user.jobPrefs && user.jobPrefs.role) ? String(user.jobPrefs.role).trim() : '';
+    if (!roleFromProfile) {
+      await sendMsg(chatId, '⚠️ No saved role found. Type the role you want to apply for.');
+      setState(userId, 'awaiting_job_apply_role', {});
+      return;
+    }
+    await sendMsg(chatId, '📍 Optional: add a location for *' + roleFromProfile + '* or tap Skip to continue.');
+    await sendButtons(chatId, 'Choose how you want ACC to handle: *' + roleFromProfile + '*', jobApplyLocationMenu());
+    setState(userId, 'awaiting_job_apply_location', { role: roleFromProfile });
+    return;
+  }
+
+  if (data === 'job_apply_type_role') {
+    await sendMsg(chatId, 'Type the role you want to apply for. I’ll guide the next step after that.');
+    setState(userId, 'awaiting_job_apply_role', {});
+    return;
+  }
+
+  if (data === 'job_apply_edit_location') {
+    var roleForLocation = String((user.jobPrefs && user.jobPrefs.role) || (getState(userId) && getState(userId).data && getState(userId).data.role) || '').trim();
+    if (!roleForLocation) {
+      await sendMsg(chatId, '⚠️ I need a role first. Tap Guided Job Apply and type the role.');
+      setState(userId, 'awaiting_job_apply_role', {});
+      return;
+    }
+    await sendMsg(chatId, '📍 Type the location, country, or remote preference for *' + roleForLocation + '*.');
+    setState(userId, 'awaiting_job_apply_location', { role: roleForLocation });
+    return;
+  }
+
+  if (data === 'job_apply_skip_location') {
+    var skipRole = String((user.jobPrefs && user.jobPrefs.role) || '').trim();
+    if (!skipRole) {
+      await sendMsg(chatId, '⚠️ I need a role first. Tap Guided Job Apply and type the role.');
+      setState(userId, 'awaiting_job_apply_role', {});
+      return;
+    }
+    await sendButtons(chatId, 'Choose how you want ACC to handle: *' + skipRole + '*', jobWorkflowModeMenu());
+    setState(userId, 'awaiting_job_apply_mode', { role: skipRole, location: String((user.jobPrefs && user.jobPrefs.location) || '').trim() });
+    return;
+  }
+
+  if (data && data.indexOf('job_apply_mode:') === 0) {
+    var workflowMode = data.split(':')[1];
+    var modeRole = String((user.jobPrefs && user.jobPrefs.role) || '').trim();
+    var modeLocation = String((user.jobPrefs && user.jobPrefs.location) || '').trim();
+    if (!modeRole) {
+      await sendMsg(chatId, '⚠️ I need a role first. Tap Guided Job Apply and type the role.');
+      setState(userId, 'awaiting_job_apply_role', {});
+      return;
+    }
+    var roleInput = modeRole + (modeLocation ? ' in ' + modeLocation : '');
+    users.updateUser(userId, { jobPrefs: Object.assign({}, user.jobPrefs, { role: modeRole, location: modeLocation, jobMode: workflowMode }) });
+    await sendButtons(
+      chatId,
+      '✅ *Review before launch*\n\n' + jobApplySummaryText(modeRole, modeLocation, workflowMode),
+      jobApplyReviewMenu()
+    );
+    setState(userId, 'awaiting_job_apply_confirm', { role: modeRole, location: modeLocation, mode: workflowMode });
+    return;
+  }
+
+  if (data === 'job_apply_launch') {
+    var launchState = getState(userId);
+    var launchData = (launchState && launchState.data) || {};
+    var launchRole = String(launchData.role || (user.jobPrefs && user.jobPrefs.role) || '').trim();
+    var launchLocation = String(launchData.location || (user.jobPrefs && user.jobPrefs.location) || '').trim();
+    var launchMode = String(launchData.mode || (user.jobPrefs && user.jobPrefs.jobMode) || 'legacy').trim();
+    if (!launchRole) {
+      await sendMsg(chatId, '⚠️ I need a role first. Tap Guided Job Apply and type the role.');
+      setState(userId, 'awaiting_job_apply_role', {});
+      return;
+    }
+    var launchRoleInput = launchRole + (launchLocation ? ' in ' + launchLocation : '');
+    var launchCommand;
+    if (launchMode === 'crewai') {
+      launchCommand = 'crew: use-workflow autonomous_resume_driven_job_search_with_clickup_integration for ' + launchRoleInput;
+    } else if (launchMode === 'parallel') {
+      launchCommand = 'workflow: parallel intelligent_job_application_automation, autonomous_resume_driven_job_search_with_clickup_integration for ' + launchRoleInput;
+    } else {
+      launchCommand = 'apply for jobs for this role for me: ' + launchRoleInput;
+    }
+    clearState(userId);
+    await sendMsg(chatId, '🚀 *Launching guided job workflow*\n\n' + jobApplySummaryText(launchRole, launchLocation, launchMode));
+    var tbGuided = require('./taskbus/telegramCommands.js');
+    var createdGuided = await tbGuided.createTaskFromMessage(userId, launchCommand, 'claude', sendMsg, chatId, sendButtons);
+    if (!createdGuided) {
+      await sendMsg(chatId, '⚠️ Could not launch the job workflow. Try /workflows and choose one manually.');
+      await sendButtons(chatId, 'Would you like to try again?', careerWorkflowMenu(userId));
+    }
+    return;
+  }
+
+  if (data === 'wf_job_legacy') {
+    await sendMsg(chatId, '💼 Type the role you want to apply for with the legacy job flow:');
+    setState(userId, 'awaiting_workflow_input', {
+      commandPrefix: 'apply for jobs for this role for me: '
+    });
+    return;
+  }
+
+  if (data === 'wf_job_crewai') {
+    await sendMsg(chatId, '🧵 Type the role you want to search/apply for with the CrewAI job flow:');
+    setState(userId, 'awaiting_workflow_input', {
+      commandPrefix: 'crew: use-workflow autonomous_resume_driven_job_search_with_clickup_integration for '
+    });
+    return;
+  }
+
+  if (data === 'wf_job_parallel') {
+    await sendMsg(chatId, '🔁 Type the role or query to run both job workflows in parallel:');
+    setState(userId, 'awaiting_workflow_input', {
+      commandPrefix: 'workflow: parallel intelligent_job_application_automation, autonomous_resume_driven_job_search_with_clickup_integration for '
+    });
+    return;
+  }
+
+  if (data && data.indexOf('wf_pick:') === 0) {
+    var wfIndex = parseInt(data.split(':')[1], 10);
+    var workflowList = getSortedWorkflows();
+    var workflow = workflowList[wfIndex];
+    if (!workflow) {
+      await sendMsg(chatId, '⚠️ Workflow not found. Try /workflows again.');
+      return;
+    }
+    var prefix = workflow.kind === 'crewai_project'
+      ? 'crew: use-workflow ' + workflow.id + ' for '
+      : 'task: run workflow: ' + workflow.id + ' for ';
+    await sendMsg(chatId, '✍️ Type the role/query for: ' + workflow.name);
+    setState(userId, 'awaiting_workflow_input', {
+      commandPrefix: prefix
+    });
+    return;
+  }
 
   // Language
   if (data==='lang_en'||data==='lang_fa') {
@@ -855,7 +1114,9 @@ async function handleCallback(cb) {
     clearState(userId);
     users.updateUser(userId, { jobPrefs: Object.assign({}, user.jobPrefs, { type: jtype }) });
     await sendMsg(chatId, '🔍 *Searching ' + jtype + ' ' + jrole + ' jobs in ' + jloc + '...*\n\n_Checking LinkedIn, Indeed, and the web. Results coming shortly._');
-    await callACC('/api/execute', { agentType: 'browser', payload: { mode: 'search', query: jrole+' '+jtype+' jobs in '+jloc, userId: userId, resumeFile: user.resumeFile }, meta: { role: 'member', userId: userId, sandbox: true } });
+    var jobSearch = require('../connectors/jobSearch.js');
+    var jobResults = await jobSearch.searchJobs(jrole, jloc, jtype, 10);
+    await sendMsg(chatId, jobSearch.formatForTelegram(jobResults, jrole, jloc));
     return;
   }
 
@@ -875,9 +1136,10 @@ async function handleCallback(cb) {
   if (data==='seo_content')    { await sendMsg(chatId,'📹 SEO content about what topic?'); setState(userId,'awaiting_content_topic',{type:'seo'}); return; }
   if (data==='blog_post')      { await sendMsg(chatId,'📝 Blog post topic?'); setState(userId,'awaiting_content_topic',{type:'blog'}); return; }
   if (data==='video_script')   { await sendMsg(chatId,'🎬 Video about what?'); setState(userId,'awaiting_content_topic',{type:'video'}); return; }
+  if (data==='video_generator'){ await sendMsg(chatId,'🎥 What video concept do you want generated?'); setState(userId,'awaiting_content_topic',{type:'replicate_video'}); return; }
   if (data==='social_post')    { await sendMsg(chatId,'📱 Social post about what?'); setState(userId,'awaiting_content_topic',{type:'social'}); return; }
   if (data==='email_sequence') { await sendMsg(chatId,'📧 Email campaign about what?'); setState(userId,'awaiting_content_topic',{type:'email'}); return; }
-  if (data==='youtube_upload') { await sendMsg(chatId,'▶️ *YouTube Auto-Publisher*\n\nDescribe the video content and your channel focus. I\'ll create the script, generate audio, and prepare upload files.'); setState(userId,'awaiting_content_topic',{type:'youtube'}); return; }
+  if (data==='youtube_upload') { await sendMsg(chatId,'▶️ *YouTube Auto-Publisher*\n\nDescribe the video content and your channel focus. I\'ll create the script, build the upload package, and try to generate a short Replicate promo clip.'); setState(userId,'awaiting_content_topic',{type:'youtube'}); return; }
 
   // Notes
   if (data==='note_add')    { await sendMsg(chatId,'📝 Note title:'); setState(userId,'awaiting_note_title'); return; }
@@ -906,11 +1168,201 @@ async function handleCallback(cb) {
 log('[bot] ACC v2 Multi-User Bot — ' + users.getUserCount() + '/10 users');
 log('[bot] Features: Voice, Notes, JobTracker, Interview, EmailMonitor, Scheduler');
 
+
+// ── Menu builders ─────────────────────────────────────────────────────────────
+function mainMenu(userId) {
+  var fa = (users.getUserProfile(userId)||{}).language === 'fa';
+  return fa ? [
+    [{text:'💼 شغل و رزومه',callback_data:'menu_jobs'},{text:'📝 یادداشت‌ها',callback_data:'menu_notes'}],
+    [{text:'📱 محتوا',callback_data:'menu_content'},{text:'🍳 آشپز AI',callback_data:'menu_chef'}],
+    [{text:'💎 داشبورد',callback_data:'menu_dashboard'},{text:'⚙️ ابزار بیشتر',callback_data:'menu_more'}],
+    [{text:'🌐 ترجمه',callback_data:'menu_translate'},{text:'📊 وضعیت',callback_data:'menu_status'}],
+  ] : [
+    [{text:'💼 Jobs & Resume',callback_data:'menu_jobs'},{text:'📝 Notes',callback_data:'menu_notes'}],
+    [{text:'📱 Content',callback_data:'menu_content'},{text:'🍳 Chef AI',callback_data:'menu_chef'}],
+    [{text:'💎 Dashboard',callback_data:'menu_dashboard'},{text:'⚙️ More Tools',callback_data:'menu_more'}],
+    [{text:'🌐 Translate',callback_data:'menu_translate'},{text:'📊 Status',callback_data:'menu_status'}],
+  ];
+}
+function langMenu() { return [[{text:'🇺🇸 English',callback_data:'lang_en'},{text:'🇮🇷 فارسی',callback_data:'lang_fa'}]]; }
+function jobsMenu(userId) {
+  return [
+    [{text:'🔍 Job Search',callback_data:'job_search'},{text:'📄 Resume Tools',callback_data:'menu_resume'}],
+    [{text:'✉️ Cover Letter',callback_data:'cover_letter'},{text:'🎯 Interview Prep',callback_data:'interview_prep'}],
+    [{text:'💰 Salary Coach',callback_data:'salary_coach'},{text:'📊 Job Tracker',callback_data:'job_tracker'}],
+    [{text:'🪄 Guided Job Apply',callback_data:'job_apply_guided'},{text:'🧭 Workflow Launcher',callback_data:'workflow_menu'}],
+    [{text:'💼 Career Workflows',callback_data:'career_workflows'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function resumeMenu(userId) {
+  return [
+    [{text:'📤 Upload Resume',callback_data:'upload_resume'},{text:'✏️ Tailor Resume',callback_data:'tailor_resume'}],
+    [{text:'📋 ATS Check',callback_data:'ats_check'},{text:'👁 View',callback_data:'view_resume'}],
+    [{text:'◀️ Back',callback_data:'menu_jobs'}],
+  ];
+}
+function contentMenu(userId) {
+  return [
+    [{text:'📝 Blog Post',callback_data:'blog_post'},{text:'📱 Social Post',callback_data:'social_post'}],
+    [{text:'🎬 Video Script',callback_data:'video_script'},{text:'🎥 Video Generator',callback_data:'video_generator'}],
+    [{text:'📧 Email Sequence',callback_data:'email_sequence'},{text:'🌐 Landing Page',callback_data:'landing_page'}],
+    [{text:'🔍 SEO Content',callback_data:'seo_content'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function notesMenu(userId) {
+  return [
+    [{text:'➕ New Note',callback_data:'note_add'},{text:'📋 List Notes',callback_data:'note_list'}],
+    [{text:'🔍 Search',callback_data:'note_search'},{text:'🗑 Delete',callback_data:'note_delete'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function toolsMenu(userId) {
+  return [
+    [{text:'⚖️ Legal Help',callback_data:'legal_assistant'},{text:'💡 Brainstorm',callback_data:'brainstorm'}],
+    [{text:'📊 Data Analysis',callback_data:'data_analysis'},{text:'🔍 Research',callback_data:'competitor_research'}],
+    [{text:'✈️ Travel Plan',callback_data:'travel_planner'},{text:'🎁 Gift Ideas',callback_data:'gift_ideas'}],
+    [{text:'◀️ Back',callback_data:'back_main'}],
+  ];
+}
+function jobTypeMenu(userId) {
+  return [
+    [{text:'⏱ Full-time',callback_data:'jobtype_full-time'},{text:'⏰ Part-time',callback_data:'jobtype_part-time'}],
+    [{text:'🏠 Remote',callback_data:'jobtype_remote'},{text:'🔀 Hybrid',callback_data:'jobtype_hybrid'}],
+    [{text:'📋 Contract',callback_data:'jobtype_contract'}],
+  ];
+}
+
+function getSortedWorkflows() {
+  return workflowRegistry.listWorkflows().slice().sort(function(a, b) {
+    return String(a.category || '').localeCompare(String(b.category || '')) ||
+      String(a.name || '').localeCompare(String(b.name || '')) ||
+      String(a.key || '').localeCompare(String(b.key || ''));
+  });
+}
+
+function trimWorkflowLabel(label, maxLen) {
+  var text = String(label || '').trim();
+  if (text.length <= maxLen) return text;
+  return text.slice(0, Math.max(0, maxLen - 1)).trim() + '…';
+}
+
+function workflowMenu(userId) {
+  var workflows = getSortedWorkflows();
+  var rows = [];
+  workflows.forEach(function(workflow, index) {
+    rows.push([{
+      text: trimWorkflowLabel((workflow.category ? workflow.category + ': ' : '') + workflow.name, 34),
+      callback_data: 'wf_pick:' + index
+    }]);
+  });
+  rows.push([{ text: '📋 List All Commands', callback_data: 'workflow_list' }]);
+  rows.push([{ text: '💼 Career Workflows', callback_data: 'career_workflows' }]);
+  rows.push([{ text: '🔙 Back', callback_data: 'back_main' }]);
+  return rows;
+}
+
+function careerWorkflowMenu(userId) {
+  return [
+    [{ text: '🪄 Guided Job Apply', callback_data: 'job_apply_guided' }],
+    [{ text: '💼 Legacy Job Apply', callback_data: 'wf_job_legacy' }],
+    [{ text: '🧵 CrewAI Job Search', callback_data: 'wf_job_crewai' }],
+    [{ text: '🔁 Parallel Job Flows', callback_data: 'wf_job_parallel' }],
+    [{ text: '📋 All Workflows', callback_data: 'workflow_list' }],
+    [{ text: '🔙 Back', callback_data: 'menu_jobs' }],
+  ];
+}
+
+function jobWorkflowModeMenu() {
+  return [
+    [{ text: '💼 Legacy Job Apply', callback_data: 'job_apply_mode:legacy' }],
+    [{ text: '🧵 CrewAI Job Search', callback_data: 'job_apply_mode:crewai' }],
+    [{ text: '🔁 Parallel Job Flows', callback_data: 'job_apply_mode:parallel' }],
+    [{ text: '🔙 Back', callback_data: 'menu_jobs' }],
+  ];
+}
+
+function jobApplyLocationMenu() {
+  return [
+    [{ text: '⏭ Skip location', callback_data: 'job_apply_skip_location' }],
+    [{ text: '🔙 Back', callback_data: 'menu_jobs' }],
+  ];
+}
+
+function jobApplyReviewMenu() {
+  return [
+    [{ text: '🚀 Launch now', callback_data: 'job_apply_launch' }],
+    [{ text: '✏️ Change role', callback_data: 'job_apply_type_role' }, { text: '📍 Change location', callback_data: 'job_apply_edit_location' }],
+    [{ text: '🔙 Back', callback_data: 'career_workflows' }],
+  ];
+}
+
+function jobApplyModeLabel(mode) {
+  if (mode === 'crewai') return 'CrewAI Job Search';
+  if (mode === 'parallel') return 'Parallel Job Flows';
+  return 'Legacy Job Apply';
+}
+
+function jobApplySummaryText(role, location, mode) {
+  return [
+    '*Role:* ' + (role || 'not set'),
+    '*Location:* ' + (location || 'anywhere'),
+    '*Mode:* ' + jobApplyModeLabel(mode),
+    '',
+    '_Launch will create a live Task Bus job and route it through the selected workflow._'
+  ].join('\n');
+}
+
+// ── Polling loop ──────────────────────────────────────────────────────────────
+var running = true;
+var lastOffset = 0;
+
+async function poll() {
+  while (running) {
+    try {
+      var updates = await tgGet('getUpdates', { offset: lastOffset, timeout: 20, allowed_updates: ['message','callback_query'] });
+      if (updates && updates.length) {
+        for (var i = 0; i < updates.length; i++) {
+          var u = updates[i];
+          lastOffset = u.update_id + 1;
+          try {
+            if (u.message)        await handleMessage(u.message);
+            if (u.callback_query) await handleCallback(u.callback_query);
+          } catch(e) { log('[bot] handler err:', e.message); }
+        }
+      }
+    } catch(e) {
+      if (running) {
+        var detail = e && (e.response && e.response.data && e.response.data.description
+          ? e.response.data.description
+          : e.code || e.message || String(e));
+        log('[bot] poll err:', detail);
+        await new Promise(function(r){ setTimeout(r, 3000); });
+      }
+    }
+  }
+}
+
 scheduler.start();
 emailMon.startPolling(5); // check email every 5 minutes
 
 poll();
-process.on('SIGINT',  function() { running = false; scheduler.stop(); emailMon.stopPolling(); process.exit(0); });
-process.on('SIGTERM', function() { running = false; process.exit(0); });
+
+function shutdownBot(code) {
+  running = false;
+  try { scheduler.stop(); } catch (e) {}
+  try { emailMon.stopPolling(); } catch (e) {}
+  try { botLock.releaseBot(BOT_NAME); } catch (e) {}
+  if (typeof code === 'number') {
+    process.exit(code);
+  }
+}
+
+process.on('SIGINT',  function() { shutdownBot(0); });
+process.on('SIGTERM', function() { shutdownBot(0); });
+process.on('exit', function() {
+  try { botLock.releaseBot(BOT_NAME); } catch (e) {}
+});
 
 module.exports = { send: sendMsg };

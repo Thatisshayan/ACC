@@ -1,0 +1,572 @@
+---
+analyze_resume:
+  description: |-
+    **COMPREHENSIVE RESUME ANALYSIS & PROFILE EXTRACTION:**
+
+    **Autonomous Information Extraction:**
+    - Read and analyze the resume file from {resume_file_path}
+    - Extract ALL necessary candidate information automatically:
+      * **Contact Information**: Full name, email, phone, address
+      * **Skills & Technical Competencies**: Programming languages, tools, certifications
+      * **Work Experience**: Job titles, companies, achievements, responsibilities
+      * **Education Background**: Degrees, institutions, graduation dates
+      * **Career Level**: Determine experience level (entry, mid, senior) from work history
+      * **Industry Preferences**: Based on work history and skills
+      * **Salary Expectations**: Extract from resume or estimate based on experience
+      * **Portfolio & References**: URLs, LinkedIn, GitHub, personal websites
+      * **Availability**: Current employment status and start date preferences
+      * **Location Preferences**: Current location and willingness to relocate
+
+    **Intelligent Profile Building:**
+    - Automatically determine target job titles based on:
+      * Current/previous job titles and career progression
+      * Skills alignment with market roles
+      * Experience level and career growth trajectory
+      * Industry trends and role evolution
+
+    **Smart Preferences Inference:**
+    - Infer preferred locations from:
+      * Current address and work history locations
+      * Remote work experience indicated on resume
+      * Geographic preferences mentioned in resume
+
+    - Automatically extract or estimate:
+      * Salary range based on experience level, location, and industry standards
+      * Start date availability from current employment status
+      * Portfolio URLs, GitHub, LinkedIn profiles from contact section
+      * Professional references from resume or work experience
+
+    **Comprehensive Candidate Profile Creation:**
+    Create a complete, structured candidate profile containing all information needed for job applications without requiring additional user input. The profile should be comprehensive enough to autonomously drive the entire job search process.
+
+    **Target Role Identification:**
+    Based on resume analysis, automatically identify 2-3 target job titles that best match:
+    - Current skills and experience
+    - Career progression path
+    - Market demand and opportunities
+    - Salary growth potential
+
+    This analysis will serve as the foundation for the entire automated job search process.
+  expected_output: A detailed candidate profile document containing extracted skills,
+    experience, education, qualifications, contact information, and preferences formatted
+    in a structured way for easy job matching
+  agent: resume_analyzer
+linkedin_job_search_networking:
+  description: |-
+    **AUTONOMOUS LINKEDIN JOB SEARCH & NETWORKING:**
+
+    **Resume-Driven LinkedIn Strategy:**
+    - Use target job titles automatically extracted from resume analysis
+    - Focus on roles matching candidate's experience level and skills from resume
+    - Target locations based on resume-extracted preferences and current location
+
+    **Advanced LinkedIn Job Search:**
+    - Use LinkedIn Jobs advanced search with filters for resume-identified target roles
+    - Search in extracted preferred locations with determined experience level
+    - Identify jobs with "Easy Apply" for faster applications
+    - Find jobs posted in the last 7-14 days for better response rates
+    - Focus on companies in the candidate's industry based on work history
+
+    **Company & Recruiter Research:**
+    - Research target companies relevant to candidate's background and skills
+    - Identify key recruiters in candidate's industry and target locations
+    - Find company employees in similar roles for potential networking
+    - Research company culture, recent news, and growth opportunities
+    - Focus on companies that align with candidate's career trajectory
+
+    **LinkedIn Profile Optimization Recommendations:**
+    - Analyze current profile visibility and suggest improvements based on resume
+    - Recommend keywords to add based on target job requirements from resume analysis
+    - Suggest skill endorsements and recommendations to request
+    - Identify gaps in profile compared to successful profiles in target roles
+    - Optimize headline and summary based on career goals from resume
+
+    **Networking Strategy:**
+    - Identify potential connections at target companies in candidate's field
+    - Draft personalized connection requests based on shared background/interests
+    - Find relevant LinkedIn groups and discussions in candidate's industry
+    - Suggest content engagement strategies to increase visibility in target field
+    - Focus networking on roles and industries matching resume background
+
+    **Autonomous Execution:**
+    All LinkedIn activities driven by resume analysis - no additional user input required:
+    - **Target roles**: From resume analysis
+    - **Industry focus**: From work history
+    - **Location targeting**: From resume preferences
+    - **Networking focus**: From career background and goals
+    - **Profile optimization**: Based on resume skills and experience
+
+    Focus on finding 8-12 high-quality LinkedIn opportunities with detailed company insights that match the candidate's resume-extracted preferences and qualifications.
+  expected_output: A comprehensive LinkedIn strategy report including job opportunities
+    with Easy Apply options, target company research, profile optimization recommendations,
+    networking contacts, and drafted connection messages
+  agent: linkedin_specialist
+  context:
+  - analyze_resume
+search_job_opportunities:
+  description: "**FULLY AUTONOMOUS JOB SEARCH EXECUTION:**\n\n**Resume-Driven Search
+    Strategy:**\n- Use extracted target job titles and preferences from resume analysis\n-
+    Execute comprehensive job search across multiple platforms with advanced search
+    strategies\n- Focus on roles that match the candidate's extracted experience level
+    and skills\n- Target locations based on resume analysis (current location + remote
+    preferences)\n\n**Primary Job Platforms:**\n- **Indeed.com**: Use advanced filters,
+    company research, salary filters\n- **Google Jobs**: Leverage Google's job aggregation
+    and search operators  \n- **Monster.com & ZipRecruiter**: Search niche and volume-based
+    platforms\n- **Industry-specific job boards** relevant to identified target roles\n-
+    **Company career pages** directly (Fortune 500 + target companies based on candidate's
+    industry)\n\n**Advanced Search Techniques:**\n- Use Boolean search operators and
+    advanced keywords based on resume skills\n- Search by job posted date (last 7-14
+    days for higher response rates)\n- Filter by company size, funding stage, and
+    growth indicators\n- Target remote, hybrid, and location-specific opportunities
+    from resume analysis\n- Cross-reference with Glassdoor for company insights and
+    salary data\n\n**Comprehensive Job Data Collection:**\nFor each job found, gather:\n-
+    Complete job URL and application method\n- Detailed job description and requirements\n-
+    Company information, size, industry, and recent news\n- Hiring manager or recruiter
+    contact information when available\n- Salary range, benefits, and equity information\n-
+    Application deadline and process timeline\n- Company culture and values alignment\n-
+    Growth opportunities and career progression\n\n**Quality Focus:**\n- Target 20-30
+    high-quality opportunities over quantity\n- Prioritize companies with strong growth
+    and positive culture\n- Focus on roles that offer career advancement matching
+    resume trajectory\n- Identify companies with values aligned to candidate preferences
+    from resume\n\n**Autonomous Search Parameters:**\n- **Job Titles**: Automatically
+    use titles identified from resume analysis\n- **Locations**: Use extracted location
+    preferences from resume\n- **Experience Level**: Use determined experience level
+    from work history\n- **Salary Range**: Use estimated range from resume analysis\n-
+    **Skills Focus**: Prioritize jobs matching resume skills and competencies\n\nNo
+    user input required - all search parameters derived from comprehensive resume
+    analysis."
+  expected_output: A comprehensive list of 15-25 relevant job opportunities with complete
+    details including URLs, requirements, and application methods, formatted as structured
+    data for easy processing
+  agent: job_search_specialist
+  context:
+  - analyze_resume
+  - linkedin_job_search_networking
+conduct_market_intelligence_salary_research:
+  description: "**AUTONOMOUS MARKET INTELLIGENCE & SALARY RESEARCH:**\n\n**Resume-Driven
+    Compensation Analysis:**\n- Conduct comprehensive market research using target
+    job titles from resume analysis\n- Focus on locations extracted from resume preferences
+    and current location\n- Base research on experience level determined from work
+    history analysis\n\n**Salary Benchmarking & Market Analysis:**\n- Research current
+    salary ranges using Glassdoor, PayScale, Indeed Salary Guide, levels.fyi\n- Analyze
+    compensation trends for the past 12 months in candidate's field\n- Identify regional
+    salary variations and cost of living adjustments for target locations\n- Research
+    company-specific salary ranges and benefits in candidate's industry\n- Gather
+    equity, bonus, and total compensation data where available\n- Factor in candidate's
+    specific experience level and skill set from resume\n\n**Company Compensation
+    Intelligence:**\n- Research each target company's compensation philosophy and
+    pay ranges\n- Identify recently posted salary ranges in job descriptions for similar
+    roles\n- Analyze company funding status, growth stage, and compensation capacity\n-
+    Research company benefits: health insurance, 401k, stock options, PTO, remote
+    work\n- Identify companies known for competitive compensation in candidate's industry\n-
+    Focus on companies that match candidate's career level and background\n\n**Negotiation
+    Strategy & Market Positioning:**\n- Calculate candidate's market value based on
+    extracted experience level and skills\n- Identify salary negotiation leverage
+    points based on resume strengths\n- Research industry-standard signing bonuses
+    and negotiation practices in candidate's field\n- Provide strategic timing recommendations
+    for salary discussions\n- Create compensation comparison matrices for different
+    opportunities\n- Factor in candidate's unique value proposition from resume analysis\n\n**Market
+    Intelligence Reports:**\n- Generate detailed salary reports for each target role
+    identified from resume\n- Provide industry benchmark data and percentile rankings
+    for candidate's experience level\n- Create negotiation scripts and talking points
+    based on candidate's background\n- Identify high-paying companies and compensation
+    outliers in target field\n- Recommend optimal salary ranges for negotiations based
+    on candidate's qualifications\n\n**Autonomous Research Parameters:**\nAll salary
+    research driven by resume analysis:\n- **Target roles**: From resume-identified
+    job titles and career progression\n- **Location focus**: From resume location
+    preferences and current address  \n- **Experience benchmarking**: From work history
+    and career level analysis\n- **Industry focus**: From resume background and target
+    companies\n- **Skills premium**: Based on unique skills and certifications from
+    resume\n\nFocus on data-driven insights that give the candidate competitive advantage
+    in salary negotiations, customized to their specific background and target roles."
+  expected_output: Comprehensive market intelligence report including salary benchmarks,
+    company compensation analysis, negotiation strategies, and data-driven recommendations
+    for maximizing compensation in target roles
+  agent: market_intelligence_salary_research_specialist
+  context:
+  - analyze_resume
+  - linkedin_job_search_networking
+evaluate_job_matches:
+  description: "For each job opportunity found, perform detailed analysis to evaluate
+    candidate-job fit:\n\n1. Scrape full job descriptions from job URLs\n2. Analyze
+    required skills vs candidate skills (match percentage)\n3. Evaluate experience
+    requirements vs candidate experience\n4. Check education/certification requirements\n5.
+    Assess salary expectations alignment  \n6. Consider location preferences\n7. Evaluate
+    company culture fit based on available information\n\nFor each job, provide:\n-
+    Overall match score (0-100%)\n- Skills match analysis\n- Experience level compatibility\n-
+    Education/certification alignment\n- Pros and cons of applying\n- Recommendation
+    (Apply/Skip/Maybe)\n- Priority level (High/Medium/Low)\n\nOnly recommend jobs
+    with 60%+ match score for application."
+  expected_output: A detailed evaluation report for each job opportunity including
+    match scores, compatibility analysis, and clear recommendations for which jobs
+    to apply for, sorted by priority and match percentage
+  agent: job_match_evaluator
+  context:
+  - search_job_opportunities
+generate_personalized_application_materials:
+  description: |-
+    Create compelling, personalized application materials for each approved job opportunity:
+
+    1. **Company & Role Research**:
+       - Deep dive into company mission, values, recent news, and culture
+       - Research hiring managers and team members
+       - Understand company challenges and how the candidate can help
+       - Analyze company's recent growth, acquisitions, or strategic changes
+
+    2. **Personalized Cover Letter Creation**:
+       - Write unique, engaging cover letters for each high-priority job
+       - Connect candidate's experience to specific job requirements
+       - Include company-specific references and value propositions
+       - Use the company's tone and language style
+       - Highlight relevant achievements with quantifiable results
+
+    3. **Email Templates & Follow-up Sequences**:
+       - Create professional email templates for different application scenarios
+       - Draft follow-up email sequences (3-5 touches over 3 weeks)
+       - Write thank-you email templates
+       - Create interview request confirmation templates
+
+    4. **Professional Communication Guidelines**:
+       - Research proper contact methods and timing for each company
+       - Identify the best person to address applications to
+       - Create LinkedIn connection messages for networking
+       - Draft responses to common application questions
+
+    5. **Application Strategy per Job**:
+       - Determine the best application method for each opportunity
+       - Suggest optimal timing for applications and follow-ups
+       - Identify additional ways to stand out (portfolio pieces, case studies)
+
+    Output: Personalized materials for each job with 60%+ match score.
+  expected_output: Complete personalized application packages for each approved job
+    including custom cover letters, email templates, follow-up sequences, networking
+    messages, and strategic application guidance
+  agent: cover_letter_communication_specialist
+  context:
+  - evaluate_job_matches
+  - linkedin_job_search_networking
+prepare_interview_success_materials:
+  description: |-
+    **AUTONOMOUS INTERVIEW PREPARATION BASED ON RESUME:**
+
+    **Company-Specific Interview Preparation:**
+    - Deep research on company culture, values, recent news, and strategic initiatives
+    - Analysis of company leadership team and interview panel research
+    - Understanding of company's technology stack, products, and competitive landscape
+    - Research on company's hiring process and interview format expectations
+    - Focus on companies and roles matching candidate's resume background
+
+    **Role-Specific Interview Preparation:**
+    - Analysis of job requirements and how candidate's resume experience aligns
+    - Preparation of compelling STAR (Situation, Task, Action, Result) stories from resume work history
+    - Technical interview preparation specific to resume-identified target roles
+    - Behavioral interview questions and tailored responses based on resume achievements
+
+    **Strategic Interview Materials Creation:**
+    - Comprehensive Google Docs interview preparation guides for each opportunity
+    - Company-specific question banks with prepared answers using resume examples
+    - Portfolio presentation materials and case study walkthroughs from resume projects
+    - Salary negotiation strategies based on market research and resume experience level
+    - Reference sheet with contact information extracted from resume
+
+    **Interview Success Strategy:**
+    - Mock interview questions and practice scenarios relevant to target roles
+    - Strategic questions for candidates to ask during interviews based on career goals
+    - Post-interview follow-up templates and thank you note scripts
+    - Timeline for interview process management and follow-up strategies
+
+    **Professional Interview Assets:**
+    - Executive summary of candidate's value proposition for each role based on resume
+    - Technical skills demonstration materials and project portfolios from resume
+    - Professional references preparation and briefing materials
+    - Interview day logistics and presentation optimization
+
+    **Resume-Driven Preparation:**
+    All interview preparation customized using resume analysis:
+    - **Experience Stories**: Based on actual work history and achievements from resume
+    - **Skills Demonstration**: Using projects and competencies from resume
+    - **Career Narrative**: Built from resume career progression and goals
+    - **Value Proposition**: Highlighting unique strengths and experiences from resume
+    - **Salary Positioning**: Based on experience level and market research
+
+    Focus on materials that position the candidate as the ideal hire and demonstrate deep understanding of the role and company, all tailored to their specific resume background and target roles.
+  expected_output: Comprehensive interview preparation package including company research
+    documents, tailored question-answer guides, strategic materials, and success frameworks
+    for each interview opportunity
+  agent: interview_preparation_success_strategist
+  context:
+  - conduct_market_intelligence_salary_research
+  - generate_personalized_application_materials
+manage_professional_crm_networking:
+  description: |-
+    **COMPREHENSIVE CRM & PROFESSIONAL RELATIONSHIP MANAGEMENT:**
+
+    **HubSpot CRM Integration & Data Management:**
+
+    **1. Company Data Management:**
+    - **Create HubSpot Company Records** for each target company:
+      * Company name, industry, size, and location
+      * Recent news, funding status, and growth indicators
+      * Technology stack, company culture, and values
+      * Hiring patterns and recruitment cycles
+      * Salary ranges and compensation philosophy
+      * Key decision makers and organizational structure
+
+    **2. Contact Relationship Tracking:**
+    - **Create HubSpot Contact Records** for key professionals:
+      * Hiring managers and department heads
+      * HR recruiters and talent acquisition specialists
+      * Current employees in target roles
+      * LinkedIn connections and referrals
+      * Professional references and industry contacts
+      * Include contact details, role, communication history
+
+    **3. Opportunity Pipeline Management:**
+    - **Create HubSpot Deal Records** for each job application:
+      * Deal Name: "[Company] - [Position] Opportunity"
+      * Deal Stage: Application Submitted → Under Review → Interview → Final Round → Offer
+      * Deal Value: Expected salary and total compensation
+      * Close Date: Expected decision timeline
+      * Associated contacts and company records
+      * Custom properties: Match score, application method, priority level
+
+    **Professional Networking Strategy:**
+
+    **4. Relationship Building Activities:**
+    - Research and identify key networking targets within each company
+    - Track LinkedIn connections, coffee meetings, and professional interactions
+    - Monitor engagement with company social media and industry content
+    - Document relationship-building opportunities and follow-up actions
+    - Create networking event and industry conference attendance plans
+
+    **5. Communication History & Follow-up Tracking:**
+    - Log all email communications and response timelines
+    - Track LinkedIn messages, connection requests, and interactions
+    - Record phone calls, video meetings, and in-person conversations
+    - Monitor application status changes and company responses
+    - Schedule follow-up activities and relationship maintenance
+
+    **Advanced CRM Analytics:**
+
+    **6. Relationship Intelligence:**
+    - Analyze response patterns and communication effectiveness
+    - Track relationship progression and networking success rates
+    - Identify most valuable contacts and referral sources
+    - Monitor industry connections and influence mapping
+    - Assess networking ROI and relationship building effectiveness
+
+    **7. Pipeline Management & Forecasting:**
+    - Track deal progression through application stages
+    - Analyze conversion rates from application to interview to offer
+    - Forecast potential opportunities and timeline predictions
+    - Identify bottlenecks and optimization opportunities
+    - Monitor competitive landscape and market positioning
+
+    **Integration with Project Management:**
+
+    **8. Cross-Platform Data Synchronization:**
+    - Sync HubSpot data with ClickUp tasks and Google Sheets tracking
+    - Ensure consistent contact information across all platforms
+    - Update deal stages based on ClickUp task progression
+    - Cross-reference salary data with market intelligence research
+    - Maintain unified professional contact database
+
+    **9. Automated Workflow Management:**
+    - Create automated follow-up sequences in HubSpot
+    - Set up lead scoring based on company size, role fit, and opportunity
+    - Implement automated task creation for relationship maintenance
+    - Configure alert systems for important relationship milestones
+    - Establish drip campaigns for long-term networking
+
+    **Strategic Networking Insights:**
+
+    **10. Industry Network Mapping:**
+    - Identify industry influencers and thought leaders
+    - Map professional networks and connection opportunities
+    - Analyze most effective networking channels and strategies
+    - Track referral sources and relationship building success
+    - Create strategic networking plans for career advancement
+
+    **11. Professional Brand Management:**
+    - Monitor online presence and professional reputation
+    - Track engagement with professional content and industry discussions
+    - Manage thought leadership and expertise positioning
+    - Coordinate professional branding across networking activities
+    - Optimize networking messaging and value proposition
+
+    **Long-term Relationship Strategy:**
+    - Develop multi-touch relationship building campaigns
+    - Create value-added content for professional contacts
+    - Maintain long-term relationships beyond immediate job search
+    - Build industry reputation and thought leadership presence
+    - Establish professional mentorship and advisory relationships
+  expected_output: Comprehensive CRM database with organized contacts, companies,
+    and opportunities, plus strategic networking insights and relationship management
+    recommendations
+  agent: crm_relationship_manager
+  context:
+  - linkedin_job_search_networking
+  - generate_personalized_application_materials
+execute_job_applications:
+  description: "**FULLY AUTONOMOUS APPLICATION EXECUTION WITH CLICKUP INTEGRATION:**\n\n**Pre-Application
+    Setup & Resume-Driven Intelligence:**\n- Use ALL information extracted from resume
+    analysis automatically:\n  * Contact information (name, email, phone, address)
+    from resume\n  * Portfolio URLs, GitHub, LinkedIn profiles from resume contact
+    section\n  * Professional references from resume or work experience\n  * Start
+    date availability from current employment status analysis\n  * Salary expectations
+    from resume analysis and market research\n\n**COMPREHENSIVE TRACKING & PROJECT
+    MANAGEMENT:**\n\n**1. Google Sheets - Master Dashboard:**\n   - Create comprehensive
+    tracking spreadsheet with formulas and dashboards\n   - Columns: Company, Position,
+    Application Date, Method, Status, Follow-up Dates, Salary Range, Response Rate,
+    Interview Dates\n   - Automated formulas for success metrics and pipeline analysis\n
+    \  - Color-coded status tracking and progress visualization\n\n**2. ClickUp Integration
+    - Professional Task Management:**\n   - **Create ClickUp Tasks** for each job
+    application with:\n     * Task Name: \"[Company] - [Position] Application\"\n
+    \    * Description: Full job details, requirements, and application method\n     *
+    Due Date: Follow-up dates and interview preparation deadlines\n     * Priority
+    Level: Based on job match percentage and strategic importance\n     * Custom Fields:
+    Salary range, application method, match score, company size\n     * Tags: Industry,
+    location, application status, priority level\n   \n   - **ClickUp Task Updates:**\n
+    \    * Update task status as applications progress (Applied → Under Review → Interview
+    → Offer)\n     * Add comments with follow-up activities and responses\n     *
+    Attach related documents (cover letters, email communications)\n     * Set recurring
+    tasks for follow-up activities\n\n**3. Google Calendar - Strategic Scheduling:**\n
+    \  - Schedule follow-up reminders and interview preparation time\n   - Create
+    calendar events for application deadlines and networking meetings\n   - Set up
+    automated reminders for follow-up communications\n   - Block time for interview
+    preparation and research sessions\n\n**ADVANCED EMAIL AUTOMATION SYSTEM:**\n\n**Gmail
+    Integration - Professional Communication:**\n   - **Automated Application Emails:**
+    Send personalized applications using resume contact info\n   - **Follow-up Email
+    Sequences:** Automated follow-up campaigns at 1 week, 2 weeks, 1 month\n   - **Thank
+    You Emails:** Professional thank you messages after applications\n   - **Interview
+    Request Responses:** Quick response templates for interview invitations\n   -
+    **Networking Emails:** Outreach to hiring managers using resume background\n\n**STRATEGIC
+    APPLICATION PROCESS (MAX 12 per session):**\n\n**PRIORITY 1: Premium Applications
+    (75%+ match)**\n- Full personalization with salary research insights\n- ClickUp
+    tasks with HIGH priority and detailed tracking\n- Direct Gmail applications with
+    custom cover letters\n- LinkedIn networking outreach to hiring managers\n- Calendar
+    reminders for strategic follow-ups\n\n**PRIORITY 2: Standard Applications (60-74%
+    match)**\n- ClickUp tasks with NORMAL priority and standard tracking\n- Optimized
+    applications with market intelligence\n- Professional email sequences with value-add
+    content\n- Strategic timing based on company research\n\n**MULTI-CHANNEL EXECUTION:**\n\n**A)
+    Email Applications via Gmail:**\n- Research hiring manager contact information\n-
+    Send professionally formatted emails with personalized messages using resume data\n-
+    Include salary expectations based on market research\n- Attach optimized resume
+    and cover letter PDFs\n- Schedule automatic follow-up sequences\n- **Create ClickUp
+    task** immediately after sending\n\n**B) Direct Company Applications:**\n- Navigate
+    career portals with optimized keyword usage from resume\n- Complete applications
+    with market intelligence insights\n- Upload tailored materials for each application\n-
+    Set calendar reminders for application status checks\n- **Create ClickUp task**
+    with application confirmation details\n\n**C) LinkedIn Advanced Networking:**\n-
+    Easy Apply with personalized messages based on resume background\n- Connection
+    requests to hiring managers with value propositions from experience\n- Engage
+    with company content strategically\n- Share relevant industry insights to build
+    visibility\n- **Create ClickUp task** for networking follow-up\n\n**POST-APPLICATION
+    PROJECT MANAGEMENT:**\n\n**Immediate Actions (Within 1 Hour):**\n1. Create detailed
+    ClickUp task with all application information\n2. Add entry to Google Sheets master
+    tracking\n3. Schedule Google Calendar follow-up reminders\n4. Send confirmation
+    of successful submission\n\n**Follow-up Management:**\n- Gmail automation for
+    thank you messages within 24 hours\n- ClickUp task updates with response tracking\n-
+    Value-add follow-ups with industry insights and market intelligence\n- Calendar-scheduled
+    networking meetings and coffee chats\n- Strategic re-engagement based on application
+    response patterns\n\n**SUCCESS METRICS & ANALYTICS:**\n- Track response rates
+    and optimize approaches in ClickUp\n- A/B test email subject lines and application
+    strategies\n- Monitor salary negotiation outcomes and market positioning effectiveness\n-
+    Generate weekly reports from ClickUp and Google Sheets\n- Continuous improvement
+    based on application success data\n\n**AUTONOMOUS EXECUTION:**\nAll application
+    activities use information extracted from resume:\n- **Contact details**: From
+    resume contact section\n- **Experience highlighting**: From work history analysis\n-
+    **Skills emphasis**: From resume skills extraction\n- **Salary positioning**:
+    From market research based on experience level\n- **Portfolio sharing**: From
+    resume URLs and links\n\nNo additional user input required - complete automation
+    based on comprehensive resume analysis."
+  expected_output: A comprehensive application report showing successfully submitted
+    applications with confirmation details, created tracking spreadsheet, scheduled
+    follow-ups, and any applications that require manual intervention
+  agent: application_manager
+  context:
+  - generate_personalized_application_materials
+  - prepare_interview_success_materials
+  - manage_professional_crm_networking
+generate_performance_analytics_optimization_report:
+  description: |-
+    **COMPREHENSIVE JOB SEARCH ANALYTICS & STRATEGY OPTIMIZATION:**
+
+    **Data Collection & Analysis:**
+
+    **1. Application Performance Metrics:**
+    - Analyze Google Sheets master tracking data for success patterns
+    - Review ClickUp tasks and their progression through application stages
+    - Calculate response rates by industry, company size, and application method
+    - Identify highest-performing application channels and timing
+    - Track salary negotiation success rates and market positioning effectiveness
+
+    **2. Success Pattern Analysis:**
+    - Identify companies and industries with highest response rates
+    - Analyze correlation between job match scores and interview invitations
+    - Track performance by application method (email, job boards, LinkedIn)
+    - Evaluate effectiveness of personalized cover letters vs. standard applications
+    - Measure impact of salary research and negotiation strategies
+
+    **3. Market Intelligence Integration:**
+    - Compare application success against market trends and demand
+    - Analyze seasonal patterns and optimal application timing
+    - Track company hiring cycles and best application windows
+    - Monitor industry-specific success factors and requirements
+
+    **Performance Optimization Recommendations:**
+
+    **4. Strategic Improvement Insights:**
+    - Recommend optimal application volume and frequency
+    - Identify skills gaps and training opportunities based on rejection patterns
+    - Suggest portfolio improvements and experience highlighting
+    - Provide company-specific application strategy refinements
+    - Recommend salary negotiation improvements based on market data
+
+    **5. Process Optimization:**
+    - Optimize application workflow based on success data
+    - Recommend email templates and follow-up timing improvements
+    - Suggest LinkedIn networking strategy enhancements
+    - Identify most effective job search platforms and methods
+    - Provide interview preparation focus areas based on common questions
+
+    **Comprehensive Reporting:**
+
+    **6. Executive Dashboard Creation:**
+    - Create detailed Google Docs performance report with:
+      * Application success rate trends and improvements
+      * Industry and company performance breakdowns
+      * Salary negotiation outcomes and market positioning
+      * Interview conversion rates and success patterns
+      * Recommended strategic adjustments and next steps
+
+    **7. ClickUp Project Updates:**
+    - Update ClickUp tasks with performance insights and recommendations
+    - Add tags and priority adjustments based on success pattern analysis
+    - Create optimization action items and strategic improvement tasks
+    - Set up recurring analytics reviews and performance tracking
+
+    **8. Predictive Analytics:**
+    - Forecast interview likelihood based on application patterns
+    - Predict optimal salary ranges for upcoming negotiations
+    - Identify emerging market opportunities and timing
+    - Recommend strategic career moves and application focus areas
+
+    **Success Metrics Dashboard:**
+    - Response rate trends (daily, weekly, monthly)
+    - Interview conversion rates by application method
+    - Offer rates and salary negotiation success
+    - Time-to-interview and time-to-offer analytics
+    - ROI analysis of different application strategies
+
+    **Continuous Improvement Framework:**
+    - Weekly performance reviews and strategy adjustments
+    - Monthly market analysis and trend identification
+    - Quarterly career goal alignment and strategy pivots
+    - Annual career advancement and success measurement
+  expected_output: Comprehensive performance analytics report with success metrics,
+    optimization recommendations, strategic insights, and actionable improvement strategies
+    for maximizing job search effectiveness
+  agent: job_search_analytics_performance_optimizer
+  context:
+  - execute_job_applications

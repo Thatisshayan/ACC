@@ -8,7 +8,17 @@ const store   = require('./store.js');
 const router  = require('./router.js');
 const { getProvidersStatus } = require('./providerFallback.js');
 const { log } = require('../utils/logger.js');
+const outreachCrm = require('../workflows/accOutreachCrmModule.js');
+const { runLeadCollectorPollerOnce } = require('../workflows/leadCollectorPoller.js');
+const workflowDispatcher = require('../workflows/dispatcher.js');
+const workflowRegistry = require('../workflows/registry.js');
 const app     = express.Router();
+
+function loadIntegrationHealthModule(name) {
+  if (name === 'airtable') return require('../integrations/airtable.js');
+  if (name === 'clickup') return require('../integrations/clickup.js');
+  return require('../integrations/' + name + '.js');
+}
 
 // ── GET /api/taskbus/agents ───────────────────────────────────────────────────
 app.get('/agents', async function(req, res) {
@@ -34,13 +44,16 @@ app.get('/stats', function(req, res) {
 // ── GET /api/taskbus/integrations/status ────────────────────────────────────────
 app.get('/integrations/status', async function(req, res) {
   var integrations = {};
-  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','crewai','grok','perplexity','airtable','clickup'];
+  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','crewai','grok','perplexity','airtable','clickup','replicate'];
   for (var i = 0; i < files.length; i++) {
     var name = files[i];
     try {
-      var mod = require('../integrations/' + name + '.js');
+      var mod = loadIntegrationHealthModule(name);
+      if (mod && mod.ClickUpConnector && typeof mod.checkHealth !== 'function') {
+        mod = new mod.ClickUpConnector();
+      }
       var health = await mod.checkHealth();
-      integrations[name] = Object.assign({ enabled: mod.enabled() }, health);
+      integrations[name] = Object.assign({ enabled: typeof mod.enabled === 'function' ? mod.enabled() : true }, health);
     } catch (e) {
       integrations[name] = { enabled: false, status: 'error', error: e.message };
     }
@@ -57,6 +70,100 @@ app.get('/providers/status', async function(req, res) {
     var order  = (process.env.TASKBUS_PROVIDER_ORDER || 'deepseek,ollama,claude,smart_stub').split(',');
     res.json({ success: true, provider_order: order, providers: status });
   } catch(e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— GET /api/taskbus/workflows ————————————————————————————————————————————
+app.get('/workflows', function(req, res) {
+  try {
+    const workflows = workflowRegistry.listWorkflows().map(function(workflow) {
+      return workflowRegistry.getWorkflowSummary(workflow);
+    });
+    res.json({
+      success: true,
+      workflows: workflows,
+      total: workflows.length,
+      catalog: workflowDispatcher.describeWorkflowCatalog(),
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— GET /api/taskbus/workflow/:workflowId ————————————————————————————————
+app.get('/workflow/:workflowId', function(req, res) {
+  try {
+    const workflow = workflowRegistry.resolveWorkflow(req.params.workflowId);
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    res.json({ success: true, workflow: workflowRegistry.getWorkflowSummary(workflow) });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— POST /api/taskbus/workflow/run ———————————————————————————————————————
+// Body: { workflow, input, preferKind, title, mode, skipRoute, parallel_group }
+app.post('/workflow/run', async function(req, res) {
+  try {
+    const workflowRef = req.body.workflow || req.body.workflowId || req.body.id;
+    if (!workflowRef) return res.status(400).json({ success: false, error: 'workflow is required' });
+    const result = await workflowDispatcher.launchWorkflow(workflowRef, req.body || {});
+    if (!result.success) return res.status(404).json(result);
+    res.json({ success: true, result: result });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— POST /api/taskbus/workflow/run/parallel ————————————————————————————
+// Body: { workflows: [], input, preferKind, mode, skipRoute }
+app.post('/workflow/run/parallel', async function(req, res) {
+  try {
+    const workflows = Array.isArray(req.body.workflows) ? req.body.workflows : [];
+    if (!workflows.length) return res.status(400).json({ success: false, error: 'workflows is required' });
+    const result = await workflowDispatcher.launchWorkflowsInParallel(workflows, req.body || {});
+    res.json({ success: true, result: result });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— GET /api/taskbus/workflow/outreach-crm/health ——————————————————————————————
+app.get('/workflow/outreach-crm/health', function(req, res) {
+  try {
+    res.json({ success: true, health: outreachCrm.health() });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— POST /api/taskbus/workflow/outreach-crm/bootstrap ——————————————————————————
+// Body: { sheetCsvUrl?, maxLeads?, sink?: none|airtable|clickup|both, clickupListId?, createdBy? }
+app.post('/workflow/outreach-crm/bootstrap', async function(req, res) {
+  try {
+    const requestId = req.headers['x-request-id'] || req.body.requestId || ('req-' + Date.now());
+    const result = await outreachCrm.bootstrapOutreachCrm({
+      requestId: requestId,
+      sheetCsvUrl: req.body.sheetCsvUrl,
+      maxLeads: req.body.maxLeads,
+      sink: req.body.sink || 'none',
+      clickupListId: req.body.clickupListId,
+      createdBy: req.body.createdBy || 'chatgpt'
+    });
+    if (!result.success) return res.status(500).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// —— POST /api/taskbus/workflow/outreach-crm/poller/run ———————————————————————
+app.post('/workflow/outreach-crm/poller/run', async function(req, res) {
+  try {
+    await runLeadCollectorPollerOnce();
+    res.json({ success: true, message: 'Lead collector poller run triggered.' });
+  } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -153,11 +260,21 @@ app.get('/approvals', function(req, res) {
 // ── POST /api/taskbus/approval/:id ───────────────────────────────────────────
 // Body: { decision: 'approved'|'rejected', notes }
 app.post('/approval/:id', function(req, res) {
-  const approver = req.headers['x-approver'] || 'Shayan';
-  if (approver !== 'Shayan') return res.status(403).json({ success: false, error: 'Only Shayan can approve' });
-  const approval = store.resolveApproval(req.params.id, req.body.decision, approver, req.body.notes);
-  if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
-  res.json({ success: true, approval });
+  (async function() {
+    const approver = req.headers['x-approver'] || 'Shayan';
+    if (approver !== 'Shayan') return res.status(403).json({ success: false, error: 'Only Shayan can approve' });
+    const approval = store.resolveApproval(req.params.id, req.body.decision, approver, req.body.notes);
+    if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
+
+    if (req.body.decision === 'approved') {
+      const routeResult = await router.routeTask(approval.task_id);
+      return res.json({ success: true, approval, routeResult });
+    }
+
+    return res.json({ success: true, approval });
+  })().catch(function(e) {
+    res.status(500).json({ success: false, error: e.message });
+  });
 });
 
 // ── GET /api/taskbus/results ──────────────────────────────────────────────────

@@ -10,7 +10,9 @@ var router     = require('../../taskbus/router.js');
 
 var _sendFn = null;
 
-function init(sendFunction) { _sendFn = sendFunction; }
+function init(sendFunction) {
+  _sendFn = sendFunction;
+}
 
 function send(chatId, text) {
   if (!_sendFn) return Promise.resolve();
@@ -22,27 +24,33 @@ function send(chatId, text) {
 var BRIEFING_TZ = process.env.BRIEFING_TZ || 'America/Toronto';
 var SLOT_WINDOW_MIN = parseInt(process.env.BRIEFING_WINDOW_MIN || '30', 10);
 
-function todayKey() {
-  return localNow().dateKey;
-}
-
 function localNow() {
   var parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: BRIEFING_TZ,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
     weekday: 'short',
   }).formatToParts(new Date());
-  var get = function(t) {
-    var p = parts.find(function(x) { return x.type === t; });
-    return p ? p.value : '';
+
+  var get = function(type) {
+    var part = parts.find(function(x) { return x.type === type; });
+    return part ? part.value : '';
   };
+
   return {
     dateKey: get('year') + '-' + get('month') + '-' + get('day'),
     hour: parseInt(get('hour'), 10),
     minute: parseInt(get('minute'), 10),
     day: get('weekday'),
   };
+}
+
+function todayKey() {
+  return localNow().dateKey;
 }
 
 function inSlot(hour, minute, targetHour) {
@@ -54,23 +62,46 @@ function userLocation(user) {
   return prefs.location || prefs.city || process.env.BRIEFING_CITY || 'Toronto, Canada';
 }
 
+function formatTaskLine(task) {
+  return task.title + ' [' + task.status + ']';
+}
+
+function formatResultLine(result) {
+  var summary = String(result.summary || result.output || '').replace(/\s+/g, ' ').trim();
+  if (summary.length > 90) summary = summary.slice(0, 87).trim() + '...';
+  return (result.provider_used || 'unknown') + ': ' + (summary || 'no summary');
+}
+
 function buildUserContext(user) {
   var jobs = jobTracker.getJobs(user.id);
   var pending = jobs.filter(function(j) {
     return j.status === 'found' || j.status === 'applied' || j.status === 'interview';
   });
   var stale = jobTracker.getStaleApplications(user.id, 5);
+  var recentTasks = store.getTasks().slice(0, 5);
+  var pendingApprovals = store.getPendingApprovals().slice(0, 5);
+  var recentResults = store.getAllResults(5);
+  var stats = store.getStats();
+
   return {
     name: user.name || 'friend',
     language: user.language || 'en',
     location: userLocation(user),
+    now: localNow(),
     date: new Date().toLocaleDateString(user.language === 'fa' ? 'fa-IR' : 'en-CA', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     }),
     pendingJobs: pending.slice(0, 12),
     staleJobs: stale.slice(0, 5),
     notesCount: notes.getNotes(user.id).length,
     totalJobs: jobs.length,
+    taskStats: stats,
+    recentTasks: recentTasks,
+    pendingApprovals: pendingApprovals,
+    recentResults: recentResults,
   };
 }
 
@@ -82,30 +113,43 @@ function buildBriefingInstruction(user, type, ctx) {
       return '- ' + j.title + (j.company ? ' @ ' + j.company : '') + ' [' + j.status + ']';
     }).join('\n')
     : '(none)';
+  var taskLines = ctx.recentTasks.length ? ctx.recentTasks.map(formatTaskLine).join('\n') : '(none)';
+  var approvalLines = ctx.pendingApprovals.length ? ctx.pendingApprovals.map(function(a) {
+    return '- ' + a.action + ' / ' + a.id.slice(0, 8);
+  }).join('\n') : '(none)';
+  var resultLines = ctx.recentResults.length ? ctx.recentResults.map(formatResultLine).join('\n') : '(none)';
 
   return [
-    'Write a ' + (isMorning ? 'MORNING' : 'AFTERNOON') + ' personal briefing for Telegram.',
+    'Write a ' + (isMorning ? 'MORNING' : 'AFTERNOON') + ' operational briefing for Telegram.',
     'Language: ' + lang + '. User: ' + ctx.name + '. Location: ' + ctx.location + '.',
     '',
-    'USER DATA (use exactly — do not invent job titles):',
+    'LIVE ACC SNAPSHOT (use only these facts; do not invent external news):',
+    'Current time: ' + ctx.now.day + ' ' + ctx.now.hour + ':' + String(ctx.now.minute).padStart(2, '0') + ' (' + BRIEFING_TZ + ')',
     'Today\'s date: ' + ctx.date,
+    'Total tasks: ' + ctx.taskStats.total_tasks,
+    'Pending approvals: ' + ctx.taskStats.pending_approvals,
+    'Recent tasks:',
+    taskLines,
+    'Pending approval IDs:',
+    approvalLines,
+    'Recent results:',
+    resultLines,
     'Notes saved: ' + ctx.notesCount,
     'Total jobs tracked: ' + ctx.totalJobs,
     'Pending / active jobs:',
     jobLines,
-    ctx.staleJobs.length ? ('Stale applications (5+ days): ' + ctx.staleJobs.map(function(j) { return j.title; }).join(', ')) : '',
+    ctx.staleJobs.length ? ('Stale applications (5+ days): ' + ctx.staleJobs.map(function(j) { return j.title; }).join(', ')) : 'Stale applications: none',
     '',
     'REQUIRED SECTIONS (emoji headers, concise bullets):',
-    '1. Greeting + today\'s date',
-    '2. Pending jobs summary (from USER DATA)',
-    '3. Notes vault (' + ctx.notesCount + ' saved)',
-    '4. Motivational tip (1-2 sentences)',
-    '5. Canada news headlines summary (3 bullets, general/public — no fabricated breaking events)',
-    '6. Global news headlines summary (3 bullets)',
-    '7. Gold price today (USD approximate, note if estimate)',
-    '8. Weather today for ' + ctx.location + ' (high/low, conditions)',
-    isMorning ? '9. One priority focus for this morning' : '9. One priority focus for this afternoon',
+    '1. Greeting + current date/time',
+    '2. Today\'s ACC queue: task counts, pending approvals, and what changed most recently',
+    '3. Pending jobs summary (from LIVE ACC SNAPSHOT)',
+    '4. Notes vault (' + ctx.notesCount + ' saved)',
+    '5. Latest results summary (use recent results above)',
+    '6. One practical priority focus for ' + (isMorning ? 'this morning' : 'this afternoon'),
+    '7. One short action list for the next 24 hours',
     '',
+    'Keep it fresh. If a section has nothing new, say so plainly instead of repeating generic filler.',
     'Put the FULL formatted briefing in the JSON "output" field. Keep under 3200 characters.',
   ].filter(Boolean).join('\n');
 }
@@ -113,7 +157,7 @@ function buildBriefingInstruction(user, type, ctx) {
 async function generateBriefingViaTaskBus(user, type) {
   var ctx = buildUserContext(user);
   var task = store.createTask({
-    title: (type === 'morning' ? 'Morning' : 'Afternoon') + ' briefing — ' + ctx.name,
+    title: (type === 'morning' ? 'Morning' : 'Afternoon') + ' briefing - ' + ctx.name,
     instruction: buildBriefingInstruction(user, type, ctx),
     assigned_agent: 'claude',
     automation_mode: 'semi_auto',
@@ -140,7 +184,11 @@ function buildFallbackBriefing(user, type) {
 
   var lines = [
     greeting + ', *' + ctx.name + '*!',
-    '📅 ' + ctx.date,
+    '📅 ' + ctx.date + ' • ' + ctx.now.day + ' ' + ctx.now.hour + ':' + String(ctx.now.minute).padStart(2, '0'),
+    '',
+    '🧭 *ACC today:* ' + ctx.taskStats.total_tasks + ' tasks | ' + ctx.taskStats.pending_approvals + ' approvals pending',
+    '• Recent tasks: ' + (ctx.recentTasks.length ? ctx.recentTasks.map(formatTaskLine).join(' | ') : 'none'),
+    '• Recent results: ' + (ctx.recentResults.length ? ctx.recentResults.map(formatResultLine).join(' | ') : 'none'),
     '',
     '💼 *Pending jobs:* ' + ctx.pendingJobs.length,
   ];
@@ -148,16 +196,16 @@ function buildFallbackBriefing(user, type) {
     lines.push('  • ' + j.title + (j.company ? ' @ ' + j.company : '') + ' (' + j.status + ')');
   });
   lines.push('');
+  lines.push('🧾 *Pending approvals:* ' + (ctx.pendingApprovals.length ? ctx.pendingApprovals.map(function(a) { return a.id.slice(0, 8); }).join(', ') : 'none'));
+  lines.push('');
   lines.push('📝 *Notes saved:* ' + ctx.notesCount);
   lines.push('');
-  lines.push('💡 _Tip: Review one pending application and send a follow-up today._');
-  lines.push('');
-  lines.push('_(AI briefing unavailable — add DEEPSEEK_API_KEY for full news, gold, and weather.)_');
+  lines.push('💡 _Tip: Clear one approval, review one recent task, and move one job forward today._');
   return lines.join('\n');
 }
 
 function briefingHeader(type, lang) {
-  if (type === 'morning') return lang === 'fa' ? '🌅 *خلاصه صبحگاهی ACC*' : '🌅 *ACC Morning Briefing*';
+  if (type === 'morning') return lang === 'fa' ? '☀️ *خلاصه صبحگاهی ACC*' : '☀️ *ACC Morning Briefing*';
   return lang === 'fa' ? '🌤️ *خلاصه ظهر ACC*' : '🌤️ *ACC Afternoon Briefing*';
 }
 
@@ -176,7 +224,7 @@ async function runBriefingSlot(type) {
   var allUsers = users.getAllUsers().filter(function(u) {
     return u.state === 'ready' && u.name && u.id;
   });
-  console.log('[scheduler]', type, 'briefing —', allUsers.length, 'users');
+  console.log('[scheduler]', type, 'briefing -', allUsers.length, 'users');
   for (var i = 0; i < allUsers.length; i++) {
     try {
       await sendBriefingToUser(allUsers[i], type);
@@ -244,7 +292,7 @@ function start() {
     var h   = now.hour;
     var m   = now.minute;
     var dk  = now.dateKey;
-    var day = now.day; // Sun, Mon, ...
+    var day = now.day;
 
     if (inSlot(h, m, 8) && lastRuns.morning !== dk) {
       startBriefingSlot('morning', dk);
@@ -276,18 +324,19 @@ function start() {
 
   intervals.push(iv);
   var n = localNow();
-  console.log('[scheduler] Started — briefings 8:00 + 12:00 (' + BRIEFING_TZ + ', window ' + SLOT_WINDOW_MIN + 'm) | now:', n.hour + ':' + String(n.minute).padStart(2, '0'));
+  console.log('[scheduler] Started - briefings 8:00 + 12:00 (' + BRIEFING_TZ + ', window ' + SLOT_WINDOW_MIN + 'm) | now:', n.hour + ':' + String(n.minute).padStart(2, '0'));
 }
 
-function stop() { intervals.forEach(clearInterval); intervals = []; }
+function stop() {
+  intervals.forEach(clearInterval);
+  intervals = [];
+}
 
-/** Manual trigger — all ready users */
 function triggerBriefing(type, force) {
   if (force) lastRuns[type] = null;
   return runBriefingSlot(type);
 }
 
-/** Manual trigger — single user (e.g. /briefing in Telegram) */
 async function sendBriefingForUser(userId, type) {
   var user = users.getUserProfile(userId);
   if (!user || user.state !== 'ready' || !user.name) {
@@ -297,7 +346,13 @@ async function sendBriefingForUser(userId, type) {
 }
 
 module.exports = {
-  init, start, stop,
-  buildDailyBriefing, buildWeeklyReport,
-  generateBriefingViaTaskBus, runBriefingSlot, triggerBriefing, sendBriefingForUser,
+  init,
+  start,
+  stop,
+  buildDailyBriefing,
+  buildWeeklyReport,
+  generateBriefingViaTaskBus,
+  runBriefingSlot,
+  triggerBriefing,
+  sendBriefingForUser,
 };

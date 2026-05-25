@@ -21,6 +21,11 @@ crewai install
 ### Customizing
 
 **Add your `OPENAI_API_KEY` into the `.env` file**
+**Add a search API key into the `.env` file**
+
+- Preferred: `SERPER_API_KEY`
+- Fallback: `SERPAPI_API_KEY`
+- The job-search crew uses Serper when available, then falls back to SerpAPI.
 
 - Modify `src/intelligent_job_application_automation/config/agents.yaml` to define your agents
 - Modify `src/intelligent_job_application_automation/config/tasks.yaml` to define your tasks

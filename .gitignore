@@ -8,6 +8,8 @@ cloud/security/.vault/
 # Runtime/private data
 data/users/
 data/taskbus/
+data/run/
+data/alphonso-bridge/
 cloud/dlq/items/
 *.log
 bot.log
@@ -31,3 +33,10 @@ serviceAccountKey.json
 *.pem
 *.key
 node_modules/  
+
+# Electron build artifacts
+desktop/dist/
+desktop/dist-verify/
+desktop/dist-verify2/
+desktop/dist-verify3/
+desktop/node_modules/

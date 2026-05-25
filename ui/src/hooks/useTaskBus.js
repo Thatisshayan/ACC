@@ -20,7 +20,7 @@ export function useTaskBus() {
   const [serverLive, setLive]   = useState(false);
 
   // Check old executor queue + Task Bus simultaneously
-  const fetch = useCallback(async () => {
+  const refreshTaskBus = useCallback(async () => {
     try {
       const [tRes, sRes] = await Promise.all([
         taskbusApi.getTasks(),
@@ -43,22 +43,22 @@ export function useTaskBus() {
   }, []);
 
   useEffect(() => {
-    fetch();
+    refreshTaskBus();
     checkServer();
-    const iv1 = setInterval(fetch, 8000);       // poll Task Bus every 8s
+    const iv1 = setInterval(refreshTaskBus, 8000);       // poll Task Bus every 8s
     const iv2 = setInterval(checkServer, 15000); // check health every 15s
     return () => { clearInterval(iv1); clearInterval(iv2); };
-  }, [fetch, checkServer]);
+  }, [refreshTaskBus, checkServer]);
 
-  const createTask  = useCallback(async (d) => { const r = await taskbusApi.createTask(d); await fetch(); return r.data; }, [fetch]);
-  const approveTask = useCallback(async (id) => { await taskbusApi.approve(id); await fetch(); }, [fetch]);
-  const rejectTask  = useCallback(async (id) => { await taskbusApi.reject(id);  await fetch(); }, [fetch]);
+  const createTask  = useCallback(async (d) => { const r = await taskbusApi.createTask(d); await refreshTaskBus(); return r.data; }, [refreshTaskBus]);
+  const approveTask = useCallback(async (id) => { await taskbusApi.approve(id); await refreshTaskBus(); }, [refreshTaskBus]);
+  const rejectTask  = useCallback(async (id) => { await taskbusApi.reject(id);  await refreshTaskBus(); }, [refreshTaskBus]);
 
   // Create task via old executor (for bot-style natural language tasks)
   const executePrompt = useCallback(async (prompt, agentType) => {
     const BASE = (typeof window !== 'undefined' && window.location.protocol === 'file:')
       ? 'http://localhost:4000' : '';
-    const r = await fetch(BASE + '/api/execute', {
+    const r = await window.fetch(BASE + '/api/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -77,9 +77,9 @@ export function useTaskBus() {
       approval_required: false,
       created_by:     'dashboard',
     });
-    await fetch();
+    await refreshTaskBus();
     return data;
-  }, [fetch]);
+  }, [refreshTaskBus]);
 
   return {
     tasks, stats, loading, error, serverLive,

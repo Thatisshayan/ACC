@@ -1,14 +1,111 @@
+import json
 import os
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from crewai import LLM
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import (
-	SerperDevTool,
-	JinaScrapeWebsiteTool,
-	FileReadTool
+	FileReadTool,
+	tool,
 )
 
+def _env_has(name: str) -> bool:
+    return bool(os.environ.get(name, "").strip())
+
+def _format_search_results(results):
+    if not results:
+        return "No results found."
+    parts = []
+    for item in results[:5]:
+        parts.append(
+            f"Title: {item.get('title', 'N/A')}\n"
+            f"URL: {item.get('link', item.get('url', 'N/A'))}\n"
+            f"Snippet: {item.get('snippet', item.get('description', 'N/A'))}"
+        )
+    return "\n\n".join(parts)
+
+@tool("SerpAPI Search")
+def serpapi_search(query: str) -> str:
+    """Search the web using SerpAPI when SERPER_API_KEY is not available."""
+    api_key = os.environ.get("SERPAPI_API_KEY", "").strip()
+    if not api_key:
+        return "SERPAPI_API_KEY not set."
+
+    params = urlencode({
+        "engine": "google",
+        "q": query,
+        "api_key": api_key,
+        "num": 5,
+    })
+    url = f"https://serpapi.com/search.json?{params}"
+
+    try:
+        with urlopen(url, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        organic = payload.get("organic_results") or []
+        return _format_search_results(organic)
+    except Exception as exc:
+        return f"SerpAPI search error: {exc}"
+
+@tool("Job Search Web")
+def job_search_web(query: str) -> str:
+    """Search jobs using Serper first, then SerpAPI as fallback."""
+    serper_error = "SERPER_API_KEY not set."
+    serpapi_error = "SERPAPI_API_KEY not set."
+
+    serper_key = os.environ.get("SERPER_API_KEY", "").strip()
+    if serper_key:
+        try:
+            payload = json.dumps({ "q": query, "num": 5 }).encode("utf-8")
+            request = Request(
+                "https://google.serper.dev/search",
+                data=payload,
+                headers={
+                    "X-API-KEY": serper_key,
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urlopen(request, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            organic = payload.get("organic") or payload.get("organic_results") or []
+            formatted = _format_search_results(organic)
+            if formatted != "No results found.":
+                return formatted
+            serper_error = "Serper returned no results."
+        except Exception as exc:
+            serper_error = f"Serper search error: {exc}"
+
+    serpapi_key = os.environ.get("SERPAPI_API_KEY", "").strip()
+    if serpapi_key:
+        try:
+            params = urlencode({
+                "engine": "google",
+                "q": query,
+                "api_key": serpapi_key,
+                "num": 5,
+            })
+            url = f"https://serpapi.com/search.json?{params}"
+            with urlopen(url, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            organic = payload.get("organic_results") or []
+            formatted = _format_search_results(organic)
+            if formatted != "No results found.":
+                return formatted
+            serpapi_error = "SerpAPI returned no results."
+        except Exception as exc:
+            serpapi_error = f"SerpAPI search error: {exc}"
+
+    return "\n".join([
+        "No search provider available.",
+        serper_error,
+        serpapi_error,
+    ])
+
+def build_job_search_tools():
+    return [job_search_web]
 
 
 
@@ -27,8 +124,7 @@ class IntelligentJobApplicationAutomationCrew:
             config=self.agents_config["job_search_specialist"],
             
             
-            tools=[				SerperDevTool(),
-				JinaScrapeWebsiteTool()],
+            tools=build_job_search_tools(),
             reasoning=False,
             max_reasoning_attempts=None,
             inject_date=True,
@@ -185,5 +281,3 @@ class IntelligentJobApplicationAutomationCrew:
 
             chat_llm=LLM(model="openai/gpt-4o-mini"),
         )
-
-

@@ -16,22 +16,26 @@ def _load_json_env(name):
 
 
 def _crew_class():
-    from intelligent_job_application_automation.crew import IntelligentJobApplicationAutomationCrew
-    return IntelligentJobApplicationAutomationCrew
+    from autonomous_resume_driven_job_search_with_clickup_integration.crew import AutonomousResumeDrivenJobSearchWithClickupIntegrationCrew
+    return AutonomousResumeDrivenJobSearchWithClickupIntegrationCrew
 
 
 def build_inputs():
     inputs = {
-        'search_query': os.environ.get('JOB_QUERY', '').strip() or os.environ.get('TARGET_ROLE', '').strip() or 'sample_value',
-        'resume_content': os.environ.get('RESUME_FILE_PATH', '').strip() or 'sample_value',
-        'job_location': os.environ.get('JOB_LOCATION', '').strip(),
+        'resume_file_path': os.environ.get('RESUME_FILE_PATH', '').strip(),
+        'target_role': os.environ.get('TARGET_ROLE', '').strip(),
+        'job_query': os.environ.get('JOB_QUERY', '').strip(),
+        'location': os.environ.get('JOB_LOCATION', '').strip(),
         'clickup_list_id': os.environ.get('CLICKUP_LIST_ID', '').strip(),
     }
 
     inputs.update(_load_json_env('ACC_WORKFLOW_INPUTS_JSON'))
 
+    if not inputs.get('job_query') and inputs.get('target_role'):
+        inputs['job_query'] = inputs['target_role']
+
     if not inputs.get('search_query'):
-        inputs['search_query'] = inputs.get('job_query') or inputs.get('target_role') or inputs.get('workflow_input') or 'sample_value'
+        inputs['search_query'] = inputs.get('job_query') or inputs.get('target_role') or inputs.get('workflow_input') or ''
 
     if not inputs.get('resume_content') and inputs.get('resume_file_path'):
         inputs['resume_content'] = inputs['resume_file_path']

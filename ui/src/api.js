@@ -12,5 +12,10 @@ export const listApprovals   = () => api.get("/ui/approvals").then(r => r.data);
 export const listSecrets     = () => api.get("/ui/secrets").then(r => r.data);
 export const getAdminSystem  = () => api.get("/admin/system").then(r => r.data);
 export const getAuditTrail   = () => api.get("/admin/audit").then(r => r.data);
+export const listWorkflows   = () => api.get("/taskbus/workflows").then(r => r.data);
+export const runWorkflow     = (workflow, body = {}) => api.post("/taskbus/workflow/run", { workflow, ...body }).then(r => r.data);
+export const runWorkflowParallel = (workflows, body = {}) => api.post("/taskbus/workflow/run/parallel", { workflows, ...body }).then(r => r.data);
+export const getAlphonsoBridgeStatus = () => api.get("/alphonso-bridge/status").then(r => r.data);
+export const listAlphonsoBridgePackets = (limit = 10) => api.get(`/alphonso-bridge/packets?limit=${limit}`).then(r => r.data);
 
 export default api;

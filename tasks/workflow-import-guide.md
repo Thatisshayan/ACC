@@ -4,6 +4,7 @@
 - **Location**: `cloud/workflows/n8n/`
 - **Import Method**: ACC sends a POST request to your n8n webhook URL (set in `.env` as `N8N_WEBHOOK_URL`).
 - **Trigger from Telegram**: Send message: `task: run workflow: [workflow-name]`
+- **Parallel mode**: `workflow: parallel [workflow-a], [workflow-b]`
 - **Example**: If file is `my_workflow.json`, trigger with `task: run workflow: my_workflow`
 
 ### 2. ChatGPT JSON Workflows (Custom GPT Actions/Schemas)
@@ -17,6 +18,7 @@
 - **Format**: `{"name": "crew-name", "agents": [{"role": "...", "goal": "...", "backstory": "..."}], "tasks": [{"description": "...", "agent": "..."}]}`
 - **How ACC reads them**: `crewai_agent.py` loads the JSON, creates agents/tasks, and executes the crew.
 - **Trigger from Telegram**: Send message: `crew: use-workflow [workflow-name]`
+- **Job application shortcut**: `apply for jobs for this role for me: [role]`
 
 ### 4. Step-by-Step: What Shayan Should Do RIGHT NOW
 
@@ -40,7 +42,7 @@
 
 5. **For CrewAI workflows**:
    - Verify JSON format matches the spec above
-   - Test: Send `crew: use-workflow [filename without .json]` in Telegram
+   - Test: Send `crew: use-workflow [filename without .json]` or `apply for jobs for this role for me: [role]` in Telegram
 
 6. **Restart ACC** (or run `node index.js` if in dev mode) to load new workflows.
 
