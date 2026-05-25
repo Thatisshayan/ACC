@@ -10,13 +10,19 @@ data/users/
 data/taskbus/
 data/run/
 data/alphonso-bridge/
+data/storage/
+data/*.json
+data/*.txt
 cloud/dlq/items/
+cloud/security/.approvals/
+cloud/security/.ephemeral_store/
 *.log
 bot.log
 
 # Dependencies
 node_modules/
 ui/node_modules/
+desktop/node_modules/
 
 # Build output
 dist/
@@ -26,17 +32,12 @@ ui/dist/
 *.tmp
 *.temp
 .cache/
-.env
-.env.*
-!.env.example
 serviceAccountKey.json
 *.pem
 *.key
-node_modules/  
 
 # Electron build artifacts
 desktop/dist/
 desktop/dist-verify/
 desktop/dist-verify2/
 desktop/dist-verify3/
-desktop/node_modules/
