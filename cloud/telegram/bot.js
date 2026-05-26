@@ -1326,7 +1326,7 @@ setInterval(function() {
   try { require('fs').writeFileSync(require('path').join(__dirname,'../../data/bot-heartbeat.json'), JSON.stringify({pid:process.pid,lastPoll:Date.now(),online:true})); } catch(e){}
 }, 30000);
 
-function poll() {
+async function poll() {
   while (running) {
     try {
       var updates = await tgGet('getUpdates', { offset: lastOffset, timeout: 20, allowed_updates: ['message','callback_query'] });
@@ -1384,4 +1384,4 @@ process.on('exit', function() {
   try { botLock.releaseBot(BOT_NAME); } catch (e) {}
 });
 
-module.exports = { send: sendMsg };
+module.exports = { send: sendMsg, handleMessage: handleMessage, handleCallback: handleCallback };
