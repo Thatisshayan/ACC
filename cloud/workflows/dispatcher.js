@@ -54,7 +54,7 @@ function runCrewAIProject(workflow, task) {
     var stderr = '';
     var timedOut = false;
 
-    var child = cp.spawn(CREWAI_PYTHON, [entrypoint], { cwd: sourceDir, env: env });
+    var child = cp.spawn(CREWAI_PYTHON, [entrypoint], { cwd: sourceDir, env: env, windowsHide: true });
 
     var timer = setTimeout(function() {
       timedOut = true;

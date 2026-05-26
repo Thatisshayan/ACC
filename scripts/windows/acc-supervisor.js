@@ -150,6 +150,12 @@ function ensureBackend() {
 }
 
 function ensureBot() {
+  // Bot runs on Railway in webhook mode — never start locally.
+  // If TELEGRAM_BOT_MODE is set to 'local' it can be re-enabled for dev work.
+  if (process.env.TELEGRAM_BOT_MODE !== 'local') {
+    log('bot skipped — running on Railway (set TELEGRAM_BOT_MODE=local to override)');
+    return;
+  }
   if (stopping) return;
   const activeBot = botLock.getActiveBot ? botLock.getActiveBot() : null;
   const lockInfo = botLock.getLockInfo ? botLock.getLockInfo() : { pid: null };
@@ -210,10 +216,12 @@ setInterval(() => {
     }
   });
 
-  const activeBot = botLock.getActiveBot ? botLock.getActiveBot() : null;
-  const lockInfo = botLock.getLockInfo ? botLock.getLockInfo() : { pid: null };
-  if (!(activeBot === 'cloud' && lockInfo.pid && isPidAlive(lockInfo.pid))) {
-    log('bot lock inactive; ensuring bot');
-    ensureBot();
+  if (process.env.TELEGRAM_BOT_MODE === 'local') {
+    const activeBot = botLock.getActiveBot ? botLock.getActiveBot() : null;
+    const lockInfo = botLock.getLockInfo ? botLock.getLockInfo() : { pid: null };
+    if (!(activeBot === 'cloud' && lockInfo.pid && isPidAlive(lockInfo.pid))) {
+      log('bot lock inactive; ensuring bot');
+      ensureBot();
+    }
   }
 }, 15000);

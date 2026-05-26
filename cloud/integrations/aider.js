@@ -39,7 +39,7 @@ async function runTask(repoPath, instruction, model) {
       '--message', instruction,
     ];
     console.log('[aider] Running in:', repoPath);
-    var proc = cp.spawn('aider', args, { cwd: repoPath || REPO, env: env, timeout: 120000 });
+    var proc = cp.spawn('aider', args, { cwd: repoPath || REPO, env: env, timeout: 120000, windowsHide: true });
     var out = ''; var err = '';
     proc.stdout.on('data', function(d){ out += d.toString(); });
     proc.stderr.on('data', function(d){ err += d.toString(); });

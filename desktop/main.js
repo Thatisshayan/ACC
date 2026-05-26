@@ -132,14 +132,30 @@ function findBackendRoot() {
   return null;
 }
 
+function resolveNodeBin() {
+  // Prefer a real node.exe from PATH over Electron-as-Node to avoid edge cases
+  // on Windows where Electron's node emulation can behave differently.
+  const candidates = ['node', 'node.exe'];
+  for (const bin of candidates) {
+    try {
+      require('child_process').execFileSync(bin, ['--version'], { timeout: 3000, windowsHide: true });
+      return bin;
+    } catch (_) {}
+  }
+  // Fall back to Electron-as-Node
+  return process.execPath;
+}
+
 function launchBackend(repoRoot) {
   const startScript = path.join(repoRoot, 'scripts', 'start.js');
-  const child = spawn(process.execPath, [startScript], {
+  const nodeBin = resolveNodeBin();
+  const child = spawn(nodeBin, [startScript], {
     cwd: repoRoot,
     env: {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
       PORT: String(BACKEND_PORT),
+      ACC_SKIP_TELEGRAM_BOT: '1',   // bot is on Railway; never start locally
+      ELECTRON_RUN_AS_NODE: undefined, // don't leak this into the real node process
     },
     detached: true,
     stdio: 'ignore',
