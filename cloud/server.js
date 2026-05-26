@@ -10,6 +10,8 @@ const dlqRoutes                = require("./admin/dlqRoutes.js");
 const securityApproval         = require("./api/securityApproval.js");
 const telegramWebhook          = require("./api/telegramWebhook.js");
 const webhookHandler           = require("./telegram/webhookHandler.js");
+const alphonsoBridge           = require("./api/alphonsoBridge.js");
+const statusSummary            = require("./api/statusSummary.js");
 const uiRoutes                 = require("./api/uiRoutes.js");
 const taskbusRoutes            = require("./taskbus/routes.js");
 const { startWSServer }        = require("./ws/server.js");
@@ -113,6 +115,8 @@ app.use("/api/taskbus", taskbusRoutes);
 app.use("/api", securityApproval);
 app.use("/api", telegramWebhook);
 app.use("/api", webhookHandler);
+app.use("/api/alphonso-bridge", alphonsoBridge);
+app.use("/api/status", statusSummary);
 
 // ---------- UI Routes ----------
 app.use("/api/ui", uiRoutes);
@@ -130,6 +134,8 @@ const httpServer = app.listen(PORT, () => {
   console.log(`[server] Routes: GET /api/health  POST /api/execute  GET /api/task/:id  POST /orchestrate`);
   console.log(`[server] Admin:  GET /admin/users  /admin/graphs  /admin/tasks  /admin/system`);
   console.log(`[server] UI:     GET /api/ui/dashboard  /api/ui/snapshots  /api/ui/approvals`);
+  console.log(`[server] Bridge: GET /api/alphonso-bridge/status  POST /api/alphonso-bridge`);
+  console.log(`[server] Status: GET /api/status  /api/status/summary`);
   console.log(`[server] WS:     ws://localhost:${PORT}/ws`);
   startWSServer(httpServer);
 });
