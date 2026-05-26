@@ -2,23 +2,192 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: #0A0A0F;
+  background: #050508;
   color: #e2e8f0;
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
+/* ── Scrollbars ────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,242,255,0.3); }
-
+::-webkit-scrollbar-thumb { background: rgba(26,255,140,0.18); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(26,255,140,0.4); }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-.fade-in { animation: fadeIn 0.3s ease forwards; }
+/* ── Core animations ───────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInFast {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Pulse / glow ──────────────────────────────────────────────────────────── */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(26,255,140,0.25), 0 0 12px rgba(26,255,140,0.1);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(26,255,140,0.55), 0 0 40px rgba(26,255,140,0.2), 0 0 60px rgba(26,255,140,0.08);
+  }
+}
+@keyframes glowPulseCyan {
+  0%, 100% { box-shadow: 0 0 8px rgba(0,242,255,0.2); }
+  50%       { box-shadow: 0 0 24px rgba(0,242,255,0.6), 0 0 48px rgba(0,242,255,0.2); }
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.7); }
+}
+@keyframes ripple {
+  0%   { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ── Scan line ─────────────────────────────────────────────────────────────── */
+@keyframes scanline {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.4; }
+  100% { transform: translateY(400%); opacity: 0; }
+}
+@keyframes scanlineH {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* ── Radar / sweep ─────────────────────────────────────────────────────────── */
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes radarPing {
+  0%   { transform: scale(0.3); opacity: 1; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* ── Float / breathe ───────────────────────────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-5px); }
+}
+@keyframes breathe {
+  0%, 100% { opacity: 0.7; }
+  50%       { opacity: 1; }
+}
+
+/* ── Blink / flicker ───────────────────────────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+@keyframes ledFlicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+  20%, 24%, 55% { opacity: 0.4; }
+}
+
+/* ── Counter / type-in ─────────────────────────────────────────────────────── */
+@keyframes countIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes typeIn {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+@keyframes cursorBlink {
+  0%, 100% { border-right-color: #1aff8c; }
+  50%       { border-right-color: transparent; }
+}
+
+/* ── Slide-up activity row ─────────────────────────────────────────────────── */
+@keyframes rowIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Utility classes ───────────────────────────────────────────────────────── */
+.fade-in        { animation: fadeIn 0.4s ease forwards; }
+.fade-in-fast   { animation: fadeInFast 0.2s ease forwards; }
+.slide-in-left  { animation: slideInLeft 0.4s ease forwards; }
+.float          { animation: float 4s ease-in-out infinite; }
+.breathe        { animation: breathe 3s ease-in-out infinite; }
+.blink          { animation: blink 1.1s step-end infinite; }
+.glow-green     { animation: glowPulse 2.5s ease-in-out infinite; }
+.glow-cyan      { animation: glowPulseCyan 2.5s ease-in-out infinite; }
+.count-in       { animation: countIn 0.5s ease forwards; }
+.row-in         { animation: rowIn 0.35s ease forwards; }
+.scanline       { animation: scanline 6s linear infinite; }
+.radar-spin     { animation: radarSweep 4s linear infinite; }
+
+/* ── ACC circuit-grid background ───────────────────────────────────────────── */
+.acc-grid-bg {
+  background-image:
+    linear-gradient(rgba(26,255,140,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,255,140,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Glowing border utility ────────────────────────────────────────────────── */
+.border-glow-green {
+  border-color: rgba(26,255,140,0.4) !important;
+  box-shadow: 0 0 0 1px rgba(26,255,140,0.15), inset 0 0 20px rgba(26,255,140,0.03);
+}
+.border-glow-green:hover {
+  border-color: rgba(26,255,140,0.65) !important;
+  box-shadow: 0 0 0 1px rgba(26,255,140,0.25), 0 0 16px rgba(26,255,140,0.15), inset 0 0 20px rgba(26,255,140,0.04);
+}
+
+/* ── Live dot with ripple ──────────────────────────────────────────────────── */
+.live-dot {
+  position: relative;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #1aff8c;
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #1aff8c;
+  animation: ripple 1.5s ease-out infinite;
+}
+
+/* ── Banner scan overlay ───────────────────────────────────────────────────── */
+.banner-scan::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(26,255,140,0.6), transparent);
+  animation: scanline 5s linear infinite;
+  pointer-events: none;
+}
+
+/* ── Stat card number ──────────────────────────────────────────────────────── */
+.stat-number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ── Terminal / mono text ──────────────────────────────────────────────────── */
+.terminal {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #1aff8c;
+}
