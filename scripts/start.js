@@ -30,8 +30,11 @@ if (!process.env.TELEGRAM_BOT_TOKEN) {
     var https = require('https');
     var token = process.env.TELEGRAM_BOT_TOKEN;
     
-    // Register webhook with Telegram
+    // Register webhook with Telegram (include secret_token if configured)
     var regUrl = 'https://api.telegram.org/bot' + token + '/setWebhook?url=' + encodeURIComponent(webhookUrl) + '&drop_pending_updates=true';
+    if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+      regUrl += '&secret_token=' + encodeURIComponent(process.env.TELEGRAM_WEBHOOK_SECRET);
+    }
     https.get(regUrl, function(res) {
       var d = '';
       res.on('data', function(c){ d += c; });

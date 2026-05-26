@@ -31,6 +31,11 @@ let backendState = {
 };
 let logFilePath = null;
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 function ensureDesktopLogFile() {
   if (logFilePath) return logFilePath;
 
@@ -323,6 +328,16 @@ app.whenReady().then(() => {
   ensureBackend().catch((err) => {
     notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend bootstrap failed: ${err.message}`);
   });
+});
+
+app.on('second-instance', () => {
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    return;
+  }
+  createWindow();
 });
 
 app.on('window-all-closed', () => {

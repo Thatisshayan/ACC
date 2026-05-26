@@ -566,7 +566,7 @@ function addResult(opts) {
     risks:                    JSON.stringify(opts.risks         || []),
     next_request:             opts.next_request      || '',
     request_id:               opts.request_id        || null,
-    receipt:                  opts.receipt           || null,
+    receipt:                  opts.receipt ? (typeof opts.receipt === 'string' ? opts.receipt : JSON.stringify(opts.receipt)) : null,
     failure_class:            opts.failure_class     || null,
     timestamp:                now,
   };

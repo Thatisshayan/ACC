@@ -22,7 +22,7 @@ function MessageBubble({ message, isMine }) {
     <div className={`max-w-[88%] rounded-[24px] px-4 py-3 border ${isMine ? 'ml-auto bg-emerald-500/12 border-emerald-500/25 text-emerald-50' : 'bg-white/[0.04] border-white/[0.06] text-zinc-100'}`}>
       <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-zinc-500">
         <span>{isMine ? 'You' : shortId(message.senderId)}</span>
-        <span>·</span>
+        <span>|</span>
         <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       <div className="whitespace-pre-wrap leading-relaxed">{message.content || '(empty message)'}</div>
@@ -30,11 +30,17 @@ function MessageBubble({ message, isMine }) {
   );
 }
 
-function Suggestion({ title, description, onClick }) {
+function PillButton({ active, children, onClick }) {
   return (
-    <button onClick={onClick} className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-left transition-colors hover:bg-white/[0.06]">
-      <div className="text-sm font-medium text-white">{title}</div>
-      <div className="mt-1 text-xs leading-relaxed text-zinc-500">{description}</div>
+    <button
+      onClick={onClick}
+      className={`rounded-2xl border px-4 py-2 text-sm transition-colors ${
+        active
+          ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200'
+          : 'border-white/[0.08] bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]'
+      }`}
+    >
+      {children}
     </button>
   );
 }
@@ -57,7 +63,10 @@ export default function Messenger() {
   const [mode, setMode] = useState('inbox');
 
   const currentUser = useMemo(() => users.find((user) => String(user.id) === String(currentUserId)), [users, currentUserId]);
-  const quickRecipients = useMemo(() => users.filter((user) => String(user.id) !== String(currentUserId)).slice(0, 4), [users, currentUserId]);
+  const quickRecipients = useMemo(
+    () => users.filter((user) => String(user.id) !== String(currentUserId)).slice(0, 4),
+    [users, currentUserId],
+  );
 
   async function refreshUsers() {
     const payload = await listMessengerUsers();
@@ -126,6 +135,13 @@ export default function Messenger() {
     }
     refreshThread(activeThreadId, currentUserId).catch((e) => setError(e.message || 'Thread load failed'));
   }, [activeThreadId, currentUserId]);
+
+  useEffect(() => {
+    const firstThread = threads[0];
+    if (firstThread && !activeThreadId) {
+      setActiveThreadId(firstThread.id);
+    }
+  }, [threads, activeThreadId]);
 
   async function handleEnsureUser() {
     if (!recipientId && !recipientName && !currentUserId) return;
@@ -214,18 +230,12 @@ export default function Messenger() {
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || threads[0] || null;
 
-  useEffect(() => {
-    if (activeThread && activeThread.id !== activeThreadId) {
-      setActiveThreadId(activeThread.id);
-    }
-  }, [threads.length]);
-
   if (loading) {
-    return <div className="p-6 text-zinc-400">Loading private messenger…</div>;
+    return <div className="p-6 text-zinc-400">Loading private messenger...</div>;
   }
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-[#0a0a0f] via-[#0c0f18] to-[#0a0a0f] p-4 md:p-6 pb-24 md:pb-6">
+    <div className="min-h-full bg-gradient-to-b from-[#0a0a0f] via-[#0c0f18] to-[#0a0a0f] p-4 pb-24 md:p-6 md:pb-6">
       <div className="mx-auto max-w-6xl space-y-4 md:space-y-6">
         <div className={`${shell} p-5 md:p-6`}>
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -262,28 +272,19 @@ export default function Messenger() {
 
         <div className={`${shell} p-3 md:p-4`}>
           <div className="grid grid-cols-3 gap-2 md:flex md:flex-wrap">
-            {[
-              { id: 'inbox', label: 'Inbox' },
-              { id: 'compose', label: 'Compose' },
-              { id: 'chat', label: 'Conversation' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setMode(item.id)}
-                className={`rounded-2xl border px-4 py-2 text-sm transition-colors ${mode === item.id ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200' : 'border-white/[0.08] bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]'}`}
-              >
-                {item.label}
-              </button>
-            ))}
+            <PillButton active={mode === 'inbox'} onClick={() => setMode('inbox')}>Inbox</PillButton>
+            <PillButton active={mode === 'compose'} onClick={() => setMode('compose')}>Compose</PillButton>
+            <PillButton active={mode === 'chat'} onClick={() => setMode('chat')}>Conversation</PillButton>
           </div>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
-          <div className={`${shell} p-4 md:p-5 space-y-4`}>
+          <div className={`${shell} p-4 space-y-4 md:p-5`}>
             <div>
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Identity</div>
               <div className="mt-1 text-sm text-zinc-400">Pick the sender and route a private conversation.</div>
             </div>
+
             <div className="space-y-3">
               <label className="block text-xs text-zinc-500">
                 Sender
@@ -294,7 +295,7 @@ export default function Messenger() {
                 >
                   <option value="">Select a user</option>
                   {users.map((user) => (
-                    <option key={user.id} value={user.id}>{user.name || user.id} · {user.role}</option>
+                    <option key={user.id} value={user.id}>{user.name || user.id} | {user.role}</option>
                   ))}
                 </select>
               </label>
@@ -352,7 +353,7 @@ export default function Messenger() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium text-white">Quick recipients</div>
-                  <div className="text-xs text-zinc-500 mt-1">Tap to prefill a recipient and jump to compose.</div>
+                  <div className="mt-1 text-xs text-zinc-500">Tap to prefill a recipient and jump to compose.</div>
                 </div>
               </div>
               <div className="mt-3 grid gap-2">
@@ -371,14 +372,14 @@ export default function Messenger() {
                     className="rounded-2xl border border-white/[0.06] bg-black/20 px-4 py-3 text-left transition-colors hover:bg-white/[0.06]"
                   >
                     <div className="text-sm text-white">{user.name || user.id}</div>
-                    <div className="mt-1 text-xs text-zinc-500">{user.role} · {user.state}</div>
+                    <div className="mt-1 text-xs text-zinc-500">{user.role} | {user.state}</div>
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className={`${shell} p-4 md:p-5 flex flex-col min-h-[70vh]`}>
+          <div className={`${shell} flex min-h-[70vh] flex-col p-4 md:p-5`}>
             {mode === 'inbox' && (
               <div className="flex-1 space-y-4">
                 <div className="flex items-start justify-between gap-3">
@@ -410,10 +411,10 @@ export default function Messenger() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate text-sm text-white">
-                            {thread.subject || thread.participants?.map((user) => user.name || user.id).filter(Boolean).join(' · ') || shortId(thread.id)}
+                            {thread.subject || thread.participants?.map((user) => user.name || user.id).filter(Boolean).join(' | ') || shortId(thread.id)}
                           </div>
                           <div className="mt-1 text-xs text-zinc-500">
-                            {thread.participants?.map((user) => user.name || user.id).join(' • ') || thread.participantIds.join(' • ')}
+                            {thread.participants?.map((user) => user.name || user.id).join(' | ') || thread.participantIds.join(' | ')}
                           </div>
                         </div>
                         <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-zinc-300">
@@ -433,7 +434,7 @@ export default function Messenger() {
                   <h2 className="mt-1 text-xl font-semibold text-white">Send an encrypted private message</h2>
                 </div>
                 <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-sm text-zinc-400">
-                  Sender: <span className="text-zinc-100">{currentUser?.name || currentUserId || 'not selected'}</span> · Recipient: <span className="text-zinc-100">{recipientName || recipientId || 'not selected'}</span>
+                  Sender: <span className="text-zinc-100">{currentUser?.name || currentUserId || 'not selected'}</span> | Recipient: <span className="text-zinc-100">{recipientName || recipientId || 'not selected'}</span>
                 </div>
                 <label className="block text-xs text-zinc-500">
                   Private message
@@ -442,7 +443,7 @@ export default function Messenger() {
                     onChange={(e) => setDraft(e.target.value)}
                     rows={6}
                     placeholder="Write a private message..."
-                    className="mt-1 w-full rounded-[24px] border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-white outline-none resize-none focus:border-emerald-500/40"
+                    className="mt-1 w-full resize-none rounded-[24px] border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500/40"
                   />
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -467,14 +468,14 @@ export default function Messenger() {
               <>
                 {activeThread ? (
                   <>
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-white/[0.06] pb-4">
+                    <div className="flex flex-col gap-3 border-b border-white/[0.06] pb-4 md:flex-row md:items-center md:justify-between">
                       <div>
                         <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Conversation</div>
                         <h2 className="mt-2 text-xl font-semibold text-white">
-                          {activeThread.subject || activeThread.participants?.map((user) => user.name || user.id).join(' · ') || shortId(activeThread.id)}
+                          {activeThread.subject || activeThread.participants?.map((user) => user.name || user.id).join(' | ') || shortId(activeThread.id)}
                         </h2>
                         <div className="mt-1 text-xs text-zinc-500">
-                          {activeThread.participants?.map((user) => user.name || user.id).join(' • ') || activeThread.participantIds.join(' • ')}
+                          {activeThread.participants?.map((user) => user.name || user.id).join(' | ') || activeThread.participantIds.join(' | ')}
                         </div>
                       </div>
                       <div className="text-xs text-zinc-500">
@@ -483,7 +484,7 @@ export default function Messenger() {
                       </div>
                     </div>
 
-                    <div className="flex-1 overflow-auto py-4 space-y-3">
+                    <div className="flex-1 space-y-3 overflow-auto py-4">
                       {threadMessages.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-white/[0.08] bg-black/20 px-4 py-10 text-center text-sm text-zinc-500">
                           No messages yet. Send the first private message.
@@ -505,7 +506,7 @@ export default function Messenger() {
                           onChange={(e) => setDraft(e.target.value)}
                           rows={4}
                           placeholder="Write a reply..."
-                          className="mt-1 w-full rounded-[24px] border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-white outline-none resize-none focus:border-emerald-500/40"
+                          className="mt-1 w-full resize-none rounded-[24px] border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500/40"
                         />
                       </label>
                       <div className="mt-3 flex flex-wrap gap-2">

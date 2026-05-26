@@ -47,14 +47,34 @@ export default function Assistant() {
   const [error, setError] = useState('');
   const [lastVoice, setLastVoice] = useState('');
 
-  const currentUser = useMemo(() => users.find((user) => String(user.id) === String(currentUserId)), [users, currentUserId]);
+  const currentUser = useMemo(
+    () => users.find((user) => String(user.id) === String(currentUserId)),
+    [users, currentUserId],
+  );
+
   const quickActions = useMemo(() => [
     'Show my inbox',
     'Show system status',
     'Send a private message to user X: Ready for approval.',
+    'Apply for jobs for me: product manager remote',
+    'Publish social content through alphonso and socialclaw',
+    'Show pending approvals',
+    'Show bridge packets',
+    'Show recent results',
     'What is the health of the messenger?',
     'Who is online right now?',
   ], []);
+
+  const workflowHints = [
+    { title: 'Inbox first', desc: 'Open the private messenger and check what needs attention.', text: 'Show my inbox' },
+    { title: 'Status sweep', desc: 'See the assistant, bot, bridge, and messenger truth together.', text: 'Show system status' },
+    { title: 'Send a note', desc: 'Route a private message to another ACC user.', text: 'Send a private message to user X: Ready for approval.' },
+    { title: 'Apply for roles', desc: 'Launch the job-apply workflow with a role and location.', text: 'Apply for jobs for me: product manager remote' },
+    { title: 'Publish lane', desc: 'Generate a social draft and hand it to SocialClaw.', text: 'Publish social content through alphonso and socialclaw' },
+    { title: 'Approvals', desc: 'Open the queue of waiting review actions.', text: 'Show pending approvals' },
+    { title: 'Recent results', desc: 'Inspect fresh workflow outputs and task outcomes.', text: 'Show recent results' },
+    { title: 'Bridge history', desc: 'Review the latest Alphonso packets and content sync activity.', text: 'Show bridge packets' },
+  ];
 
   async function refreshMeta() {
     const [usersPayload, statusPayload] = await Promise.all([
@@ -121,12 +141,6 @@ export default function Assistant() {
     }
   }
 
-  const workflowHints = [
-    { title: 'Inbox first', desc: 'Open the private messenger and check what needs attention.', text: 'Show my inbox' },
-    { title: 'Status sweep', desc: 'See the assistant, bot, bridge, and messenger truth together.', text: 'Show system status' },
-    { title: 'Send a note', desc: 'Route a private message to another ACC user.', text: 'Send a private message to user X: Ready for approval.' },
-  ];
-
   const status = assistantStatus || {};
 
   return (
@@ -165,7 +179,7 @@ export default function Assistant() {
                 <StatusCard
                   label="Assistant"
                   value={status.overall || 'ready'}
-                  detail={`Messenger ${status?.messenger?.status || 'unknown'} · Bot ${status?.bot?.status || 'unknown'}`}
+                  detail={`Messenger ${status?.messenger?.status || 'unknown'} - Bot ${status?.bot?.status || 'unknown'}`}
                 />
                 <StatusCard
                   label="User"
@@ -303,7 +317,7 @@ export default function Assistant() {
                 <StatusCard
                   label="Messenger"
                   value={status?.messenger?.status || 'ready'}
-                  detail={`Threads: ${status?.messenger?.threads ?? '—'} · Messages: ${status?.messenger?.messages ?? '—'}`}
+                  detail={`Threads: ${status?.messenger?.threads ?? 'n/a'} - Messages: ${status?.messenger?.messages ?? 'n/a'}`}
                 />
                 <StatusCard
                   label="Bot"
@@ -313,12 +327,12 @@ export default function Assistant() {
                 <StatusCard
                   label="Bridge"
                   value={status?.bridge?.status || 'unknown'}
-                  detail={`Packets: ${status?.bridge?.packetCount ?? '—'}`}
+                  detail={`Packets: ${status?.bridge?.packetCount ?? 'n/a'}`}
                 />
                 <StatusCard
                   label="Task Bus"
                   value={status?.taskbus?.status || 'ok'}
-                  detail={`Approvals: ${status?.taskbus?.pendingApprovals ?? '—'}`}
+                  detail={`Approvals: ${status?.taskbus?.pendingApprovals ?? 'n/a'}`}
                 />
               </div>
             </div>

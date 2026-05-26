@@ -56,6 +56,22 @@ const MOBILE_NAV = [
   { id: 'settings', label: 'More', icon: '⚙️' },
 ];
 
+const PAGE_PATHS = new Set([
+  'dashboard',
+  'tasks',
+  'approvals',
+  'messages',
+  'assistant',
+  'agents',
+  'integrations',
+  'settings',
+]);
+
+function pathToPage(pathname) {
+  const next = String(pathname || '').replace(/^\/+/, '').trim().toLowerCase();
+  return PAGE_PATHS.has(next) ? next : 'dashboard';
+}
+
 function normalizeBackendStatus(next) {
   if (!next) return DEFAULT_BACKEND_STATUS;
   if (typeof next === 'string') {
@@ -113,7 +129,7 @@ function Badge({ status }) {
 }
 
 export default function App() {
-  const [page, setPage]         = useState('dashboard');
+  const [page, setPage]         = useState(() => (typeof window !== 'undefined' ? pathToPage(window.location.pathname) : 'dashboard'));
   const [sidebar, setSidebar]   = useState(true);
   const [stats, setStats]       = useState({});
   const [tasks, setTasks]       = useState([]);
@@ -205,12 +221,35 @@ export default function App() {
     const id = setInterval(fetchAll, 8000);
     syncBackendStatus();
 
+    const syncRoute = () => {
+      if (typeof window === 'undefined') return;
+      const nextPage = pathToPage(window.location.pathname);
+      if (nextPage !== page) setPage(nextPage);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('popstate', syncRoute);
+      syncRoute();
+    }
+
     return () => {
       active = false;
       clearInterval(id);
       cleanupBackend();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('popstate', syncRoute);
+      }
     };
-  }, []);
+  }, [page]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const current = pathToPage(window.location.pathname);
+    const nextPath = `/${page}`;
+    if (current !== page || window.location.pathname !== nextPath) {
+      window.history.pushState({}, '', nextPath);
+    }
+  }, [page]);
 
   const pending = tasks.filter(t => t.status === 'waiting_approval');
   const socialclaw = integrations.socialclaw || {};
@@ -412,7 +451,7 @@ export default function App() {
                       <div>
                         <div className="text-sm font-medium text-white">{task.title || 'Untitled publish lane'}</div>
                         <div className="mt-1 text-xs text-zinc-500">
-                          {meta.workflow_stage || task.assigned_agent} ? {task.status}
+                          {meta.workflow_stage || task.assigned_agent} - {task.status}
                         </div>
                       </div>
                       <Badge status={task.status} />
@@ -458,7 +497,7 @@ export default function App() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-white">{t.title || t.id?.slice(0, 12)}</div>
-                    <div className="mt-1 text-xs text-zinc-500">{t.assigned_agent} ? {t.created_by}</div>
+                    <div className="mt-1 text-xs text-zinc-500">{t.assigned_agent} - {t.created_by}</div>
                   </div>
                   <Badge status={t.status} />
                 </div>
@@ -545,6 +584,11 @@ export default function App() {
   }
 
   function renderApprovals() {
+    const approvalStats = {
+      pending: pending.length,
+      urgent: pending.filter((t) => t.priority === 'P0').length,
+      waiting: pending.filter((t) => t.status === 'waiting_approval').length,
+    };
     return (
       <div className="p-4 sm:p-6 space-y-6">
         <Surface className="p-5 sm:p-6">
@@ -553,18 +597,28 @@ export default function App() {
             title={`Pending approvals (${pending.length})`}
             description="Every risky action should stay obvious, calm, and fast to review."
           />
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <MetricCard label="Pending" value={approvalStats.pending} detail="Items waiting for a human decision." icon="🛂" />
+            <MetricCard label="Urgent" value={approvalStats.urgent} detail="P0 items that should stay in the spotlight." icon="⚡" />
+            <MetricCard label="In queue" value={approvalStats.waiting} detail="Tasks currently blocked by approval." icon="🕒" />
+          </div>
         </Surface>
         {pending.length === 0
           ? <Surface className="p-12 text-center text-zinc-500">No pending approvals.</Surface>
           : <div className="grid gap-4">{pending.map((t) => {
               const busy = approvalBusy.has(t.id);
               const msg  = approvalMsg[t.id];
+              const meta = t.meta || {};
+              const createdBy = meta.createdBy || t.created_by || 'unknown';
+              const nodeId = meta.nodeId || meta.node_id || '—';
               return (
                 <Surface key={t.id} className="p-5 sm:p-6">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="text-lg font-medium text-white">{t.title}</div>
-                      <div className="mt-1 text-xs text-zinc-500">Agent: {t.assigned_agent} · Task: {t.id?.slice(0,8)}</div>
+                      <div className="mt-1 text-xs text-zinc-500">
+                        Agent: {t.assigned_agent} - Task: {t.id?.slice(0,8)} - Node: {nodeId}
+                      </div>
                     </div>
                     <Badge status={t.status} />
                   </div>
@@ -580,6 +634,12 @@ export default function App() {
                     <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-zinc-400">
                       <div className="uppercase tracking-[0.18em] text-[10px] text-zinc-600">Review mode</div>
                       <div className="mt-1 text-zinc-200">Human approval</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3 text-xs leading-relaxed text-zinc-400">
+                    <span className="uppercase tracking-[0.18em] text-[10px] text-zinc-600">Review context</span>
+                    <div className="mt-2 text-zinc-200">
+                      Created by {createdBy}. Keep this as a human decision point before any risky or external action.
                     </div>
                   </div>
                   {msg && (
@@ -692,7 +752,7 @@ export default function App() {
             </div>
             <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3 text-xs text-zinc-400 min-w-[220px]">
               <div className="text-zinc-500 uppercase tracking-[0.2em] text-[10px] mb-2">Workflow lane</div>
-              <div className="text-white font-medium">publish → socialclaw</div>
+              <div className="text-white font-medium">publish - socialclaw</div>
               <div className="mt-1">Approval gate: publish actions should remain review-first in ACC.</div>
             </div>
           </div>

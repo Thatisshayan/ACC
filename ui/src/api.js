@@ -19,10 +19,13 @@ export const listApprovals   = () => api.get("/ui/approvals").then(r => r.data);
 export const listSecrets     = () => api.get("/ui/secrets").then(r => r.data);
 export const getAdminSystem  = () => api.get("/admin/system").then(r => r.data);
 export const getAuditTrail   = () => api.get("/admin/audit").then(r => r.data);
+export const getStatusSummary = () => api.get("/status/summary").then(r => r.data);
 
 // ── Task Bus ──────────────────────────────────────────────────────────────────
 export const getTaskbusStats        = () => api.get("/taskbus/stats").then(r => r.data);
 export const getTaskbusTasks        = (filter = {}) => api.get("/taskbus/tasks", { params: filter }).then(r => r.data);
+export const getTaskbusApprovals    = () => api.get("/taskbus/approvals").then(r => r.data);
+export const getTaskbusResults      = (limit = 12) => api.get("/taskbus/results", { params: { limit } }).then(r => r.data);
 export const getTaskbusIntegrations = () => api.get("/taskbus/integrations/status").then(r => r.data);
 export const listAgents             = () => api.get("/taskbus/agents").then(r => r.data);
 export const createTask             = (payload = {}) => api.post("/taskbus/task", payload).then(r => r.data);

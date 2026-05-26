@@ -1,5 +1,7 @@
 @echo off
-taskkill /F /IM electron.exe 2>nul
-timeout /t 2 /nobreak >nul
-start "" "C:\Users\Shaya\agent-command-center\desktop\node_modules\.bin\electron.cmd" "C:\Users\Shaya\agent-command-center\desktop"
-echo Dashboard launched!
+setlocal
+set "ROOT=C:\Users\Shaya\agent-command-center"
+set "ELECTRON=%ROOT%\desktop\node_modules\.bin\electron.cmd"
+
+start "" "%ELECTRON%" "%ROOT%\desktop"
+exit /b 0

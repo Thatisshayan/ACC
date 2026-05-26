@@ -33,7 +33,22 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use(cors());
+// CORS — allow Railway domain + any explicitly listed origins.
+// Set CORS_ALLOWED_ORIGINS=https://foo.up.railway.app,https://example.com to extend.
+// Requests with no Origin header (server-to-server, curl) always pass through.
+const _corsOrigins = [
+  'https://acc-production-a26c.up.railway.app',
+  ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
+];
+app.use(cors({
+  origin: function(origin, cb) {
+    if (!origin) return cb(null, true); // same-origin / server-to-server
+    if (process.env.NODE_ENV !== 'production') return cb(null, true); // open in dev
+    if (_corsOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('CORS blocked: ' + origin));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(limiter); // Apply rate limiting to all routes
 

@@ -4,14 +4,12 @@
 // POST /api/voice/transcribe — accepts audio, returns transcript + task routing
 
 var express  = require('express');
-var fs       = require('fs');
-var path     = require('path');
 var axios    = require('axios');
 var router   = express.Router();
 var FormData = require('form-data');
+var assistant = require('../messages/service.js');
 
 var OPENAI_KEY = process.env.OPENAI_API_KEY;
-var ACC_PORT   = process.env.PORT || '4000';
 
 // Wake word patterns to strip before routing
 var WAKE_WORDS = /^(hey\s+acc|ok\s+acc|okay\s+acc|acc)[,\s]+/i;
@@ -39,18 +37,31 @@ async function transcribeWithWhisper(audioBuffer, mimeType) {
   }
 }
 
-// Route command text to ACC Task Bus
-async function routeToTaskBus(command, userId) {
+// Route command text through the assistant contract first.
+async function routeThroughAssistant(command, userId) {
   try {
-    var res = await axios.post('http://localhost:' + ACC_PORT + '/api/taskbus/task', {
-      title: command.slice(0, 80),
-      instruction: command,
-      assigned_agent: 'claude',
-      automation_mode: 'semi_auto',
-      approval_required: false,
-      created_by: userId || 'voice',
-    }, { timeout: 30000 });
-    return res.data;
+    var parsed = assistant.parseAssistantIntent(command);
+    var result = await assistant.executeAssistantIntent({
+      text: command,
+      userId: userId || 'voice',
+      intent: parsed.intent,
+      arguments: parsed.arguments || {},
+      senderType: 'voice',
+      transport: 'voice',
+      createdBy: userId || 'voice',
+      approvalRequired: true,
+      meta: {
+        source: 'voice',
+        parsed_intent: parsed.intent,
+      },
+    });
+    return {
+      success: true,
+      parsed: parsed,
+      result: result,
+      taskId: result && result.task && result.task.id ? result.task.id : null,
+      routing: result && result.routing ? result.routing : null,
+    };
   } catch(e) {
     return { success: false, error: e.message };
   }
@@ -82,14 +93,17 @@ router.post('/transcribe', async function(req, res) {
     var command = stripWakeWord(transcript);
     if (!command) return res.json({ success: false, transcript: transcript, error: 'No command detected after wake word' });
 
-    // Route to Task Bus
-    var routing = await routeToTaskBus(command, req.body && req.body.userId);
+    // Route through assistant parse/execute first.
+    var routing = await routeThroughAssistant(command, req.body && req.body.userId);
 
     res.json({
       success: true,
       transcript: transcript,
       command: command,
-      taskId: routing.task && routing.task.id,
+      parsed: routing.parsed || null,
+      intent: routing.parsed && routing.parsed.intent ? routing.parsed.intent : null,
+      assistant: routing.result || null,
+      taskId: routing.taskId || null,
       routing: routing.routing || {},
     });
   } catch(e) {
