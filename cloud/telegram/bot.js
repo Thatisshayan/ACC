@@ -225,6 +225,89 @@ function getACC(p) {
   });
 }
 
+function formatMessengerThread(thread, currentUserId) {
+  var last = thread.lastMessage || {};
+  var sender = String(last.senderId || '') === String(currentUserId) ? 'You' : (last.senderId || 'unknown');
+  return [
+    (thread.subject || 'Private thread'),
+    'Thread: ' + String(thread.id || '').slice(0, 8),
+    'Participants: ' + (thread.participants && thread.participants.length ? thread.participants.map(function(user) {
+      return user.name || user.id;
+    }).join(' • ') : (thread.participantIds || []).join(' • ')),
+    'Unread: ' + String(thread.unreadCount || 0),
+    last.content ? ('Last from ' + sender + ': ' + String(last.content).slice(0, 120)) : 'No messages yet.',
+  ].join('\n');
+}
+
+async function showMessengerInbox(chatId, userId) {
+  var inbox = await getACC('/api/messages/inbox?userId=' + encodeURIComponent(userId));
+  var threads = inbox && Array.isArray(inbox.threads) ? inbox.threads : [];
+  if (!threads.length) {
+    await sendMsg(chatId, '💬 *Private inbox*\n\nNo threads yet. Start one from the ACC app or with `/msg <recipientId> <message>`.');
+    return;
+  }
+  var rows = threads.slice(0, 5).map(function(thread) {
+    return [{ text: trimWorkflowLabel(thread.subject || (thread.participants && thread.participants[0] && thread.participants[0].name) || thread.id, 28), callback_data: 'messenger_thread:' + String(thread.id) }];
+  });
+  rows.push([{ text: '🔄 Refresh inbox', callback_data: 'messenger_inbox' }, { text: '💬 New message', callback_data: 'menu_more' }]);
+  await sendButtons(chatId, '💬 *Private inbox*\n\n' + threads.slice(0, 5).map(function(thread) {
+    return formatMessengerThread(thread, userId);
+  }).join('\n\n---\n\n'), rows);
+}
+
+async function showMessengerThread(chatId, userId, threadId) {
+  var thread = await getACC('/api/messages/threads/' + encodeURIComponent(threadId) + '?userId=' + encodeURIComponent(userId));
+  if (!thread || thread.success === false || !thread.thread) {
+    await sendMsg(chatId, '❌ Thread not found.');
+    return;
+  }
+  var messages = Array.isArray(thread.messages) ? thread.messages : [];
+  var text = [
+    '💬 *' + (thread.thread.subject || 'Private thread') + '*',
+    'Thread: `' + String(thread.thread.id || '').slice(0, 8) + '`',
+    '',
+    messages.length ? messages.slice(-5).map(function(message) {
+      var sender = String(message.senderId || '') === String(userId) ? 'You' : (message.senderId || 'unknown');
+      return '*' + sender + '*: ' + String(message.content || '').slice(0, 400);
+    }).join('\n\n') : 'No messages yet.',
+  ].join('\n');
+  await sendButtons(chatId, text, [
+    [{ text: '💬 Inbox', callback_data: 'messenger_inbox' }, { text: '🔄 Refresh', callback_data: 'messenger_thread:' + String(threadId) }],
+    [{ text: '📊 Dashboard', callback_data: 'menu_dashboard' }],
+  ]);
+}
+
+async function sendMessengerFromTelegram(chatId, userId, text) {
+  var match = String(text || '').match(/^\/(?:msg|dm)\s+(\S+)(?:\s+|:\s*)([\s\S]+)$/i);
+  if (!match) {
+    await sendMsg(chatId, 'Usage: `/msg <recipientId> <message>`');
+    return;
+  }
+  var recipientQuery = match[1].trim();
+  var content = match[2].trim();
+  var result = await callACC('/api/messages/send', {
+    senderId: userId,
+    recipientId: recipientQuery,
+    recipientQuery: recipientQuery,
+    content: content,
+    createdBy: userId,
+    transport: 'telegram',
+    senderType: 'user',
+  });
+
+  if (result && result.success) {
+    await sendMsg(chatId, '✅ Message sent into ACC inbox.' + (result.delivery && result.delivery.mirrored ? '\n\nTelegram mirror attempted.' : ''));
+    return;
+  }
+
+  if (result && result.needsClarification && Array.isArray(result.questions) && result.questions.length) {
+    await sendMsg(chatId, '⚠️ ' + result.questions[0]);
+    return;
+  }
+
+  await sendMsg(chatId, '❌ Could not send message.');
+}
+
 // ── executeAndReply: Task Bus ONLY — polls for real result ──────────────────
 async function executeAndReply(chatId, agentType, prompt, language) {
   var SHORT_CONTEXT = 'Keep answer SHORT (max 150 words). Bullet points. Practical. No fluff.';
@@ -333,6 +416,8 @@ async function handleMessage(msg) {
   if (text === '/notes')       { await sendButtons(chatId, '📝 *Notes Vault*', notesMenu(userId)); return; }
   if (text === '/tracker')     { await sendMsg(chatId, jobTracker.formatTracker(userId, user.language)); return; }
   if (text === '/jobs')        { await sendButtons(chatId, t(userId,'main_menu',{name:user.name||'friend'}), jobsMenu(userId)); return; }
+  if (text === '/inbox' || text === '/messages') { await showMessengerInbox(chatId, userId); return; }
+  if (/^\/(?:msg|dm)\b/i.test(text)) { await sendMessengerFromTelegram(chatId, userId, text); return; }
   if (/^(job[\s_-]?apply[\s_-]?guided|\/jobapply|\/job-apply)$/i.test(text)) {
     await handleCallback({
       id: 'text_job_apply_guided_' + Date.now(),
@@ -823,6 +908,16 @@ async function handleCallback(cb) {
 
   if (data === 'workflow_menu') {
     await sendButtons(chatId, '🧭 *Workflow Launcher*\n\nPick a workflow to run.', workflowMenu(userId));
+    return;
+  }
+
+  if (data === 'messenger_inbox') {
+    await showMessengerInbox(chatId, userId);
+    return;
+  }
+
+  if (data && data.indexOf('messenger_thread:') === 0) {
+    await showMessengerThread(chatId, userId, data.split(':')[1]);
     return;
   }
 
@@ -1320,10 +1415,9 @@ var lastOffset = 0;
 var lastPollErrorKey = null;
 var lastPollErrorAt = 0;
 
-async 
 // Write heartbeat every 30s so admin/system can detect bot is alive
 setInterval(function() {
-  try { require('fs').writeFileSync(require('path').join(__dirname,'../../data/bot-heartbeat.json'), JSON.stringify({pid:process.pid,lastPoll:Date.now(),online:true})); } catch(e){}
+  try { require('fs').writeFileSync(require('path').join(__dirname,'../../data/run/bot-heartbeat.json'), JSON.stringify({pid:process.pid,lastPoll:Date.now(),online:true})); } catch(e){}
 }, 30000);
 
 async function poll() {

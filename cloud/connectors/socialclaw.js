@@ -8,6 +8,23 @@ const path = require("path");
 const os = require("os");
 const { BaseConnector } = require("./baseConnector.js");
 
+// ── CLI path validation ───────────────────────────────────────────────────────
+// Only allow executables whose basename matches the socialclaw pattern.
+// Prevents an attacker who controls SOCIALCLAW_CLI_PATH from running arbitrary code.
+const SAFE_CLI_RE = /^socialclaw(\.exe|\.cmd|\.bat)?$/i;
+
+function validateCliPath(cliPath) {
+  if (!cliPath) return { valid: false, reason: "empty CLI path" };
+  var base = path.basename(String(cliPath));
+  if (!SAFE_CLI_RE.test(base)) {
+    return { valid: false, reason: 'CLI basename "' + base + '" does not match expected "socialclaw[.exe|.cmd|.bat]"' };
+  }
+  if (path.isAbsolute(cliPath) && path.normalize(cliPath).includes("..")) {
+    return { valid: false, reason: "CLI path contains path traversal" };
+  }
+  return { valid: true };
+}
+
 function parseJsonish(text) {
   const raw = String(text || "").trim();
   if (!raw) return null;
@@ -42,10 +59,18 @@ class SocialClawConnector extends BaseConnector {
     });
 
     this.baseUrl = config.baseUrl || process.env.SOCIALCLAW_BASE_URL || "https://getsocialclaw.com";
-    this.cliPath = config.cliPath || process.env.SOCIALCLAW_CLI_PATH || "socialclaw";
     this.workspaceId = config.workspaceId || process.env.SOCIALCLAW_WORKSPACE_ID || "";
     this.dataDir = path.join(__dirname, "..", "..", "data", "run", "socialclaw");
     this.timeoutMs = Math.max(10000, parseInt(process.env.SOCIALCLAW_CLI_TIMEOUT_MS || "60000", 10) || 60000);
+
+    var rawCli = config.cliPath || process.env.SOCIALCLAW_CLI_PATH || "socialclaw";
+    var cliCheck = validateCliPath(rawCli);
+    if (!cliCheck.valid) {
+      console.error("[socialclaw] UNSAFE CLI path rejected —", cliCheck.reason, "| value:", String(rawCli).slice(0, 100));
+      this.cliPath = null; // disabled; execCli will refuse to run
+    } else {
+      this.cliPath = rawCli;
+    }
 
     if (!this.apiKey) console.warn("[socialclaw] SOCIALCLAW_API_KEY not set. Connector will stay setup_required until configured.");
   }
@@ -59,6 +84,9 @@ class SocialClawConnector extends BaseConnector {
   }
 
   execCli(args, options = {}) {
+    if (!this.cliPath) {
+      return Promise.resolve({ success: false, code: -1, stdout: "", stderr: "", error: "SocialClaw CLI path is invalid or was rejected by safety check" });
+    }
     return new Promise((resolve) => {
       const child = cp.execFile(this.cliPath, args, {
         env: this.buildEnv(options.env),

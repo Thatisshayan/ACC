@@ -38,6 +38,24 @@ export const publishSocialclawCampaign = (payload = {}) =>
 export const deleteSocialclawPost = (payload = {}) =>
   api.post("/taskbus/socialclaw/delete", payload).then(r => r.data);
 
+// â”€â”€ Private messenger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const getMessengerStatus  = () => api.get("/messages/status").then(r => r.data);
+export const listMessengerUsers  = () => api.get("/messages/users").then(r => r.data);
+export const ensureMessengerUser = (payload = {}) => api.post("/messages/users", payload).then(r => r.data);
+export const getMessengerInbox   = (userId) => api.get("/messages/inbox", { params: { userId } }).then(r => r.data);
+export const listMessengerThreads = (userId) => api.get("/messages/threads", { params: { userId } }).then(r => r.data);
+export const getMessengerThread  = (threadId, userId) =>
+  api.get(`/messages/threads/${threadId}`, { params: { userId } }).then(r => r.data);
+export const createMessengerThread = (payload = {}) => api.post("/messages/threads", payload).then(r => r.data);
+export const sendMessengerMessage = (payload = {}) => api.post("/messages/send", payload).then(r => r.data);
+export const markMessengerRead    = (payload = {}) => api.post("/messages/read", payload).then(r => r.data);
+export const updateMessengerPresence = (payload = {}) => api.post("/messages/presence", payload).then(r => r.data);
+
+// â”€â”€ Assistant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const parseAssistantPrompt = (payload = {}) => api.post("/assistant/parse", payload).then(r => r.data);
+export const executeAssistantPrompt = (payload = {}) => api.post("/assistant/execute", payload).then(r => r.data);
+export const getAssistantStatus   = () => api.get("/assistant/status").then(r => r.data);
+
 export const listWorkflows          = () => api.get("/taskbus/workflows").then(r => r.data);
 export const runWorkflow            = (workflowKey, opts = {}) =>
   api.post("/taskbus/workflow/run", { workflow: workflowKey, ...opts }).then(r => r.data);

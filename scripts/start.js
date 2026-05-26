@@ -16,6 +16,8 @@ console.log("[start] ACC v2 server started on :" + port);
 // ─────────────────────────────────────────────────────────────────────────────
 if (!process.env.TELEGRAM_BOT_TOKEN) {
   console.warn("[start] TELEGRAM_BOT_TOKEN not set — bot not started.");
+} else if (process.env.ACC_SKIP_TELEGRAM_BOT === '1' || process.env.ACC_SUPERVISED === '1') {
+  console.log("[start] Telegram bot startup skipped by supervisor.");
 } else {
   var isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_NAME || process.env.RAILWAY_PUBLIC_DOMAIN;
   

@@ -18,8 +18,8 @@ Write-LauncherLog 'Launcher invoked.'
 
 try {
   Set-Location $repoRoot
-  cmd.exe /c start "" /b node scripts/windows/acc-supervisor.js
-  Write-LauncherLog 'Supervisor launch requested (cmd start /b).'
+  Start-Process -FilePath 'node.exe' -ArgumentList @('scripts/windows/acc-supervisor.js') -WorkingDirectory $repoRoot -WindowStyle Hidden
+  Write-LauncherLog 'Supervisor launch requested (Start-Process hidden).'
 } catch {
   Write-LauncherLog ('Failed to launch supervisor: ' + $_.Exception.Message)
   throw

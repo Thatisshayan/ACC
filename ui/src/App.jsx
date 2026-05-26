@@ -17,6 +17,9 @@ import {
   publishSocialclawCampaign,
   deleteSocialclawPost,
 } from './api.js';
+import api from './api.js';
+import MessengerPage from './pages/Messenger.jsx';
+import AssistantPage from './pages/Assistant.jsx';
 
 // In Electron the UI loads from file:// so relative URLs won't reach the backend.
 // In browser (dev+prod) use relative paths so Vite proxy / Express serve correctly.
@@ -38,9 +41,19 @@ const NAV = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '📊' },
   { id: 'tasks',        label: 'Tasks',         icon: '📋' },
   { id: 'approvals',    label: 'Approvals',     icon: '✅' },
+  { id: 'messages',     label: 'Messages',     icon: '💬' },
+  { id: 'assistant',    label: 'Assistant',    icon: '🎙️' },
   { id: 'agents',       label: 'Agents',        icon: '🤖' },
   { id: 'integrations', label: 'Integrations',  icon: '🔗' },
   { id: 'settings',     label: 'Settings',      icon: '⚙️' },
+];
+
+const MOBILE_NAV = [
+  { id: 'dashboard', label: 'Home', icon: '🏠' },
+  { id: 'messages', label: 'Chat', icon: '💬' },
+  { id: 'assistant', label: 'Talk', icon: '🎙️' },
+  { id: 'approvals', label: 'Approve', icon: '✅' },
+  { id: 'settings', label: 'More', icon: '⚙️' },
 ];
 
 function normalizeBackendStatus(next) {
@@ -284,11 +297,50 @@ export default function App() {
   function renderDashboard() {
     const byStatus = stats.by_status || {};
     return (
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Dashboard</h2>
-          <StatusPill backend={backend} />
-        </div>
+      <div className="p-4 sm:p-6 space-y-6">
+        <Surface className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.15),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.13),transparent_30%)]" />
+          <div className="relative p-6 sm:p-7">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl space-y-4">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-zinc-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Live control surface
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">
+                    ACC dashboard, but cleaner, calmer, and more premium.
+                  </h2>
+                  <p className="max-w-2xl text-sm sm:text-base leading-relaxed text-zinc-400">
+                    Monitor the brain, push work through approvals, and keep the SocialClaw publish lane visible without drowning in admin noise.
+                  </p>
+                </div>
+              </div>
+              <StatusPill backend={backend} />
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Backend</div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  <span className="text-sm font-medium text-white">{backend.status}</span>
+                </div>
+                <div className="mt-1 text-xs text-zinc-500">{backend.detail}</div>
+              </div>
+              <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Approvals</div>
+                <div className="mt-1 text-2xl font-semibold text-white">{pending.length}</div>
+                <div className="text-xs text-zinc-500">Waiting review</div>
+              </div>
+              <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Publish lane</div>
+                <div className="mt-1 text-sm font-medium text-white">{socialclaw.status || 'setup_required'}</div>
+                <div className="mt-1 text-xs text-zinc-500">{socialclaw.note || 'ACC to SocialClaw handoff'}</div>
+              </div>
+            </div>
+          </div>
+        </Surface>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Tasks"  value={stats.total_tasks || 0}       color="text-white" />
           <StatCard label="Completed"    value={byStatus.done || 0}            color="text-emerald-400" />
@@ -296,92 +348,90 @@ export default function App() {
           <StatCard label="Pending"      value={stats.pending_approvals || 0}  color="text-amber-400" />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium text-white">ACC Social Publish Pipeline</div>
-                <div className="text-xs text-zinc-500 mt-1">Plan with ACC, generate with Alphonso, then approve and publish via SocialClaw.</div>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded-full border ${socialclawIsReady ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/15 text-amber-400 border-amber-500/20'}`}>
-                {socialclaw.status || 'setup_required'}
-              </span>
-            </div>
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <Surface className="p-5 sm:p-6">
+            <SectionHeader
+              eyebrow="Publishing lane"
+              title="SocialClaw handoff"
+              description="Plan in ACC, generate with Alphonso, review in ACC, then publish through SocialClaw. The lane stays truth-gated until the API key exists."
+              action={<span className={`rounded-full border px-3 py-1 text-xs ${socialclawIsReady ? 'border-emerald-500/20 bg-emerald-500/12 text-emerald-300' : 'border-amber-500/20 bg-amber-500/12 text-amber-300'}`}>{socialclaw.status || 'setup_required'}</span>}
+            />
 
-            <div className="mt-4 rounded-xl border border-white/[0.06] bg-black/20 p-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">1. ACC intake</span>
-                <span>→</span>
-                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">2. Alphonso generate</span>
-                <span>→</span>
-                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">3. ACC review</span>
-                <span>→</span>
-                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">4. SocialClaw publish</span>
+            <div className="mt-5 rounded-2xl border border-white/[0.08] bg-black/20 p-4 sm:p-5">
+              <div className="grid gap-2 text-xs sm:grid-cols-4">
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-center text-zinc-200">1. ACC intake</div>
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-center text-zinc-200">2. Alphonso generate</div>
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-center text-zinc-200">3. ACC approval</div>
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-center text-zinc-200">4. SocialClaw publish</div>
               </div>
+
               <textarea
                 value={socialclawDraft}
                 onChange={(e) => setSocialclawDraft(e.target.value)}
                 rows={4}
-                className="mt-4 w-full rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-500/40"
+                className="mt-4 w-full rounded-2xl border border-white/[0.08] bg-black/35 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-emerald-500/40 focus:bg-black/45"
                 placeholder="Draft the social post here..."
               />
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button onClick={launchSocialPublishPipeline} disabled={!!pipelineAction}
-                  className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-sm text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50">
+                  className="rounded-xl border border-emerald-500/25 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50">
                   {pipelineAction === 'launching' ? 'Launching...' : 'Launch pipeline'}
                 </button>
                 <button onClick={() => handleSocialClaw('preview')} disabled={!!socialclawAction}
-                  className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm text-white hover:bg-white/15 disabled:opacity-50">
+                  className="rounded-xl border border-white/10 bg-white/8 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/12 disabled:opacity-50">
                   {socialclawAction === 'preview' ? 'Previewing...' : 'Preview only'}
                 </button>
                 <button onClick={() => handleSocialClaw('validate')} disabled={!!socialclawAction}
-                  className="px-3 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sm text-sky-300 hover:bg-sky-500/20 disabled:opacity-50">
+                  className="rounded-xl border border-sky-500/25 bg-sky-500/12 px-4 py-2 text-sm font-medium text-sky-300 transition hover:bg-sky-500/18 disabled:opacity-50">
                   {socialclawAction === 'validate' ? 'Validating...' : 'Validate draft'}
                 </button>
               </div>
-              <div className="mt-3 text-xs text-zinc-500">
+              <div className="mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-xs leading-relaxed text-zinc-400">
                 Publish remains truth-gated until <span className="font-mono text-zinc-200">SOCIALCLAW_API_KEY</span> is set.
               </div>
             </div>
-          </div>
+          </Surface>
 
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium text-white">Publisher Inbox</div>
-              <div className="text-xs text-zinc-500">{publisherInbox.length} items</div>
-            </div>
-            <div className="mt-4 space-y-3">
+          <Surface className="p-5 sm:p-6">
+            <SectionHeader
+              eyebrow="Publisher inbox"
+              title="Queued publish work"
+              description="The publish lane should feel like a focused inbox, not a generic task table."
+              action={<span className="text-xs text-zinc-500">{publisherInbox.length} items</span>}
+            />
+            <div className="mt-5 space-y-3">
               {publisherInbox.length === 0 ? (
-                <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4 text-sm text-zinc-500">
+                <div className="rounded-2xl border border-dashed border-white/[0.10] bg-black/20 p-5 text-sm text-zinc-500">
                   No publish drafts queued yet. Launch the pipeline to create a draft task and publish handoff.
                 </div>
               ) : publisherInbox.map((task) => {
                 const meta = task.meta || {};
                 return (
-                  <div key={task.id} className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+                  <div key={task.id} className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-sm text-white">{task.title || 'Untitled publish lane'}</div>
-                        <div className="text-xs text-zinc-500 mt-1">
-                          {meta.workflow_stage || task.assigned_agent} · {task.status}
+                        <div className="text-sm font-medium text-white">{task.title || 'Untitled publish lane'}</div>
+                        <div className="mt-1 text-xs text-zinc-500">
+                          {meta.workflow_stage || task.assigned_agent} ? {task.status}
                         </div>
                       </div>
                       <Badge status={task.status} />
                     </div>
+                    <div className="mt-2 text-xs text-zinc-500">Updated {taskTime(task.created_at)}</div>
                     {meta.workflow_parent_task_id && (
                       <div className="mt-2 text-xs text-zinc-500">Parent task: {String(meta.workflow_parent_task_id).slice(0, 8)}</div>
                     )}
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       <button
                         onClick={() => setPage('tasks')}
-                        className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-xs text-zinc-200 hover:bg-white/15"
+                        className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/[0.12]"
                       >
                         Open task
                       </button>
                       {task.status === 'waiting_approval' && (
                         <button
                           onClick={() => setPage('approvals')}
-                          className="px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-xs text-amber-300 hover:bg-amber-500/20"
+                          className="rounded-xl border border-amber-500/25 bg-amber-500/12 px-3 py-2 text-xs text-amber-300 transition hover:bg-amber-500/18"
                         >
                           Review approval
                         </button>
@@ -391,90 +441,169 @@ export default function App() {
                 );
               })}
             </div>
-          </div>
+          </Surface>
         </div>
 
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
-          <div className="px-5 py-3 border-b border-white/[0.06]">
-            <span className="text-sm font-medium text-white">Live Task Feed</span>
+        <Surface>
+          <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+            <SectionHeader
+              eyebrow="Live feed"
+              title="Recent tasks"
+              description="A cleaner view of current work, with status and ownership up front."
+            />
           </div>
-          <div className="divide-y divide-white/[0.04]">
-            {tasks.slice(0, 10).map((t, i) => (
-              <div key={i} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <div className="text-sm text-zinc-200">{t.title || t.id?.slice(0,12)}</div>
-                  <div className="text-xs text-zinc-600">{t.assigned_agent} · {t.created_by}</div>
+          <div className="grid gap-3 p-4 sm:p-5 lg:grid-cols-2 xl:grid-cols-3">
+            {tasks.slice(0, 9).map((t) => (
+              <div key={t.id} className="rounded-2xl border border-white/[0.08] bg-black/20 p-4 transition hover:border-white/[0.14] hover:bg-black/25">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-white">{t.title || t.id?.slice(0, 12)}</div>
+                    <div className="mt-1 text-xs text-zinc-500">{t.assigned_agent} ? {t.created_by}</div>
+                  </div>
+                  <Badge status={t.status} />
                 </div>
-                <Badge status={t.status} />
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-500">
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+                    <div className="uppercase tracking-[0.18em] text-[10px] text-zinc-600">Created</div>
+                    <div className="mt-1 text-zinc-300">{taskTime(t.created_at)}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+                    <div className="uppercase tracking-[0.18em] text-[10px] text-zinc-600">State</div>
+                    <div className="mt-1 text-zinc-300">{t.status}</div>
+                  </div>
+                </div>
               </div>
             ))}
-            {tasks.length === 0 && <div className="px-5 py-8 text-center text-zinc-600 text-sm">No tasks yet. Send a task to @OurAccbot to get started.</div>}
+            {tasks.length === 0 && (
+              <div className="col-span-full rounded-2xl border border-dashed border-white/[0.08] bg-black/20 px-5 py-10 text-center text-sm text-zinc-500">
+                No tasks yet. Send a task to @OurAccbot to get started.
+              </div>
+            )}
           </div>
-        </div>
+        </Surface>
       </div>
     );
   }
 
   function renderTasks() {
+    const statusGroups = [
+      { key: 'waiting_approval', label: 'Waiting approval', tone: 'text-amber-300', bg: 'bg-amber-500/10' },
+      { key: 'in_progress', label: 'In progress', tone: 'text-sky-300', bg: 'bg-sky-500/10' },
+      { key: 'done', label: 'Done', tone: 'text-emerald-300', bg: 'bg-emerald-500/10' },
+      { key: 'failed', label: 'Failed', tone: 'text-red-300', bg: 'bg-red-500/10' },
+    ];
     return (
-      <div className="p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">All Tasks</h2>
-        <div className="rounded-xl border border-white/[0.06] overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-white/[0.04]">
-              <tr>{['Title','Agent','Status','Created'].map(h => <th key={h} className="text-left px-4 py-3 text-zinc-400 font-medium">{h}</th>)}</tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.04]">
-              {tasks.map((t, i) => (
-                <tr key={i} className="hover:bg-white/[0.02]">
-                  <td className="px-4 py-3 text-zinc-200 max-w-xs truncate">{t.title}</td>
-                  <td className="px-4 py-3 text-zinc-400">{t.assigned_agent}</td>
-                  <td className="px-4 py-3"><Badge status={t.status} /></td>
-                  <td className="px-4 py-3 text-zinc-600 text-xs">{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="p-4 sm:p-6 space-y-6">
+        <Surface className="p-5 sm:p-6">
+          <SectionHeader
+            eyebrow="Work inventory"
+            title="All tasks"
+            description="A calmer board for scanning work, not a dense admin table."
+          />
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {statusGroups.map((group) => {
+              const count = tasks.filter((task) => task.status === group.key).length;
+              return (
+                <div key={group.key} className={`rounded-2xl border border-white/[0.08] ${group.bg} p-4`}>
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">{group.label}</div>
+                  <div className={`mt-2 text-3xl font-semibold ${group.tone}`}>{count}</div>
+                </div>
+              );
+            })}
+          </div>
+        </Surface>
+
+        <Surface className="overflow-hidden">
+          <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 text-xs uppercase tracking-[0.18em] text-zinc-500">
+              <span>Title</span>
+              <span>Agent</span>
+              <span>Status</span>
+              <span>Created</span>
+            </div>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {tasks.length === 0 ? (
+              <div className="px-5 py-10 text-center text-sm text-zinc-500">No tasks yet.</div>
+            ) : (
+              tasks.map((t, i) => (
+                <div key={i} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 px-5 py-4 sm:px-6 hover:bg-white/[0.02]">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-white">{t.title}</div>
+                    <div className="mt-1 text-xs text-zinc-500">#{String(t.id || '').slice(0, 8)}</div>
+                  </div>
+                  <div className="text-sm text-zinc-400">{t.assigned_agent}</div>
+                  <div><Badge status={t.status} /></div>
+                  <div className="text-xs text-zinc-500">{taskTime(t.created_at)}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </Surface>
       </div>
     );
   }
 
   function renderApprovals() {
     return (
-      <div className="p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Pending Approvals <span className="text-amber-400">({pending.length})</span></h2>
+      <div className="p-4 sm:p-6 space-y-6">
+        <Surface className="p-5 sm:p-6">
+          <SectionHeader
+            eyebrow="Decision queue"
+            title={`Pending approvals (${pending.length})`}
+            description="Every risky action should stay obvious, calm, and fast to review."
+          />
+        </Surface>
         {pending.length === 0
-          ? <div className="rounded-xl border border-white/[0.06] p-12 text-center text-zinc-600">No pending approvals.</div>
+          ? <Surface className="p-12 text-center text-zinc-500">No pending approvals.</Surface>
           : <div className="grid gap-4">{pending.map((t) => {
               const busy = approvalBusy.has(t.id);
               const msg  = approvalMsg[t.id];
               return (
-                <div key={t.id} className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
-                  <div className="font-medium text-white mb-1">{t.title}</div>
-                  <div className="text-xs text-zinc-500 mb-3">Agent: {t.assigned_agent} · Task: {t.id?.slice(0,8)}</div>
+                <Surface key={t.id} className="p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-lg font-medium text-white">{t.title}</div>
+                      <div className="mt-1 text-xs text-zinc-500">Agent: {t.assigned_agent} · Task: {t.id?.slice(0,8)}</div>
+                    </div>
+                    <Badge status={t.status} />
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3 text-xs">
+                    <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-zinc-400">
+                      <div className="uppercase tracking-[0.18em] text-[10px] text-zinc-600">Created</div>
+                      <div className="mt-1 text-zinc-200">{taskTime(t.created_at)}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-zinc-400">
+                      <div className="uppercase tracking-[0.18em] text-[10px] text-zinc-600">Output</div>
+                      <div className="mt-1 text-zinc-200">{t.outputSummary ? 'Ready to inspect' : 'No output summary'}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-zinc-400">
+                      <div className="uppercase tracking-[0.18em] text-[10px] text-zinc-600">Review mode</div>
+                      <div className="mt-1 text-zinc-200">Human approval</div>
+                    </div>
+                  </div>
                   {msg && (
-                    <div className={`text-xs mb-3 px-2 py-1 rounded ${msg.ok ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                    <div className={`mt-4 rounded-xl px-3 py-2 text-xs ${msg.ok ? 'text-emerald-300 bg-emerald-500/10 border border-emerald-500/20' : 'text-red-300 bg-red-500/10 border border-red-500/20'}`}>
                       {msg.text}
                     </div>
                   )}
-                  <div className="flex gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       disabled={busy}
                       onClick={() => handleApproval(t.id, 'approved')}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/25 disabled:opacity-50"
+                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/25 disabled:opacity-50"
                     >
                       {busy ? '...' : 'Approve'}
                     </button>
                     <button
                       disabled={busy}
                       onClick={() => handleApproval(t.id, 'rejected')}
-                      className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs hover:bg-red-500/25 disabled:opacity-50"
+                      className="rounded-xl border border-red-500/30 bg-red-500/15 px-4 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/25 disabled:opacity-50"
                     >
                       {busy ? '...' : 'Reject'}
                     </button>
                   </div>
-                </div>
+                </Surface>
               );
             })}</div>
         }
@@ -690,12 +819,21 @@ export default function App() {
     );
   }
 
-  const pages = { dashboard: renderDashboard, tasks: renderTasks, approvals: renderApprovals, agents: renderAgents, integrations: renderIntegrations, settings: renderSettings };
+  const pages = {
+    dashboard: renderDashboard,
+    tasks: renderTasks,
+    approvals: renderApprovals,
+    messages: () => <MessengerPage />,
+    assistant: () => <AssistantPage />,
+    agents: renderAgents,
+    integrations: renderIntegrations,
+    settings: renderSettings,
+  };
 
   return (
     <div className="flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
       {/* Sidebar */}
-      <div className={`flex-shrink-0 flex flex-col transition-all duration-200 border-r border-white/[0.06] ${sidebar ? 'w-56' : 'w-16'}`}>
+      <div className={`hidden md:flex flex-shrink-0 flex-col transition-all duration-200 border-r border-white/[0.06] ${sidebar ? 'w-56' : 'w-16'}`}>
         <div className="flex items-center gap-2 px-4 py-4 border-b border-white/[0.06]">
           <span className="text-lg">⚡</span>
           {sidebar && <span className="font-semibold text-sm">ACC v2</span>}
@@ -729,12 +867,21 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="sticky top-0 z-10 bg-[#0a0a0f]/80 backdrop-blur border-b border-white/[0.06] px-6 py-3 flex items-center justify-between">
-          <div>
-            <div className="text-xs text-zinc-500 capitalize">{page}</div>
+      <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <div className="sticky top-0 z-10 bg-[#0a0a0f]/90 backdrop-blur border-b border-white/[0.06] px-4 md:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setSidebar((value) => !value)}
+              className="hidden md:inline-flex rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/[0.08]"
+            >
+              {sidebar ? 'Collapse' : 'Expand'}
+            </button>
+            <div className="min-w-0">
+              <div className="text-xs text-zinc-500 uppercase tracking-[0.2em]">{page}</div>
+              <div className="text-sm text-zinc-200 truncate">ACC mobile-first control surface</div>
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-500">
+          <div className="hidden sm:flex items-center gap-3 text-xs text-zinc-500">
             <span>{stats.total_tasks || 0} tasks</span>
             <span>·</span>
             <span>{stats.total_results || 0} results</span>
@@ -744,6 +891,72 @@ export default function App() {
         </div>
         {(pages[page] || renderDashboard)()}
       </div>
+
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-white/[0.08] bg-[#0a0a0f]/95 backdrop-blur px-2 py-2">
+        <div className="grid grid-cols-5 gap-1">
+          {MOBILE_NAV.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setPage(item.id)}
+              className={`flex flex-col items-center justify-center rounded-2xl px-2 py-2 text-[11px] transition-colors ${page === item.id ? 'bg-white/[0.10] text-white' : 'text-zinc-500'}`}
+            >
+              <span className="text-base leading-none">{item.icon}</span>
+              <span className="mt-1">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
+}
+
+function Surface({ className = '', children }) {
+  return (
+    <div className={`rounded-3xl border border-white/[0.08] bg-white/[0.04] shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({ eyebrow, title, description, action }) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-1">
+        {eyebrow && (
+          <div className="text-[10px] uppercase tracking-[0.28em] text-zinc-500">{eyebrow}</div>
+        )}
+        <h3 className="text-xl font-semibold text-white">{title}</h3>
+        {description && <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">{description}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, detail, accent = 'text-white', icon, tone = 'bg-white/[0.03]' }) {
+  return (
+    <div className={`rounded-2xl border border-white/[0.08] ${tone} p-5`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className={`text-3xl font-semibold tracking-tight ${accent}`}>{value}</div>
+          <div className="text-sm text-zinc-400">{label}</div>
+        </div>
+        {icon && (
+          <div className="rounded-2xl border border-white/[0.08] bg-black/20 px-3 py-2 text-lg leading-none text-zinc-200">
+            {icon}
+          </div>
+        )}
+      </div>
+      {detail && <div className="mt-4 text-xs leading-relaxed text-zinc-500">{detail}</div>}
+    </div>
+  );
+}
+
+function taskTime(value) {
+  if (!value) return 'just now';
+  try {
+    return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return 'just now';
+  }
 }

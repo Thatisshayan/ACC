@@ -253,6 +253,26 @@ async function getProvidersStatus() {
   };
 }
 
+// ── Provider failure cache ─────────────────────────────────────────────────────
+// When a provider fails, record the timestamp. Subsequent calls within the TTL
+// skip that provider entirely instead of burning a full network timeout.
+var PROVIDER_FAIL_TTL_MS = parseInt(process.env.PROVIDER_FAIL_TTL_MS || '60000');
+var _providerFailAt = {}; // { providerName: timestamp_ms }
+
+function markProviderFailed(name) {
+  _providerFailAt[name] = Date.now();
+}
+
+function isProviderCoolingDown(name) {
+  var t = _providerFailAt[name];
+  return t && (Date.now() - t) < PROVIDER_FAIL_TTL_MS;
+}
+
+// Allow tests / health checks to reset the cache.
+function clearProviderCache() {
+  _providerFailAt = {};
+}
+
 // ── Main fallback chain ────────────────────────────────────────────────────────
 async function executeWithProviderFallback(task) {
   var order     = getProviderOrder();
@@ -270,6 +290,14 @@ async function executeWithProviderFallback(task) {
     var provider = order[i];
     var result;
 
+    // Skip providers that failed recently — don't burn a full timeout again.
+    if (provider !== 'smart_stub' && isProviderCoolingDown(provider)) {
+      log('[provider] Skipping', provider, '— cooling down after recent failure');
+      attempted.push(provider);
+      reasons[provider] = 'cooling_down';
+      continue;
+    }
+
     if (provider === 'deepseek') result = await tryDeepSeek(task);
     else if (provider === 'ollama') result = await tryOllama(task);
     else if (provider === 'alibaba') result = await tryAlibaba(task);
@@ -279,7 +307,7 @@ async function executeWithProviderFallback(task) {
 
     if (result.tried) attempted.push(provider);
     if (!result.tried) { log('[provider] Skipping', provider, '—', result.reason); continue; }
-    if (!result.success) { reasons[provider] = result.reason; continue; }
+    if (!result.success) { markProviderFailed(provider); reasons[provider] = result.reason; continue; }
 
     return buildProviderSuccess(result, attempted, reasons, task);
   }
@@ -291,4 +319,4 @@ async function executeWithProviderFallback(task) {
     execution_mode: task.automation_mode, cost_tier: 'zero_cost_stub', is_real_ai_result: false }, stub);
 }
 
-module.exports = { executeWithProviderFallback, getProvidersStatus };
+module.exports = { executeWithProviderFallback, getProvidersStatus, clearProviderCache };

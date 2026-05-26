@@ -4,6 +4,7 @@ const express = require('express');
 const store = require('../taskbus/store.js');
 const botLock = require('../telegram/botLock.js');
 const { getBridgeStatus } = require('../services/alphonsoBridgeService.js');
+const messages = require('../messages/service.js');
 
 const router = express.Router();
 
@@ -19,14 +20,16 @@ function buildSummary() {
   const bot = botLock.getLockInfo ? botLock.getLockInfo() : { activeBot: null, pid: null };
   const bridge = getBridgeStatus ? getBridgeStatus() : {};
   const stats = safeStats();
+  const messenger = messages.getStatus ? messages.getStatus() : { status: 'unknown' };
   const backendStatus = 'ok';
-  const botActive = Boolean(bot.activeBot && bot.pid);
-  const bridgeReady = bridge.status === 'configured' || bridge.status === 'setup_required';
+  const botActive = Boolean(bot.healthy);
+  const bridgeReady = bridge.status === 'configured';
+  const messengerReady = messenger.status === 'ready';
 
   let overall = 'degraded';
-  if (backendStatus === 'ok' && botActive && bridgeReady) {
+  if (backendStatus === 'ok' && botActive && bridgeReady && messengerReady) {
     overall = 'healthy';
-  } else if (backendStatus === 'ok' && (botActive || bridgeReady)) {
+  } else if (backendStatus === 'ok' && (botActive || bridgeReady || messengerReady)) {
     overall = 'partial';
   }
 
@@ -46,6 +49,7 @@ function buildSummary() {
       lock: bot,
       lockFile: 'data/run/telegram-bot.lock.json',
     },
+    messenger: messenger,
     bridge: bridge,
     taskbus: {
       status: 'ok',
@@ -57,6 +61,7 @@ function buildSummary() {
     notes: [
       'Backend truth comes from the live route itself.',
       'Bot truth comes from the file-backed lock.',
+      'Messenger truth comes from the encrypted private message store.',
       'Bridge truth comes from the Alphonso bridge service.',
       'Task Bus truth comes from the persisted task store.',
     ],

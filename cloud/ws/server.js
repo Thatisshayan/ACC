@@ -35,7 +35,7 @@ function startWSServer(httpServer) {
   });
 
   log("[ws] WebSocket server started on path /ws");
-  return wss;
+  return { wss, broadcast };
 }
 
 /**

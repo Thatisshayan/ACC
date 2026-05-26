@@ -12,6 +12,8 @@ const telegramWebhook          = require("./api/telegramWebhook.js");
 const webhookHandler           = require("./telegram/webhookHandler.js");
 const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const statusSummary            = require("./api/statusSummary.js");
+const messagesRoutes           = require("./api/messages.js");
+const assistantRoutes          = require("./api/assistant.js");
 const uiRoutes                 = require("./api/uiRoutes.js");
 const taskbusRoutes            = require("./taskbus/routes.js");
 const { startWSServer }        = require("./ws/server.js");
@@ -127,6 +129,8 @@ app.use("/api/taskbus", taskbusAuth, taskbusRoutes);
 app.use("/api", securityApproval);
 app.use("/api", telegramWebhook);
 app.use("/api", webhookHandler);
+app.use("/api/messages", messagesRoutes);
+app.use("/api/assistant", assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
 app.use("/api/status", statusSummary);
 
@@ -147,9 +151,23 @@ const httpServer = app.listen(PORT, () => {
   console.log(`[server] Admin:  GET /admin/users  /admin/graphs  /admin/tasks  /admin/system`);
   console.log(`[server] UI:     GET /api/ui/dashboard  /api/ui/snapshots  /api/ui/approvals`);
   console.log(`[server] Bridge: GET /api/alphonso-bridge/status  POST /api/alphonso-bridge`);
+  console.log(`[server] Messages: GET /api/messages/status  POST /api/messages/send`);
+  console.log(`[server] Assistant: POST /api/assistant/parse  POST /api/assistant/execute`);
   console.log(`[server] Status: GET /api/status  /api/status/summary`);
   console.log(`[server] WS:     ws://localhost:${PORT}/ws`);
-  startWSServer(httpServer);
+
+  const { broadcast } = startWSServer(httpServer);
+  const taskbusStore = require("./taskbus/store.js");
+  taskbusStore.setTaskUpdateHook(function(task) {
+    broadcast("task_updated", {
+      taskId:         task.id,
+      status:         task.status,
+      title:          task.title,
+      assigned_agent: task.assigned_agent,
+      provider_used:  task.provider_used || null,
+      updated_at:     task.updated_at,
+    });
+  });
 });
 
 httpServer.on("error", (err) => {

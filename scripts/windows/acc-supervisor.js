@@ -89,13 +89,14 @@ function healthCheck(url) {
   });
 }
 
-function spawnManaged(name, entry, args, outPath, errPath, pidPath, onExit) {
+function spawnManaged(name, entry, args, outPath, errPath, pidPath, onExit, extraEnv) {
   const outFd = fs.openSync(outPath, 'a');
   const errFd = fs.openSync(errPath, 'a');
   const child = spawn(process.execPath, [entry].concat(args || []), {
     cwd: repoRoot,
     windowsHide: true,
     stdio: ['ignore', outFd, errFd],
+    env: Object.assign({}, process.env, extraEnv || {}),
   });
 
   writePid(pidPath, child.pid);
@@ -141,6 +142,9 @@ function ensureBackend() {
 
     backendChild = spawnManaged('backend', backendEntry, [], backendOut, backendErr, backendPidPath, () => {
       scheduleRetry(ensureBackend, 5000);
+    }, {
+      ACC_SUPERVISED: '1',
+      ACC_SKIP_TELEGRAM_BOT: '1',
     });
   });
 }

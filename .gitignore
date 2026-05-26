@@ -8,7 +8,9 @@ cloud/security/.vault/
 # Runtime/private data
 data/users/
 data/taskbus/
+data/messages/
 data/run/
+data/bot-heartbeat.json
 data/alphonso-bridge/
 cloud/dlq/items/
 *.log
@@ -24,6 +26,7 @@ ui/dist/
 
 # Local/temp files
 *.tmp
+.tmp/
 *.temp
 .cache/
 .env

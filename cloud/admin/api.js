@@ -1,9 +1,9 @@
 // cloud/admin/api.js
 const express            = require("express");
-const { getActiveBot }   = require("../telegram/botLock.js");
+const { getLockInfo }    = require("../telegram/botLock.js");
 const { snapshots }      = require("../orchestrator/snapshots.js");
 const { queue, getAllTasks } = require("../queue.js");
-const { users }          = require("../telegram/users.js");
+const { getAllUsers }    = require("../telegram/users.js");
 const { getWorkerStatus } = require("../system/health.js");
 const { getLogs }        = require("../logs/logger.js");
 const { getGraphView }   = require("./graphView.js");
@@ -15,7 +15,7 @@ const adminRouter = express.Router();
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 adminRouter.get("/users", (req, res) => {
-  res.json([...users.values()]);
+  res.json(getAllUsers());
 });
 
 // ── Graphs (snapshots) ────────────────────────────────────────────────────────
@@ -52,8 +52,11 @@ adminRouter.get("/tasks", (req, res) => {
 
 // ── System Health ─────────────────────────────────────────────────────────────
 adminRouter.get("/system", (req, res) => {
+  const bot = getLockInfo ? getLockInfo() : { activeBot: null, pid: null };
   res.json({
-    activeBot:      getActiveBot(),
+    activeBot:      bot.healthy ? bot.activeBot : null,
+    botStatus:      bot.healthy ? 'active' : 'inactive',
+    botLock:        bot,
     workerStatus:   getWorkerStatus(),
     queueLength:    queue.length,
     totalTasks:     getAllTasks().length,

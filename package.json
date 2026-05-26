@@ -29,6 +29,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1041.0",
     "@supabase/supabase-js": "^2.105.4",
     "axios": "^1.16.0",
+    "better-sqlite3": "^12.10.0",
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

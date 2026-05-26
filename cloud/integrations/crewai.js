@@ -9,8 +9,16 @@ var path = require('path');
 var os   = require('os');
 
 var ENABLED = process.env.CREWAI_ENABLED === 'true';
-var PYTHON  = process.env.PYTHON_PATH || 'python';
 var AGENT   = path.join(__dirname, 'crewai_agent.py');
+
+// Python binary: only allow known-safe names (no path traversal, no shell operators).
+// PYTHON_PATH can override but is validated against a safe pattern.
+var RAW_PYTHON = process.env.PYTHON_PATH || 'python';
+var SAFE_PYTHON_RE = /^(python3?(\.\d+)?|py)$/i;
+var PYTHON = SAFE_PYTHON_RE.test(path.basename(RAW_PYTHON)) ? RAW_PYTHON : 'python';
+if (RAW_PYTHON !== PYTHON) {
+  console.warn('[crewai] PYTHON_PATH "' + RAW_PYTHON + '" failed safety check — falling back to "python"');
+}
 
 if (!ENABLED) console.warn('[crewai] CREWAI_ENABLED not set — connector disabled. Set CREWAI_ENABLED=true to enable.');
 
@@ -19,7 +27,8 @@ function enabled() { return ENABLED; }
 async function checkHealth() {
   if (!ENABLED) return { status: 'disabled', note: 'Set CREWAI_ENABLED=true in .env' };
   return new Promise(function(resolve) {
-    cp.exec(PYTHON + ' -c "import crewai; print(crewai.__version__)"', { timeout: 10000 }, function(err, stdout) {
+    // execFile: no shell expansion — PYTHON is validated above, args are a fixed array
+    cp.execFile(PYTHON, ['-c', 'import crewai; print(crewai.__version__)'], { timeout: 10000 }, function(err, stdout) {
       if (err) return resolve({ status: 'error', note: 'Run: pip install crewai crewai-tools python-dotenv', error: err.message.slice(0,100) });
       resolve({ status: 'connected', version: stdout.trim() });
     });
@@ -29,17 +38,15 @@ async function checkHealth() {
 async function runTask(task, timeoutMs) {
   if (!ENABLED) return { success: false, error: 'CREWAI_ENABLED not set' };
   return new Promise(function(resolve) {
-    // Write task to temp file
     var tmpFile = path.join(os.tmpdir(), 'acc_crewai_' + Date.now() + '.json');
     try { fs.writeFileSync(tmpFile, JSON.stringify(task), 'utf8'); }
     catch(e) { return resolve({ success: false, error: 'Failed to write task file: ' + e.message }); }
 
-    var env = Object.assign({}, process.env);
-    var cmd = PYTHON + ' "' + AGENT + '" "' + tmpFile + '"';
-    console.log('[crewai] Spawning:', cmd.slice(0, 80));
+    console.log('[crewai] Spawning agent for task:', task.id || '(no id)');
 
-    cp.exec(cmd, { timeout: timeoutMs || 120000, env: env }, function(err, stdout, stderr) {
-      try { fs.unlinkSync(tmpFile); } catch(e) {}
+    // execFile: no shell expansion — AGENT is a hardcoded path, tmpFile is our own temp file
+    cp.execFile(PYTHON, [AGENT, tmpFile], { timeout: timeoutMs || 120000, env: process.env }, function(err, stdout, stderr) {
+      try { fs.unlinkSync(tmpFile); } catch(_) {}
       if (err && !stdout) {
         console.log('[crewai] Error:', (stderr||err.message).slice(0,200));
         return resolve({ success: false, error: (stderr || err.message).slice(0, 200) });
@@ -50,7 +57,7 @@ async function runTask(task, timeoutMs) {
         var result = JSON.parse(last);
         console.log('[crewai] Done. Success:', result.success);
         resolve(result);
-      } catch(e) {
+      } catch(_) {
         resolve({ success: true, output: stdout.trim(), summary: 'CrewAI completed' });
       }
     });

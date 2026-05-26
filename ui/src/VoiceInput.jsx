@@ -63,22 +63,26 @@ export default function VoiceInput({ onResult }) {
   var statusLabels = { idle: 'Tap to speak', listening: '🔴 Listening...', processing: '⏳ Processing...', done: '✅ Command sent', error: '❌ Error' };
 
   return (
-    <div className="flex flex-col items-center gap-3 p-4">
-      <div className="text-xs text-zinc-500 mb-1">🎙️ Say: <span className="text-indigo-400">Hey ACC, ...</span></div>
+    <div className="flex flex-col items-center gap-4 p-4 md:p-5">
+      <div className="text-xs uppercase tracking-[0.22em] text-zinc-500 text-center">Voice command</div>
       <button
         onMouseDown={startListening} onMouseUp={stopListening}
         onTouchStart={startListening} onTouchEnd={stopListening}
-        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center text-2xl transition-all duration-200 ${
+        aria-label="Voice input"
+        className={`w-20 h-20 md:w-24 md:h-24 rounded-full border-2 flex items-center justify-center text-3xl transition-all duration-200 shadow-[0_0_0_0_rgba(16,185,129,0)] ${
           listening
-            ? 'bg-red-500/20 border-red-500 scale-110 animate-pulse'
-            : 'bg-white/[0.05] border-white/20 hover:bg-white/[0.08] hover:border-indigo-500/50'
+            ? 'bg-red-500/20 border-red-500 scale-110 animate-pulse shadow-[0_0_40px_rgba(239,68,68,0.20)]'
+            : 'bg-gradient-to-br from-emerald-500/20 via-white/[0.06] to-sky-500/10 border-white/20 hover:bg-white/[0.08] hover:border-emerald-500/50 shadow-[0_0_32px_rgba(16,185,129,0.10)]'
         }`}
       >
-        🎙️
+        <span className="translate-y-[1px]">🎙️</span>
       </button>
-      <div className={`text-xs ${statusColors[status]}`}>{statusLabels[status]}</div>
+      <div className={`text-xs text-center ${statusColors[status]}`}>{statusLabels[status]}</div>
+      <div className="text-[11px] text-zinc-500 text-center max-w-xs leading-relaxed">
+        Press and hold, or tap to speak. ACC will transcribe your command and hand it to the assistant parser.
+      </div>
       {transcript && (
-        <div className="max-w-xs text-center text-sm text-zinc-300 bg-white/[0.04] rounded-lg px-3 py-2 border border-white/[0.06]">
+        <div className="max-w-sm text-center text-sm text-zinc-300 bg-white/[0.04] rounded-2xl px-4 py-3 border border-white/[0.06]">
           "{transcript}"
           {taskId && <div className="text-xs text-zinc-600 mt-1">Task: {taskId.slice(0,8)}</div>}
         </div>

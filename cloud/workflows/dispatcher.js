@@ -1,8 +1,94 @@
 'use strict';
 
-const store = require('../taskbus/store.js');
+const cp     = require('child_process');
+const fs     = require('fs');
+const path   = require('path');
+const store  = require('../taskbus/store.js');
 const router = require('../taskbus/router.js');
 const registry = require('./registry.js');
+
+// ── CrewAI subprocess execution ──────────────────────────────────────────────
+// Only runs when CREWAI_EXECUTION_MODE=execute. Spawns the workflow's own
+// main.py via execFile (no shell expansion). Python binary is validated.
+
+var CREWAI_TIMEOUT_MS = parseInt(process.env.CREWAI_TIMEOUT_MS || String(10 * 60 * 1000));
+
+var RAW_PY = process.env.PYTHON_PATH || 'python';
+var SAFE_PY_RE = /^(python3?(\.\d+)?|py)$/i;
+var CREWAI_PYTHON = SAFE_PY_RE.test(path.basename(RAW_PY)) ? RAW_PY : 'python';
+
+// Ensure the entrypoint is inside the workflow's own source directory.
+function pathIsInsideDir(filePath, rootDir) {
+  var resolved = path.resolve(filePath);
+  var root     = path.resolve(rootDir);
+  return resolved === root || resolved.startsWith(root + path.sep);
+}
+
+function runCrewAIProject(workflow, task) {
+  return new Promise(function(resolve) {
+    var entrypoint = workflow.entrypoint;
+    var sourceDir  = workflow.source_dir;
+
+    if (!entrypoint || !sourceDir) {
+      return resolve({ success: false, error: 'Workflow has no entrypoint or source_dir' });
+    }
+    if (!pathIsInsideDir(entrypoint, sourceDir)) {
+      return resolve({ success: false, error: 'Entrypoint is outside workflow source directory' });
+    }
+    if (!fs.existsSync(entrypoint)) {
+      return resolve({ success: false, error: 'Entrypoint not found: ' + entrypoint });
+    }
+
+    var input = (task && task.meta && task.meta.workflow_input) ||
+                (task && task.instruction) || '';
+
+    var env = Object.assign({}, process.env, {
+      CREWAI_TASK_ID:    task ? task.id    : '',
+      CREWAI_TASK_INPUT: input,
+    });
+
+    console.log('[dispatcher] Spawning CrewAI:', path.basename(entrypoint),
+      '| cwd:', path.basename(sourceDir));
+
+    var stdout = '';
+    var stderr = '';
+    var timedOut = false;
+
+    var child = cp.spawn(CREWAI_PYTHON, [entrypoint], { cwd: sourceDir, env: env });
+
+    var timer = setTimeout(function() {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, CREWAI_TIMEOUT_MS);
+
+    child.stdout.on('data', function(d) { stdout += d.toString(); });
+    child.stderr.on('data', function(d) { stderr += d.toString(); });
+
+    child.on('error', function(err) {
+      clearTimeout(timer);
+      resolve({ success: false, error: 'Failed to spawn: ' + err.message });
+    });
+
+    child.on('close', function(code) {
+      clearTimeout(timer);
+      if (timedOut) {
+        return resolve({ success: false, error: 'Timed out after ' + (CREWAI_TIMEOUT_MS / 1000) + 's' });
+      }
+      if (code !== 0) {
+        return resolve({ success: false, error: 'Exited ' + code + ': ' + stderr.slice(0, 400) });
+      }
+      // Try to parse last JSON line (CrewAI often prints JSON result as last line)
+      var lines = stdout.trim().split('\n').filter(Boolean);
+      for (var i = lines.length - 1; i >= 0; i--) {
+        try {
+          var parsed = JSON.parse(lines[i]);
+          return resolve(Object.assign({ success: true }, parsed));
+        } catch(_) {}
+      }
+      resolve({ success: true, output: stdout.trim(), summary: 'CrewAI completed' });
+    });
+  });
+}
 
 function safeText(value) {
   return String(value || '').trim();
@@ -206,13 +292,40 @@ async function executeWorkflowTask(task) {
     };
   }
 
+  // ── EXECUTE mode: actually run the CrewAI subprocess ─────────────────────
+  if (workflow.kind === 'crewai_project' && process.env.CREWAI_EXECUTION_MODE === 'execute') {
+    const result = await runCrewAIProject(workflow, task);
+    return {
+      success: result.success,
+      workflow_key: workflow.key,
+      workflow_id: workflow.id,
+      workflow_kind: workflow.kind,
+      execution_mode: 'execute',
+      summary: result.success
+        ? (result.summary || 'CrewAI workflow completed: ' + workflow.name)
+        : ('CrewAI workflow failed: ' + result.error),
+      output: result.output || (result.success ? '' : result.error || ''),
+      files_changed: result.files_changed || [],
+      risks: Array.isArray(workflow.approval_required_for) ? workflow.approval_required_for : [],
+      next_request: result.next_request || (result.success
+        ? 'Review the CrewAI output and confirm results.'
+        : 'Check CrewAI logs and retry or adjust workflow inputs.'),
+      is_real_ai_result: result.success,
+      error: result.success ? undefined : result.error,
+    };
+  }
+
+  // ── PREPARE mode: workflow is registered but execution is gated ───────────
   const input = safeText(task && task.meta && (task.meta.workflow_input || task.instruction));
-  const response = {
+  return {
     success: true,
     workflow_key: workflow.key,
     workflow_id: workflow.id,
     workflow_kind: workflow.kind,
-    summary: 'Prepared workflow: ' + workflow.name,
+    execution_mode: 'prepare',
+    summary: workflow.kind === 'crewai_project'
+      ? 'CrewAI workflow ready. Set CREWAI_EXECUTION_MODE=execute to run.'
+      : 'Workflow prepared: ' + workflow.name,
     output: JSON.stringify({
       workflow: registry.getWorkflowSummary(workflow),
       task: {
@@ -225,24 +338,19 @@ async function executeWorkflowTask(task) {
       input: input,
       execution: {
         mode: 'prepare',
-        note: 'Workflow is registered and routed cleanly beside other workflows.',
+        note: workflow.kind === 'crewai_project'
+          ? 'Set CREWAI_EXECUTION_MODE=execute in .env and restart to enable live execution.'
+          : 'Workflow is registered and routed cleanly.',
         parallel_ready: true,
       },
     }, null, 2),
     files_changed: [],
     risks: Array.isArray(workflow.approval_required_for) ? workflow.approval_required_for : [],
     next_request: workflow.kind === 'crewai_project'
-      ? 'Approve the workflow task to continue or adjust the role/query.'
+      ? 'Set CREWAI_EXECUTION_MODE=execute to run, or review the workflow manifest.'
       : 'Review the workflow manifest and trigger the desired run.',
     is_real_ai_result: false,
   };
-
-  if (workflow.kind === 'crewai_project' && process.env.CREWAI_EXECUTION_MODE === 'execute') {
-    response.summary = 'CrewAI workflow execution is enabled, but this lane is still guarded by ACC approval.';
-    response.execution_mode = 'execute';
-  }
-
-  return response;
 }
 
 async function launchWorkflow(workflowRef, params) {

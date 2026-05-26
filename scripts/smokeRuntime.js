@@ -122,6 +122,77 @@ async function main() {
   if (!bridgeStatus.json || bridgeStatus.json.success !== true) fail('bridge status', `unexpected response ${bridgeStatus.body.slice(0, 160)}`);
   ok('bridge status', `state=${bridgeStatus.json.bridge && bridgeStatus.json.bridge.status || 'unknown'}`);
 
+  const messengerStatus = await request('GET', '/api/messages/status');
+  if (!messengerStatus.json || messengerStatus.json.success !== true) fail('messenger status', `unexpected response ${messengerStatus.body.slice(0, 160)}`);
+  ok('messenger status', `state=${messengerStatus.json.messenger && messengerStatus.json.messenger.status || 'unknown'}`);
+
+  const senderId = `smoke_user_${Date.now()}_a`;
+  const recipientId = `smoke_user_${Date.now()}_b`;
+  const senderUser = await request('POST', '/api/messages/users', { userId: senderId, name: 'Smoke Sender', role: 'member' });
+  if (!senderUser.json || senderUser.json.success !== true) fail('messenger ensure sender', `unexpected response ${senderUser.body.slice(0, 160)}`);
+  ok('messenger ensure sender', senderUser.json.user && senderUser.json.user.id || senderId);
+
+  const recipientUser = await request('POST', '/api/messages/users', { userId: recipientId, name: 'Smoke Recipient', role: 'member' });
+  if (!recipientUser.json || recipientUser.json.success !== true) fail('messenger ensure recipient', `unexpected response ${recipientUser.body.slice(0, 160)}`);
+  ok('messenger ensure recipient', recipientUser.json.user && recipientUser.json.user.id || recipientId);
+
+  const threadCreate = await request('POST', '/api/messages/threads', {
+    senderId,
+    recipientId,
+    subject: 'Smoke test private thread',
+    createdBy: senderId,
+    viewerId: senderId,
+  });
+  if (!threadCreate.json || threadCreate.json.success !== true) fail('messenger thread', `unexpected response ${threadCreate.body.slice(0, 220)}`);
+  ok('messenger thread', threadCreate.json.threadId || 'created');
+
+  const threadId = threadCreate.json.threadId || (threadCreate.json.thread && threadCreate.json.thread.id);
+  if (!threadId) fail('messenger thread', 'threadId missing from response');
+
+  const sentMessage = await request('POST', '/api/messages/send', {
+    senderId,
+    recipientId,
+    threadId,
+    subject: 'Smoke test private thread',
+    content: 'Hello from the ACC smoke test.',
+    createdBy: senderId,
+    viewerId: senderId,
+  });
+  if (!sentMessage.json || sentMessage.json.success !== true) fail('messenger send', `unexpected response ${sentMessage.body.slice(0, 220)}`);
+  ok('messenger send', sentMessage.json.message && sentMessage.json.message.id || 'sent');
+
+  const recipientInbox = await request('GET', '/api/messages/inbox?userId=' + encodeURIComponent(recipientId));
+  if (!recipientInbox.json || recipientInbox.json.success !== true) fail('messenger inbox', `unexpected response ${recipientInbox.body.slice(0, 220)}`);
+  const inboxThread = Array.isArray(recipientInbox.json.threads) ? recipientInbox.json.threads.find((thread) => thread.id === threadId) : null;
+  if (!inboxThread) fail('messenger inbox', 'created thread not present in recipient inbox');
+  ok('messenger inbox', `threads=${(recipientInbox.json.threads || []).length}`);
+
+  const threadView = await request('GET', '/api/messages/threads/' + encodeURIComponent(threadId) + '?userId=' + encodeURIComponent(recipientId));
+  if (!threadView.json || threadView.json.success !== true) fail('messenger thread view', `unexpected response ${threadView.body.slice(0, 220)}`);
+  if (!Array.isArray(threadView.json.messages) || threadView.json.messages.length === 0) fail('messenger thread view', 'thread has no messages');
+  ok('messenger thread view', `messages=${threadView.json.messages.length}`);
+
+  const readMark = await request('POST', '/api/messages/read', {
+    threadId,
+    userId: recipientId,
+  });
+  if (!readMark.json || readMark.json.success !== true) fail('messenger read', `unexpected response ${readMark.body.slice(0, 220)}`);
+  ok('messenger read', `readCount=${readMark.json.readCount || 0}`);
+
+  const assistantParse = await request('POST', '/api/assistant/parse', {
+    text: 'show my inbox',
+    userId: recipientId,
+  });
+  if (!assistantParse.json || assistantParse.json.success !== true) fail('assistant parse', `unexpected response ${assistantParse.body.slice(0, 220)}`);
+  ok('assistant parse', `intent=${assistantParse.json.parsed && assistantParse.json.parsed.intent || 'unknown'}`);
+
+  const assistantExecute = await request('POST', '/api/assistant/execute', {
+    text: 'show my inbox',
+    userId: recipientId,
+  });
+  if (!assistantExecute.json || assistantExecute.json.success !== true) fail('assistant execute', `unexpected response ${assistantExecute.body.slice(0, 220)}`);
+  ok('assistant execute', `intent=${assistantExecute.json.intent || 'unknown'}`);
+
   if (!BRIDGE_TOKEN) {
     console.log('[smoke] bridge post: SKIPPED (no bridge token in env)');
   } else {

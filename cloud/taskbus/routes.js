@@ -15,6 +15,17 @@ const socialclaw = require('../integrations/socialclaw.js');
 const { runLeadCollectorPollerOnce } = require('../workflows/leadCollectorPoller.js');
 const app     = express.Router();
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise(function(_, reject) {
+      setTimeout(function() {
+        reject(new Error(label + ' timed out after ' + ms + 'ms'));
+      }, ms);
+    }),
+  ]);
+}
+
 // ── GET /api/taskbus/agents ───────────────────────────────────────────────────
 app.get('/agents', async function(req, res) {
   try {
@@ -40,16 +51,21 @@ app.get('/stats', function(req, res) {
 app.get('/integrations/status', async function(req, res) {
   var integrations = {};
   var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','crewai','grok','perplexity','airtable','clickup','socialclaw'];
-  for (var i = 0; i < files.length; i++) {
-    var name = files[i];
-    try {
-      var mod = require('../integrations/' + name + '.js');
-      var health = await mod.checkHealth();
-      integrations[name] = Object.assign({ enabled: mod.enabled() }, health);
-    } catch (e) {
-      integrations[name] = { enabled: false, status: 'error', error: e.message };
-    }
-  }
+  var checks = files.map(function(name) {
+    return (async function() {
+      try {
+        var mod = require('../integrations/' + name + '.js');
+        var health = await withTimeout(mod.checkHealth(), 2000, name + '.checkHealth');
+        return [name, Object.assign({ enabled: mod.enabled() }, health)];
+      } catch (e) {
+        return [name, { enabled: false, status: 'error', error: e.message }];
+      }
+    })();
+  });
+  var results = await Promise.all(checks);
+  results.forEach(function(entry) {
+    integrations[entry[0]] = entry[1];
+  });
   var statuses = Object.values(integrations).map(function(i) { return i.status; });
   var overall = statuses.every(function(s) { return s === 'connected' || s === 'disabled'; }) ? 'ok' : 'degraded';
   res.json({ success: true, overall: overall, integrations: integrations, timestamp: new Date().toISOString() });
@@ -194,6 +210,17 @@ app.post('/workflow/outreach-crm/poller/run', async function(req, res) {
   }
 });
 
+// ── Internal-caller verification (rate limit bypass) ─────────────────────────
+// The INTERNAL_SERVICE_TOKEN env var is a shared secret only known to server-side
+// processes (worker loop, scheduler). It is NEVER derived from task body fields.
+var INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || '';
+
+function isInternalCaller(req) {
+  if (!INTERNAL_TOKEN) return false; // bypass disabled when token not configured
+  var header = req.headers['x-internal-token'] || '';
+  return header === INTERNAL_TOKEN;
+}
+
 // ── POST /api/taskbus/task ────────────────────────────────────────────────────
 // Body: { title, instruction, assigned_agent, priority, required_output, approval_required, automation_mode, feature_ref, created_by }
 app.post('/task', async function(req, res) {
@@ -202,7 +229,8 @@ app.post('/task', async function(req, res) {
     log('[taskbus] Task created:', task.id, '|', task.title);
     // Auto-route if not manual
     if (task.automation_mode !== 'manual') {
-      const result = await router.routeTask(task.id);
+      const routeOpts = { skipRateLimit: isInternalCaller(req) };
+      const result = await router.routeTask(task.id, routeOpts);
       return res.json({ success: true, task, routing: result });
     }
     res.json({ success: true, task, routing: { status: 'manual', note: 'Task created. No auto-routing for manual mode.' } });
