@@ -13,7 +13,8 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --REDACTED --ignore-scripts
+RUN npm install
+RUN npm rebuild better-sqlite3
 
 COPY . .
 COPY --from=ui-builder /ui/dist ./ui/dist
