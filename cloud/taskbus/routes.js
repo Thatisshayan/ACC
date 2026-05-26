@@ -8,6 +8,8 @@ const store   = require('./store.js');
 const router  = require('./router.js');
 const { getProvidersStatus } = require('./providerFallback.js');
 const { log } = require('../utils/logger.js');
+const workflowRegistry = require('../workflows/registry.js');
+const workflowDispatcher = require('../workflows/dispatcher.js');
 const outreachCrm = require('../workflows/accOutreachCrmModule.js');
 const { runLeadCollectorPollerOnce } = require('../workflows/leadCollectorPoller.js');
 const app     = express.Router();
@@ -36,7 +38,7 @@ app.get('/stats', function(req, res) {
 // ── GET /api/taskbus/integrations/status ────────────────────────────────────────
 app.get('/integrations/status', async function(req, res) {
   var integrations = {};
-  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','crewai','grok','perplexity','airtable','clickup'];
+  var files = ['langfuse','openrouter','qdrant','sentry','helicone','n8n','supabase','browserbase','flowise','neo4j','openhands','crewai','grok','perplexity','airtable','clickup','socialclaw'];
   for (var i = 0; i < files.length; i++) {
     var name = files[i];
     try {
@@ -59,6 +61,21 @@ app.get('/providers/status', async function(req, res) {
     var order  = (process.env.TASKBUS_PROVIDER_ORDER || 'deepseek,ollama,claude,smart_stub').split(',');
     res.json({ success: true, provider_order: order, providers: status });
   } catch(e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── GET /api/taskbus/workflows ─────────────────────────────────────────────────
+app.get('/workflows', function(req, res) {
+  try {
+    const workflows = workflowRegistry.listWorkflows();
+    res.json({
+      success: true,
+      total: workflows.length,
+      workflows: workflows,
+      catalog: workflowDispatcher.describeWorkflowCatalog(),
+    });
+  } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
@@ -193,10 +210,15 @@ app.get('/approvals', function(req, res) {
 
 // ── POST /api/taskbus/approval/:id ───────────────────────────────────────────
 // Body: { decision: 'approved'|'rejected', notes }
+// Requires: Authorization: Bearer <ACC_APPROVAL_HMAC_SECRET>
 app.post('/approval/:id', function(req, res) {
   (async function() {
-    const approver = req.headers['x-approver'] || 'Shayan';
-    if (approver !== 'Shayan') return res.status(403).json({ success: false, error: 'Only Shayan can approve' });
+    const secret = process.env.ACC_APPROVAL_HMAC_SECRET;
+    if (!secret) return res.status(503).json({ success: false, error: 'Approval endpoint not configured (ACC_APPROVAL_HMAC_SECRET missing)' });
+    const auth = req.headers['authorization'] || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token || token !== secret) return res.status(403).json({ success: false, error: 'Forbidden: invalid or missing approval token' });
+    const approver = 'Shayan';
     const approval = store.resolveApproval(req.params.id, req.body.decision, approver, req.body.notes);
     if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
 
