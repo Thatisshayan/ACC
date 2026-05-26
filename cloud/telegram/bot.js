@@ -1460,7 +1460,13 @@ async function poll() {
 scheduler.start();
 emailMon.startPolling(5); // check email every 5 minutes
 
-poll();
+// Skip polling in webhook mode (Railway 24/7 deployment)
+var isWebhookMode = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_NAME || process.env.TELEGRAM_BOT_MODE === 'webhook';
+if (isWebhookMode) {
+  log('[bot] Webhook mode — polling disabled. Updates arrive via HTTP.');
+} else {
+  poll();
+}
 
 function shutdownBot(code) {
   running = false;
