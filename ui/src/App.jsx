@@ -108,6 +108,8 @@ export default function App() {
   const [tasks, setTasks]       = useState([]);
   const [integrations, setInt]  = useState({});
   const [backend, setBackend]   = useState(DEFAULT_BACKEND_STATUS);
+  const [approvalBusy, setApprovalBusy] = useState(new Set());
+  const [approvalMsg, setApprovalMsg]   = useState({});
   const [socialclawDraft, setSocialclawDraft] = useState(
     'ACC + SocialClaw publish lane: preview a polished social post about the latest workflow and bridge updates.'
   );
@@ -125,6 +127,21 @@ export default function App() {
     setStats(s.stats || s || {});
     setTasks(Array.isArray(t.tasks) ? t.tasks : Array.isArray(t) ? t : []);
     setInt(i.integrations || {});
+  }
+
+  async function handleApproval(taskId, decision) {
+    setApprovalBusy(prev => new Set(prev).add(taskId));
+    setApprovalMsg(prev => ({ ...prev, [taskId]: null }));
+    try {
+      await api.post(`/taskbus/approval/${taskId}`, { decision });
+      setApprovalMsg(prev => ({ ...prev, [taskId]: { ok: true, text: decision === 'approved' ? 'Approved' : 'Rejected' } }));
+      await fetchAll();
+    } catch (e) {
+      const msg = e?.response?.data?.error || e.message || 'Request failed';
+      setApprovalMsg(prev => ({ ...prev, [taskId]: { ok: false, text: msg } }));
+    } finally {
+      setApprovalBusy(prev => { const s = new Set(prev); s.delete(taskId); return s; });
+    }
   }
 
   useEffect(() => {
@@ -288,20 +305,37 @@ export default function App() {
         <h2 className="text-xl font-semibold text-white mb-4">Pending Approvals <span className="text-amber-400">({pending.length})</span></h2>
         {pending.length === 0
           ? <div className="rounded-xl border border-white/[0.06] p-12 text-center text-zinc-600">No pending approvals.</div>
-          : <div className="grid gap-4">{pending.map((t, i) => (
-              <div key={i} className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
-                <div className="font-medium text-white mb-1">{t.title}</div>
-                <div className="text-xs text-zinc-500 mb-3">Agent: {t.assigned_agent} · Task: {t.id?.slice(0,8)}</div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/25">
-                    /taskbus_approve_{t.id?.slice(0,8)}
-                  </button>
-                  <button className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs hover:bg-red-500/25">
-                    /taskbus_reject_{t.id?.slice(0,8)}
-                  </button>
+          : <div className="grid gap-4">{pending.map((t) => {
+              const busy = approvalBusy.has(t.id);
+              const msg  = approvalMsg[t.id];
+              return (
+                <div key={t.id} className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
+                  <div className="font-medium text-white mb-1">{t.title}</div>
+                  <div className="text-xs text-zinc-500 mb-3">Agent: {t.assigned_agent} · Task: {t.id?.slice(0,8)}</div>
+                  {msg && (
+                    <div className={`text-xs mb-3 px-2 py-1 rounded ${msg.ok ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                      {msg.text}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      disabled={busy}
+                      onClick={() => handleApproval(t.id, 'approved')}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/25 disabled:opacity-50"
+                    >
+                      {busy ? '...' : 'Approve'}
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => handleApproval(t.id, 'rejected')}
+                      className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs hover:bg-red-500/25 disabled:opacity-50"
+                    >
+                      {busy ? '...' : 'Reject'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}</div>
+              );
+            })}</div>
         }
       </div>
     );
@@ -434,17 +468,51 @@ export default function App() {
   }
 
   function renderSettings() {
+    const intKeys = Object.keys(integrations);
+    const statusColor = (s) => {
+      if (s === 'connected')  return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+      if (s === 'disabled')   return 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20';
+      if (s === 'error')      return 'text-red-400 bg-red-500/10 border-red-500/20';
+      return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+    };
     return (
-      <div className="p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Settings</h2>
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5 space-y-3">
-          {['DEEPSEEK_API_KEY','TELEGRAM_BOT_TOKEN','OPENHANDS_URL','SUPABASE_URL','COMPOSIO_API_KEY'].map(k => (
-            <div key={k} className="flex items-center justify-between py-2 border-b border-white/[0.04]">
-              <span className="text-zinc-300 text-sm font-mono">{k}</span>
-              <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">SET</span>
+      <div className="p-6 space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold text-white">Settings</h2>
+          <p className="text-xs text-zinc-500 mt-1">Live integration health from the backend. Values are never sent to the browser.</p>
+        </div>
+
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
+          <div className="px-5 py-3 border-b border-white/[0.06]">
+            <span className="text-sm font-medium text-white">Integration Health</span>
+          </div>
+          {intKeys.length === 0 ? (
+            <div className="px-5 py-8 text-center text-zinc-600 text-sm">Loading…</div>
+          ) : (
+            <div className="divide-y divide-white/[0.04]">
+              {intKeys.map(k => {
+                const v = integrations[k] || {};
+                return (
+                  <div key={k} className="flex items-center justify-between px-5 py-3 gap-4">
+                    <div className="min-w-0">
+                      <span className="text-sm text-zinc-200 capitalize">{k}</span>
+                      {v.note && <span className="ml-2 text-xs text-zinc-600">{v.note}</span>}
+                      {v.error && <span className="ml-2 text-xs text-red-500 truncate">{v.error}</span>}
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded border flex-shrink-0 ${statusColor(v.status)}`}>
+                      {v.status || 'unknown'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-          <div className="pt-2 text-xs text-zinc-600">Values hidden for security. The desktop app starts the local backend automatically; Telegram still starts separately with <span className="font-mono">npm run cloud:telegram</span>.</div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <div className="text-sm font-medium text-white mb-3">Startup</div>
+          <p className="text-xs text-zinc-500">Desktop app starts the backend automatically. Telegram bot starts separately:</p>
+          <code className="mt-2 block text-xs text-cyan-300 bg-black/30 rounded px-3 py-2">npm run cloud:telegram</code>
         </div>
       </div>
     );

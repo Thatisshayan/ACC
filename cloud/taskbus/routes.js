@@ -11,6 +11,7 @@ const { log } = require('../utils/logger.js');
 const workflowRegistry = require('../workflows/registry.js');
 const workflowDispatcher = require('../workflows/dispatcher.js');
 const outreachCrm = require('../workflows/accOutreachCrmModule.js');
+const socialclaw = require('../integrations/socialclaw.js');
 const { runLeadCollectorPollerOnce } = require('../workflows/leadCollectorPoller.js');
 const app     = express.Router();
 
@@ -52,6 +53,80 @@ app.get('/integrations/status', async function(req, res) {
   var statuses = Object.values(integrations).map(function(i) { return i.status; });
   var overall = statuses.every(function(s) { return s === 'connected' || s === 'disabled'; }) ? 'ok' : 'degraded';
   res.json({ success: true, overall: overall, integrations: integrations, timestamp: new Date().toISOString() });
+});
+
+// ── GET /api/taskbus/socialclaw/status ─────────────────────────────────────────
+app.get('/socialclaw/status', async function(req, res) {
+  try {
+    const health = await socialclaw.checkHealth();
+    res.json({
+      success: true,
+      socialclaw: Object.assign({ enabled: socialclaw.enabled() }, health),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── GET /api/taskbus/socialclaw/accounts ──────────────────────────────────────
+app.get('/socialclaw/accounts', async function(req, res) {
+  try {
+    const result = await socialclaw.listAccounts();
+    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── GET /api/taskbus/socialclaw/usage ─────────────────────────────────────────
+app.get('/socialclaw/usage', async function(req, res) {
+  try {
+    const result = await socialclaw.getUsage();
+    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/taskbus/socialclaw/preview ──────────────────────────────────────
+app.post('/socialclaw/preview', async function(req, res) {
+  try {
+    const result = await socialclaw.previewCampaign(req.body || {});
+    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/taskbus/socialclaw/validate ─────────────────────────────────────
+app.post('/socialclaw/validate', async function(req, res) {
+  try {
+    const result = await socialclaw.validateCampaign(req.body || {});
+    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/taskbus/socialclaw/publish ──────────────────────────────────────
+app.post('/socialclaw/publish', async function(req, res) {
+  try {
+    const result = await socialclaw.applyCampaign(req.body || {});
+    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/taskbus/socialclaw/delete ────────────────────────────────────────
+app.post('/socialclaw/delete', async function(req, res) {
+  try {
+    const result = await socialclaw.deletePost(req.body || {});
+    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // ── GET /api/taskbus/providers/status ─────────────────────────────────────────
@@ -210,14 +285,9 @@ app.get('/approvals', function(req, res) {
 
 // ── POST /api/taskbus/approval/:id ───────────────────────────────────────────
 // Body: { decision: 'approved'|'rejected', notes }
-// Requires: Authorization: Bearer <ACC_APPROVAL_HMAC_SECRET>
+// Auth delegated to taskbusAuth middleware (TASKBUS_API_KEY bearer token).
 app.post('/approval/:id', function(req, res) {
   (async function() {
-    const secret = process.env.ACC_APPROVAL_HMAC_SECRET;
-    if (!secret) return res.status(503).json({ success: false, error: 'Approval endpoint not configured (ACC_APPROVAL_HMAC_SECRET missing)' });
-    const auth = req.headers['authorization'] || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-    if (!token || token !== secret) return res.status(403).json({ success: false, error: 'Forbidden: invalid or missing approval token' });
     const approver = 'Shayan';
     const approval = store.resolveApproval(req.params.id, req.body.decision, approver, req.body.notes);
     if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
