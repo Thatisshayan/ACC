@@ -20,6 +20,7 @@ import {
 import api from './api.js';
 import MessengerPage from './pages/Messenger.jsx';
 import AssistantPage from './pages/Assistant.jsx';
+import AdminPage from './pages/Admin.jsx';
 
 // In Electron the UI loads from file:// so relative URLs won't reach the backend.
 // In browser (dev+prod) use relative paths so Vite proxy / Express serve correctly.
@@ -45,6 +46,7 @@ const NAV = [
   { id: 'assistant',    label: 'Assistant',    icon: '🎙️' },
   { id: 'agents',       label: 'Agents',        icon: '🤖' },
   { id: 'integrations', label: 'Integrations',  icon: '🔗' },
+  { id: 'admin',        label: 'Admin',         icon: '🛡️' },
   { id: 'settings',     label: 'Settings',      icon: '⚙️' },
 ];
 
@@ -64,6 +66,7 @@ const PAGE_PATHS = new Set([
   'assistant',
   'agents',
   'integrations',
+  'admin',
   'settings',
 ]);
 
@@ -872,8 +875,10 @@ export default function App() {
 
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5">
           <div className="text-sm font-medium text-white mb-3">Startup</div>
-          <p className="text-xs text-zinc-500">Desktop app starts the backend automatically. Telegram bot starts separately:</p>
-          <code className="mt-2 block text-xs text-cyan-300 bg-black/30 rounded px-3 py-2">npm run cloud:telegram</code>
+          <p className="text-xs text-zinc-500 mb-2">The desktop app starts the backend automatically. The Telegram bot runs 24/7 on Railway in webhook mode — no local process needed.</p>
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
+            Bot is live on Railway. Set <span className="font-mono">TELEGRAM_BOT_MODE=local</span> in your env only if you want to run it locally instead.
+          </div>
         </div>
       </div>
     );
@@ -887,6 +892,7 @@ export default function App() {
     assistant: () => <AssistantPage />,
     agents: renderAgents,
     integrations: renderIntegrations,
+    admin: () => <AdminPage />,
     settings: renderSettings,
   };
 

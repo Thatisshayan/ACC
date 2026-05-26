@@ -670,6 +670,44 @@ async function handleStateInput(chatId, userId, text, state, sendButtons) {
       users.updateUser(userId, { linkedinEmail: text });
       await sendMsg(chatId, '✅ *LinkedIn connected!*\nEmail: `' + text + '`'); break;
 
+    case 'awaiting_email_address': {
+      var emAddr = text.trim().toLowerCase();
+      if (!emAddr.includes('@') || !emAddr.includes('.')) {
+        await sendMsg(chatId, user.language==='fa'?'❌ آدرس ایمیل معتبر نیست. دوباره وارد کنید:':'❌ Invalid email address. Please enter again:');
+        setState(userId,'awaiting_email_address');
+        break;
+      }
+      var detected = emailMon.detectImapHost(emAddr);
+      setState(userId, 'awaiting_email_password', { email: emAddr, imapHost: detected.host, imapPort: detected.port });
+      var pwMsg = user.language==='fa'
+        ? '🔑 *رمز عبور اپلیکیشن*\n\nسرور: `' + detected.host + ':' + detected.port + '`\n\nرمز App Password (نه رمز اصلی) را وارد کنید:\n_برای Gmail: myaccount.google.com ← Security ← App passwords_'
+        : '🔑 *App Password*\n\nDetected IMAP server: `' + detected.host + ':' + detected.port + '`\n\nEnter your App Password (not your regular password):\n_Gmail: myaccount.google.com → Security → 2-Step Verification → App passwords_';
+      await sendMsg(chatId, pwMsg);
+      break;
+    }
+
+    case 'awaiting_email_password': {
+      var emData   = state.data || {};
+      var emEmail  = emData.email;
+      var emHost   = emData.imapHost;
+      var emPort   = emData.imapPort || 993;
+      await sendMsg(chatId, user.language==='fa'?'⏳ _در حال بررسی اتصال..._':'⏳ _Testing connection..._');
+      var emResult = await emailMon.enableMonitor(userId, emEmail, text.trim(), emHost, emPort);
+      if (emResult.success) {
+        emailMon.startPolling(5);
+        var okMsg = user.language==='fa'
+          ? '✅ *مانیتورینگ ایمیل فعال شد!*\n\nحساب: `' + emEmail + '`\nهر ۵ دقیقه یک‌بار صندوق ورودی شما بررسی می‌شود و ایمیل‌های مرتبط با شغل ارسال می‌شوند.'
+          : '✅ *Email monitoring enabled!*\n\nAccount: `' + emEmail + '`\nYour inbox will be checked every 5 minutes and job-related emails will be forwarded here.';
+        await sendMsg(chatId, okMsg);
+      } else {
+        var errMsg = user.language==='fa'
+          ? '❌ *اتصال ناموفق*\n\n' + (emResult.error||'خطای ناشناخته') + '\n\nدوباره با /email_monitor تلاش کنید.'
+          : '❌ *Connection failed*\n\n' + (emResult.error||'Unknown error') + '\n\nTry again with /email_monitor.';
+        await sendMsg(chatId, errMsg);
+      }
+      break;
+    }
+
     case 'awaiting_content_topic':
       var ctype = state.data && state.data.type;
       var cprompt = {
@@ -1182,13 +1220,22 @@ async function handleCallback(cb) {
   if (data==='job_tracker')  { await sendMsg(chatId, jobTracker.formatTracker(userId, user.language)); return; }
   if (data==='connect_linkedin') { await sendMsg(chatId, '🔗 Your LinkedIn email address:'); setState(userId,'awaiting_linkedin_email'); return; }
   if (data==='email_monitor') {
-    var state2 = emailMon.getMonitorState(userId);
+    var monState = emailMon.getMonitorState(userId);
     var fa2 = user.language==='fa';
-    if (state2.enabled) {
-      await sendButtons(chatId, fa2?'📧 مانیتورینگ ایمیل فعال است.':'📧 Email monitoring is active.', [[{text:fa2?'✅ بررسی ایمیل':'✅ Check now',callback_data:'email_check_now'},{text:fa2?'🔴 غیرفعال':'🔴 Disable',callback_data:'email_disable'}],[{text:'◀️ Back',callback_data:'menu_jobs'}]]);
+    if (monState.enabled) {
+      var activeMsg = fa2
+        ? '📧 *مانیتورینگ ایمیل فعال است*\n\nحساب: `' + monState.email + '`'
+        : '📧 *Email monitoring is active*\n\nAccount: `' + monState.email + '`';
+      await sendButtons(chatId, activeMsg, [
+        [{text: fa2?'✅ بررسی الان':'✅ Check now', callback_data:'email_check_now'}, {text: fa2?'🔴 غیرفعال':'🔴 Disable', callback_data:'email_disable'}],
+        [{text:'◀️ Back', callback_data:'menu_jobs'}]
+      ]);
     } else {
-      var fa2 = user.language==='fa';
-      await sendMsg(chatId, fa2?'📧 *مانیتورینگ ایمیل*\n\nبرای اتصال Gmail به صفحه این آدرس بروید:\n\n_در حال حاضر در حال توسعه است — به زودی فعال می‌شود._':'📧 *Email Monitoring*\n\nConnect your Gmail to get notified of job replies.\n\n_Gmail OAuth setup required. Add GOOGLE_CLIENT_ID to .env to enable._');
+      var setupMsg = fa2
+        ? '📧 *مانیتورینگ ایمیل*\n\nیک آدرس ایمیل را برای نظارت وارد کنید.\nپشتیبانی از: Gmail، Outlook، Yahoo، iCloud و هر سرویس IMAP.\n\n_برای Gmail یک App Password در myaccount.google.com بسازید._\n\nآدرس ایمیل خود را وارد کنید:'
+        : '📧 *Email Monitor Setup*\n\nMonitors your inbox for job-related emails and notifies you instantly.\nSupports Gmail, Outlook, Yahoo, iCloud and any IMAP provider.\n\n_For Gmail, create an App Password at myaccount.google.com → Security → 2-Step Verification → App passwords._\n\nEnter your email address:';
+      await sendMsg(chatId, setupMsg);
+      setState(userId, 'awaiting_email_address');
     }
     return;
   }

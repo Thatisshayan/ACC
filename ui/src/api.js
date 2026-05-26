@@ -17,8 +17,12 @@ export const approveSnapshot = (id) => api.post(`/ui/snapshot/${id}/approve`, { 
 export const rejectSnapshot  = (id) => api.post(`/ui/snapshot/${id}/reject`,  { approver: "Shayan" }).then(r => r.data);
 export const listApprovals   = () => api.get("/ui/approvals").then(r => r.data);
 export const listSecrets     = () => api.get("/ui/secrets").then(r => r.data);
-export const getAdminSystem  = () => api.get("/admin/system").then(r => r.data);
-export const getAuditTrail   = () => api.get("/admin/audit").then(r => r.data);
+export const getAdminSystem     = () => api.get("/admin/system").then(r => r.data);
+export const getAuditTrail      = () => api.get("/admin/audit").then(r => r.data);
+export const getAdminUsers      = () => api.get("/admin/users").then(r => r.data);
+export const getAdminLogs       = (limit = 200) => api.get("/admin/logs", { params: { limit } }).then(r => r.data);
+export const getAdminConnectors = () => api.get("/admin/connectors").then(r => r.data);
+export const getAdminTasks      = () => api.get("/admin/tasks").then(r => r.data);
 export const getStatusSummary = () => api.get("/status/summary").then(r => r.data);
 
 // ── Task Bus ──────────────────────────────────────────────────────────────────
