@@ -3,6 +3,7 @@ import {
   getTaskbusStats,
   getTaskbusTasks,
   getTaskbusIntegrations,
+  listAgents,
   listWorkflows,
   runWorkflow,
   runWorkflowParallel,
@@ -25,16 +26,12 @@ const DEFAULT_BACKEND_STATUS = {
   lastCheckedAt: null,
 };
 
-const AGENTS = [
-  { name: 'DeepSeek', icon: '🧠', desc: 'Primary AI — text, code, analysis' },
-  { name: 'OpenHands', icon: '🤝', desc: 'Autonomous coding agent' },
-  { name: 'Aider', icon: '⚡', desc: 'CLI coding with git integration' },
-  { name: 'CrewAI', icon: '👥', desc: 'Multi-agent Python workflows' },
-  { name: 'Alphonso', icon: '🦙', desc: 'Local Ollama — free & private' },
-  { name: 'Composio', icon: '🔌', desc: '250+ tool integrations' },
-  { name: 'Devika', icon: '🤖', desc: 'AI project coding agent' },
-  { name: 'Perplexity', icon: '🔍', desc: 'Real-time web research' },
-];
+const AGENT_ICONS = {
+  chatgpt: '🧠', claude: '✳️', gemini: '💎', notebooklm: '📓',
+  clickup: '📋', crewai: '👥', replicate_video: '🎬',
+  openhands: '🤝', aider: '⚡', devika: '🤖', alphonso: '🦙',
+  composio: '🔌', perplexity: '🔍', deepseek: '🧬',
+};
 
 const NAV = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '📊' },
@@ -110,6 +107,7 @@ export default function App() {
   const [backend, setBackend]   = useState(DEFAULT_BACKEND_STATUS);
   const [approvalBusy, setApprovalBusy] = useState(new Set());
   const [approvalMsg, setApprovalMsg]   = useState({});
+  const [agents, setAgents]             = useState([]);
   const [socialclawDraft, setSocialclawDraft] = useState(
     'ACC + SocialClaw publish lane: preview a polished social post about the latest workflow and bridge updates.'
   );
@@ -118,15 +116,17 @@ export default function App() {
   const [socialclawError, setSocialclawError] = useState('');
 
   async function fetchAll() {
-    const [s, t, i] = await Promise.all([
+    const [s, t, i, a] = await Promise.all([
       getTaskbusStats().catch(() => ({})),
       getTaskbusTasks().catch(() => ({ tasks: [] })),
       getTaskbusIntegrations().catch(() => ({})),
+      listAgents().catch(() => ({ agents: [] })),
     ]);
 
     setStats(s.stats || s || {});
     setTasks(Array.isArray(t.tasks) ? t.tasks : Array.isArray(t) ? t : []);
     setInt(i.integrations || {});
+    setAgents(Array.isArray(a.agents) ? a.agents : []);
   }
 
   async function handleApproval(taskId, decision) {
@@ -342,19 +342,50 @@ export default function App() {
   }
 
   function renderAgents() {
+    const providerDot = (s) => {
+      if (s === 'connected') return 'bg-emerald-400';
+      if (s === 'error')     return 'bg-red-400';
+      if (s === 'disabled')  return 'bg-zinc-600';
+      return 'bg-amber-400';
+    };
     return (
-      <div className="p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Agent Roster</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {AGENTS.map(a => (
-            <div key={a.name} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5">
-              <div className="text-2xl mb-2">{a.icon}</div>
-              <div className="font-medium text-white">{a.name}</div>
-              <div className="text-xs text-zinc-500 mt-1">{a.desc}</div>
-              <div className="mt-3 text-xs text-emerald-400">Active</div>
-            </div>
-          ))}
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold text-white">Agent Roster</h2>
+          <span className="text-xs text-zinc-500">{agents.length} registered</span>
         </div>
+
+        {agents.length === 0 ? (
+          <div className="rounded-xl border border-white/[0.06] p-12 text-center text-zinc-600">
+            Loading agents…
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {agents.map(a => (
+              <div key={a.id} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <span className="text-2xl">{AGENT_ICONS[a.id] || '🤖'}</span>
+                  <span className={`flex-shrink-0 w-2 h-2 rounded-full mt-1.5 ${providerDot(a.provider_status)}`} title={a.provider_status || 'unknown'} />
+                </div>
+                <div className="font-medium text-white">{a.name}</div>
+                <div className="text-xs text-zinc-500 mt-1">{a.role}</div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${a.enabled ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-zinc-700 bg-zinc-800 text-zinc-500'}`}>
+                    {a.enabled ? 'enabled' : 'disabled'}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/[0.08] bg-black/20 text-zinc-400">
+                    {a.automation_mode}
+                  </span>
+                  {a.provider_note && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-400 truncate max-w-full">
+                      {a.provider_note}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
