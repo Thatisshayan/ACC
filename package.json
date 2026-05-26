@@ -7,7 +7,7 @@
     "acc": "./acc.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node cloud/taskbus/router.test.js && node --test cloud/security/webhookHmac.test.js cloud/taskbus/store.test.js cloud/messages/store.test.js",
     "telegram": "node telegram.js",
     "bridge": "node server.js",
     "cloud:api": "node cloud/server.js",
@@ -15,6 +15,11 @@
     "cloud:telegram": "node cloud/telegram/bot.js",
     "start": "node scripts/start.js",
     "server": "node scripts/start.js",
+    "mobile:start": "cd mobile && npx expo start",
+    "mobile:android": "cd mobile && npx expo run:android",
+    "mobile:ios": "cd mobile && npx expo run:ios",
+    "mobile:build:android": "cd mobile && npx eas build --platform android --profile preview",
+    "mobile:build:ios": "cd mobile && npx eas build --platform ios --profile preview",
     "smoke": "node scripts/smokeTest_sandbox.js",
     "canary:enable": "node scripts/toggleCanary.js enable",
     "canary:disable": "node scripts/toggleCanary.js disable",
