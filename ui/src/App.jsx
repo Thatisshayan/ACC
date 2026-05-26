@@ -1,6 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import {
+  getTaskbusStats,
+  getTaskbusTasks,
+  getTaskbusIntegrations,
+  listWorkflows,
+  runWorkflow,
+  runWorkflowParallel,
+  getAlphonsoBridgeStatus,
+  listAlphonsoBridgePackets,
+  getSocialclawAccounts,
+  getSocialclawUsage,
+  previewSocialclawCampaign,
+  validateSocialclawCampaign,
+  publishSocialclawCampaign,
+  deleteSocialclawPost,
+} from './api.js';
 
-const API = 'http://localhost:4000';
+// In Electron the UI loads from file:// so relative URLs won't reach the backend.
+// In browser (dev+prod) use relative paths so Vite proxy / Express serve correctly.
+const API = (typeof window !== 'undefined' && window.electronAPI) ? 'http://localhost:4000' : '';
 const DEFAULT_BACKEND_STATUS = {
   status: 'Offline',
   detail: 'Checking backend...',
@@ -90,12 +108,18 @@ export default function App() {
   const [tasks, setTasks]       = useState([]);
   const [integrations, setInt]  = useState({});
   const [backend, setBackend]   = useState(DEFAULT_BACKEND_STATUS);
+  const [socialclawDraft, setSocialclawDraft] = useState(
+    'ACC + SocialClaw publish lane: preview a polished social post about the latest workflow and bridge updates.'
+  );
+  const [socialclawAction, setSocialclawAction] = useState('');
+  const [socialclawResult, setSocialclawResult] = useState(null);
+  const [socialclawError, setSocialclawError] = useState('');
 
   async function fetchAll() {
     const [s, t, i] = await Promise.all([
-      fetch(API + '/api/taskbus/stats').then(r => r.json()).catch(() => ({})),
-      fetch(API + '/api/taskbus/tasks').then(r => r.json()).catch(() => ({ tasks: [] })),
-      fetch(API + '/api/taskbus/integrations/status').then(r => r.json()).catch(() => ({})),
+      getTaskbusStats().catch(() => ({})),
+      getTaskbusTasks().catch(() => ({ tasks: [] })),
+      getTaskbusIntegrations().catch(() => ({})),
     ]);
 
     setStats(s.stats || s || {});
@@ -129,8 +153,8 @@ export default function App() {
           const ok = await fetch(API + '/api/health').then((r) => r.ok).catch(() => false);
           if (active) {
             setBackend(ok
-              ? { status: 'Online', detail: 'Backend reachable at http://localhost:4000.', lastCheckedAt: new Date().toISOString() }
-              : { status: 'Offline', detail: 'Backend not reachable at http://localhost:4000.', lastCheckedAt: new Date().toISOString() }
+              ? { status: 'Online', detail: 'Backend reachable.', lastCheckedAt: new Date().toISOString() }
+              : { status: 'Offline', detail: 'Backend not reachable.', lastCheckedAt: new Date().toISOString() }
             );
           }
         } catch {
@@ -157,6 +181,46 @@ export default function App() {
   }, []);
 
   const pending = tasks.filter(t => t.status === 'waiting_approval');
+  const socialclaw = integrations.socialclaw || {};
+  const socialclawIsReady = socialclaw.status === 'connected';
+
+  async function handleSocialClaw(action) {
+    setSocialclawAction(action);
+    setSocialclawError('');
+    try {
+      const payload = {
+        source: 'acc-ui',
+        title: 'ACC social publish lane',
+        content: socialclawDraft,
+        caption: socialclawDraft,
+        platform: 'social',
+        lane: 'publish',
+      };
+
+      let result;
+      if (action === 'accounts') {
+        result = await getSocialclawAccounts();
+      } else if (action === 'usage') {
+        result = await getSocialclawUsage();
+      } else if (action === 'validate') {
+        result = await validateSocialclawCampaign(payload);
+      } else if (action === 'publish') {
+        result = await publishSocialclawCampaign(payload);
+      } else if (action === 'delete') {
+        result = await deleteSocialclawPost(payload);
+      } else {
+        result = await previewSocialclawCampaign(payload);
+      }
+
+      setSocialclawResult(result);
+    } catch (err) {
+      const message = err?.response?.data?.error || err?.message || 'SocialClaw action failed';
+      setSocialclawError(message);
+      setSocialclawResult(null);
+    } finally {
+      setSocialclawAction('');
+    }
+  }
 
   function renderDashboard() {
     const byStatus = stats.by_status || {};
@@ -265,7 +329,87 @@ export default function App() {
     const keys = Object.keys(integrations);
     return (
       <div className="p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Integration Status</h2>
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Integration Status</h2>
+            <div className="text-xs text-zinc-500 mt-1">
+              ACC keeps the brain and governance. SocialClaw sits in the publish lane as the social execution adapter.
+            </div>
+          </div>
+          <div className={`text-xs px-2 py-1 rounded-full border ${socialclawIsReady ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/15 text-amber-400 border-amber-500/20'}`}>
+            SocialClaw lane: {socialclaw.status || 'unknown'}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 mb-6 space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-white">SocialClaw Publisher</h3>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${socialclawIsReady ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' : 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20'}`}>
+                  {socialclaw.status || 'unknown'}
+                </span>
+              </div>
+              <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
+                This lane previews, validates, and publishes social content through SocialClaw while ACC keeps approvals, memory, and workflow control. Publish is still truth-gated: if <span className="font-mono text-zinc-200">SOCIALCLAW_API_KEY</span> is missing, the connector stays <span className="font-mono text-zinc-200">setup_required</span>.
+              </p>
+              {socialclaw.note && <div className="text-xs text-zinc-500 mt-2">{socialclaw.note}</div>}
+            </div>
+            <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3 text-xs text-zinc-400 min-w-[220px]">
+              <div className="text-zinc-500 uppercase tracking-[0.2em] text-[10px] mb-2">Workflow lane</div>
+              <div className="text-white font-medium">publish → socialclaw</div>
+              <div className="mt-1">Approval gate: publish actions should remain review-first in ACC.</div>
+            </div>
+          </div>
+
+          <textarea
+            value={socialclawDraft}
+            onChange={(e) => setSocialclawDraft(e.target.value)}
+            rows={4}
+            className="w-full rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-500/40"
+            placeholder="Draft content for SocialClaw..."
+          />
+
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => handleSocialClaw('preview')} disabled={!!socialclawAction}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm text-white hover:bg-white/15 disabled:opacity-50">
+              {socialclawAction === 'preview' ? 'Previewing...' : 'Preview'}
+            </button>
+            <button onClick={() => handleSocialClaw('validate')} disabled={!!socialclawAction}
+              className="px-3 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sm text-sky-300 hover:bg-sky-500/20 disabled:opacity-50">
+              {socialclawAction === 'validate' ? 'Validating...' : 'Validate'}
+            </button>
+            <button onClick={() => handleSocialClaw('accounts')} disabled={!!socialclawAction}
+              className="px-3 py-2 rounded-lg bg-zinc-800/60 border border-white/10 text-sm text-zinc-200 hover:bg-zinc-700/60 disabled:opacity-50">
+              {socialclawAction === 'accounts' ? 'Loading...' : 'Accounts'}
+            </button>
+            <button onClick={() => handleSocialClaw('usage')} disabled={!!socialclawAction}
+              className="px-3 py-2 rounded-lg bg-zinc-800/60 border border-white/10 text-sm text-zinc-200 hover:bg-zinc-700/60 disabled:opacity-50">
+              {socialclawAction === 'usage' ? 'Loading...' : 'Usage'}
+            </button>
+            <button onClick={() => handleSocialClaw('publish')} disabled={!!socialclawAction}
+              className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-sm text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50">
+              {socialclawAction === 'publish' ? 'Publishing...' : 'Publish'}
+            </button>
+            <button onClick={() => handleSocialClaw('delete')} disabled={!!socialclawAction}
+              className="px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/25 text-sm text-red-300 hover:bg-red-500/20 disabled:opacity-50">
+              {socialclawAction === 'delete' ? 'Deleting...' : 'Delete Post'}
+            </button>
+          </div>
+
+          {socialclawError && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {socialclawError}
+            </div>
+          )}
+
+          {socialclawResult && (
+            <pre className="max-h-72 overflow-auto rounded-xl border border-white/[0.08] bg-black/35 p-4 text-xs text-zinc-300 whitespace-pre-wrap">
+              {JSON.stringify(socialclawResult, null, 2)}
+            </pre>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {keys.length === 0
             ? <div className="col-span-3 rounded-xl border border-white/[0.06] p-12 text-center text-zinc-600">Loading integrations...</div>

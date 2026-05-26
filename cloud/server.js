@@ -108,8 +108,20 @@ app.post("/orchestrate", (req, res) => {
 app.use("/admin", adminRouter);
 app.use("/admin/dlq", dlqRoutes);
 
+// ---------- Task Bus auth middleware ----------
+// Set TASKBUS_API_KEY in .env to require Bearer token on all /api/taskbus/* routes.
+// If unset the routes are open (dev mode).
+const _TASKBUS_KEY = process.env.TASKBUS_API_KEY;
+function taskbusAuth(req, res, next) {
+  if (!_TASKBUS_KEY) return next();
+  const auth  = req.headers['authorization'] || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (token !== _TASKBUS_KEY) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  next();
+}
+
 // ---------- Agent Task Bus ----------
-app.use("/api/taskbus", taskbusRoutes);
+app.use("/api/taskbus", taskbusAuth, taskbusRoutes);
 
 // ---------- Security Approval + Telegram Webhook ----------
 app.use("/api", securityApproval);
