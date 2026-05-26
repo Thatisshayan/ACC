@@ -34,6 +34,10 @@ const CONNECTOR_SKILLS = {
     capabilities: ["ecommerce", "inventory"],
     actions:      ["getProducts", "updateInventory", "syncOrders"],
   },
+  socialclaw: {
+    capabilities: ["publish", "social_media", "schedule", "analytics", "content_publishing"],
+    actions:      ["health", "status", "accounts:list", "accounts:capabilities", "assets:upload", "preview", "validate", "apply", "publish", "posts:delete", "usage"],
+  },
   deepseek: {
     capabilities: ["validate", "reasoning", "optimize"],
     actions:      ["validate", "reason", "optimize"],

@@ -4,6 +4,7 @@ import {
   getTaskbusTasks,
   getTaskbusIntegrations,
   listAgents,
+  createTask,
   listWorkflows,
   runWorkflow,
   runWorkflowParallel,
@@ -114,6 +115,7 @@ export default function App() {
   const [socialclawAction, setSocialclawAction] = useState('');
   const [socialclawResult, setSocialclawResult] = useState(null);
   const [socialclawError, setSocialclawError] = useState('');
+  const [pipelineAction, setPipelineAction] = useState('');
 
   async function fetchAll() {
     const [s, t, i, a] = await Promise.all([
@@ -200,6 +202,13 @@ export default function App() {
   const pending = tasks.filter(t => t.status === 'waiting_approval');
   const socialclaw = integrations.socialclaw || {};
   const socialclawIsReady = socialclaw.status === 'connected';
+  const publisherInbox = tasks.filter((task) => {
+    const meta = task.meta || {};
+    return task.assigned_agent === 'socialclaw'
+      || meta.workflow_key === 'acc:social_publish_pipeline'
+      || meta.workflow_stage === 'publish'
+      || meta.workflow_stage === 'generate';
+  }).slice(0, 4);
 
   async function handleSocialClaw(action) {
     setSocialclawAction(action);
@@ -239,6 +248,39 @@ export default function App() {
     }
   }
 
+  async function launchSocialPublishPipeline() {
+    setPipelineAction('launching');
+    setSocialclawError('');
+    try {
+      const payload = {
+        title: 'ACC Social Draft Pipeline',
+        instruction: 'Draft a professional social post about ACC workflow orchestration and the SocialClaw handoff.',
+        assigned_agent: 'alphonso',
+        priority: 'high',
+        required_output: 'Social-ready draft and handoff',
+        approval_required: false,
+        automation_mode: 'semi_auto',
+        feature_ref: 'workflow:acc:social_publish_pipeline',
+        created_by: 'chatgpt',
+        meta: {
+          workflow_key: 'acc:social_publish_pipeline',
+          workflow_kind: 'publishing_pipeline',
+          workflow_stage: 'generate',
+          workflow_target_connector: 'socialclaw',
+          workflow_input: socialclawDraft,
+        },
+      };
+      const result = await createTask(payload);
+      setSocialclawResult(result);
+    } catch (err) {
+      const message = err?.response?.data?.error || err?.message || 'Pipeline launch failed';
+      setSocialclawError(message);
+      setSocialclawResult(null);
+    } finally {
+      setPipelineAction('');
+    }
+  }
+
   function renderDashboard() {
     const byStatus = stats.by_status || {};
     return (
@@ -253,6 +295,105 @@ export default function App() {
           <StatCard label="Failed"       value={byStatus.failed || 0}          color="text-red-400" />
           <StatCard label="Pending"      value={stats.pending_approvals || 0}  color="text-amber-400" />
         </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-white">ACC Social Publish Pipeline</div>
+                <div className="text-xs text-zinc-500 mt-1">Plan with ACC, generate with Alphonso, then approve and publish via SocialClaw.</div>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full border ${socialclawIsReady ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/15 text-amber-400 border-amber-500/20'}`}>
+                {socialclaw.status || 'setup_required'}
+              </span>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-white/[0.06] bg-black/20 p-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">1. ACC intake</span>
+                <span>→</span>
+                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">2. Alphonso generate</span>
+                <span>→</span>
+                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">3. ACC review</span>
+                <span>→</span>
+                <span className="px-2 py-1 rounded-full bg-white/5 text-zinc-200">4. SocialClaw publish</span>
+              </div>
+              <textarea
+                value={socialclawDraft}
+                onChange={(e) => setSocialclawDraft(e.target.value)}
+                rows={4}
+                className="mt-4 w-full rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-emerald-500/40"
+                placeholder="Draft the social post here..."
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={launchSocialPublishPipeline} disabled={!!pipelineAction}
+                  className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-sm text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50">
+                  {pipelineAction === 'launching' ? 'Launching...' : 'Launch pipeline'}
+                </button>
+                <button onClick={() => handleSocialClaw('preview')} disabled={!!socialclawAction}
+                  className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm text-white hover:bg-white/15 disabled:opacity-50">
+                  {socialclawAction === 'preview' ? 'Previewing...' : 'Preview only'}
+                </button>
+                <button onClick={() => handleSocialClaw('validate')} disabled={!!socialclawAction}
+                  className="px-3 py-2 rounded-lg bg-sky-500/15 border border-sky-500/25 text-sm text-sky-300 hover:bg-sky-500/20 disabled:opacity-50">
+                  {socialclawAction === 'validate' ? 'Validating...' : 'Validate draft'}
+                </button>
+              </div>
+              <div className="mt-3 text-xs text-zinc-500">
+                Publish remains truth-gated until <span className="font-mono text-zinc-200">SOCIALCLAW_API_KEY</span> is set.
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-white">Publisher Inbox</div>
+              <div className="text-xs text-zinc-500">{publisherInbox.length} items</div>
+            </div>
+            <div className="mt-4 space-y-3">
+              {publisherInbox.length === 0 ? (
+                <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4 text-sm text-zinc-500">
+                  No publish drafts queued yet. Launch the pipeline to create a draft task and publish handoff.
+                </div>
+              ) : publisherInbox.map((task) => {
+                const meta = task.meta || {};
+                return (
+                  <div key={task.id} className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm text-white">{task.title || 'Untitled publish lane'}</div>
+                        <div className="text-xs text-zinc-500 mt-1">
+                          {meta.workflow_stage || task.assigned_agent} · {task.status}
+                        </div>
+                      </div>
+                      <Badge status={task.status} />
+                    </div>
+                    {meta.workflow_parent_task_id && (
+                      <div className="mt-2 text-xs text-zinc-500">Parent task: {String(meta.workflow_parent_task_id).slice(0, 8)}</div>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => setPage('tasks')}
+                        className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-xs text-zinc-200 hover:bg-white/15"
+                      >
+                        Open task
+                      </button>
+                      {task.status === 'waiting_approval' && (
+                        <button
+                          onClick={() => setPage('approvals')}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-xs text-amber-300 hover:bg-amber-500/20"
+                        >
+                          Review approval
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
           <div className="px-5 py-3 border-b border-white/[0.06]">
             <span className="text-sm font-medium text-white">Live Task Feed</span>

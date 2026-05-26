@@ -25,6 +25,7 @@ export const getTaskbusStats        = () => api.get("/taskbus/stats").then(r => 
 export const getTaskbusTasks        = (filter = {}) => api.get("/taskbus/tasks", { params: filter }).then(r => r.data);
 export const getTaskbusIntegrations = () => api.get("/taskbus/integrations/status").then(r => r.data);
 export const listAgents             = () => api.get("/taskbus/agents").then(r => r.data);
+export const createTask             = (payload = {}) => api.post("/taskbus/task", payload).then(r => r.data);
 export const getSocialclawStatus    = () => api.get("/taskbus/socialclaw/status").then(r => r.data);
 export const getSocialclawAccounts   = () => api.get("/taskbus/socialclaw/accounts").then(r => r.data);
 export const getSocialclawUsage      = () => api.get("/taskbus/socialclaw/usage").then(r => r.data);

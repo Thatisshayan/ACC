@@ -469,9 +469,95 @@ async function routeTask(taskId) {
         is_real_ai_result: true, cost_tier: 'local_free',
         output: alResult.output || '', summary: alResult.success ? 'Alphonso/Ollama completed (free, local)' : alResult.error });
       store.updateTask(taskId, { status: alResult.success?'done':'failed', provider_used: 'alphonso_ollama' });
+
+      if (alResult.success && task.meta && task.meta.workflow_key === 'acc:social_publish_pipeline') {
+        var publishPayload = {
+          source: 'acc-social-publish-pipeline',
+          workflow_key: 'acc:social_publish_pipeline',
+          workflow_parent_task_id: taskId,
+          title: task.title,
+          content: alResult.output || '',
+          caption: alResult.output || '',
+          draft: alResult.output || '',
+          prompt: task.instruction || task.title || '',
+        };
+        var publishTask = store.createTask({
+          title: '[SocialClaw] Publish draft from ' + (task.title || 'ACC'),
+          instruction: [
+            'Publish the approved draft through SocialClaw.',
+            'Draft content:',
+            alResult.output || '',
+            '',
+            'Follow the ACC approval gate before publishing.',
+          ].join('\n'),
+          assigned_agent: 'socialclaw',
+          priority: task.priority || 'high',
+          required_output: 'Publish confirmation and destination URL',
+          approval_required: true,
+          automation_mode: 'semi_auto',
+          feature_ref: 'workflow:acc:social_publish_pipeline',
+          created_by: task.created_by || 'chatgpt',
+          request_id: task.request_id || null,
+          meta: Object.assign({}, task.meta || {}, {
+            workflow_key: 'acc:social_publish_pipeline',
+            workflow_kind: 'publishing_pipeline',
+            workflow_stage: 'publish',
+            workflow_parent_task_id: taskId,
+            publish_payload: publishPayload,
+            generated_by: 'alphonso',
+          }),
+        });
+        var publishApproval = store.createApproval(publishTask.id, 'high_risk_execution');
+        store.updateTask(publishTask.id, { status: 'waiting_approval' });
+        store.addMessage(taskId, 'alphonso', 'socialclaw', [
+          'Publish handoff prepared.',
+          'Child task: ' + publishTask.id.slice(0, 8),
+          'Approval ID: ' + publishApproval.id.slice(0, 8),
+          'Approve the publish task from /approvals before SocialClaw runs.',
+        ].join('\n'));
+        return {
+          status: 'done',
+          taskId,
+          provider_used: 'alphonso_ollama',
+          output: alResult.output,
+          next_request: 'Review the generated draft, then approve the SocialClaw publish task: ' + publishTask.id.slice(0, 8),
+          publish_task_id: publishTask.id,
+          publish_approval_id: publishApproval.id,
+        };
+      }
+
       return { status: alResult.success?'done':'failed', taskId, provider_used:'alphonso_ollama', output: alResult.output };
     }
     log('[router] Alphonso/Ollama not enabled â€” falling through');
+  }
+
+  // â”€â”€ SocialClaw â€” publishing adapter for social distribution â€”â”€â”€â”€â”€â”€â”€â”€â”€
+  if (task.assigned_agent === 'socialclaw') {
+    var socialclaw = require('../integrations/socialclaw.js');
+    if (socialclaw.enabled()) {
+      log('[router] Routing to SocialClaw publishing adapter...');
+      store.updateTask(taskId, { status: 'in_progress' });
+      var scResult = await socialclaw.sendTaskFromACC(task);
+      var scOutput = typeof scResult.output === 'object' ? JSON.stringify(scResult.output) : (scResult.output || '');
+      var scR = store.addResult({
+        task_id: taskId,
+        provider_used: 'socialclaw',
+        is_real_ai_result: true,
+        cost_tier: 'external_publisher',
+        output: scOutput,
+        summary: scResult.summary || (scResult.success ? 'SocialClaw publish completed' : scResult.error || 'SocialClaw setup required'),
+      });
+      store.updateTask(taskId, { status: scResult.success ? 'done' : 'failed', provider_used: 'socialclaw' });
+      return {
+        status: scResult.success ? 'done' : 'failed',
+        taskId: taskId,
+        provider_used: 'socialclaw',
+        resultId: scR.id,
+        output: scOutput,
+        summary: scR.summary || '',
+      };
+    }
+    log('[router] SocialClaw not configured â€” falling through');
   }
 
   store.addMessage(taskId, 'system', task.assigned_agent,

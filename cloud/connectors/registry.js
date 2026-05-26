@@ -4,12 +4,66 @@
 
 const fs   = require("fs");
 const path = require("path");
+const { BaseConnector } = require("./baseConnector.js");
 const { readSecret } = require("../security/vaultStub.js");
 
 const CONNECTORS_DIR  = __dirname;
 const MANIFEST_PATH   = path.join(__dirname, "manifest.json");
 
 const registry = new Map(); // name → connector instance
+
+class LegacyConnectorAdapter extends BaseConnector {
+  constructor(config = {}, mod = {}) {
+    super(config);
+    this.mod = mod;
+  }
+
+  async checkHealth() {
+    if (typeof this.mod.checkHealth === "function") {
+      return this.mod.checkHealth();
+    }
+    return { status: this.enabled ? "connected" : "disabled", note: "Legacy connector adapter fallback." };
+  }
+
+  async run(action, payload = {}) {
+    if (typeof this.mod.run === "function") {
+      return this.mod.run(action, payload);
+    }
+
+    if (typeof this.mod.sendTaskFromACC === "function") {
+      return this.mod.sendTaskFromACC(Object.assign({ action: action }, payload));
+    }
+
+    if (typeof this.mod[action] === "function") {
+      try {
+        switch (this.name) {
+          case "clickup":
+            if (action === "createTask") return this.mod.createTask(payload.listId || payload.list_id || payload.list || "", payload.data || payload);
+            if (action === "updateTask") return this.mod.updateTask(payload.taskId || payload.task_id || payload.id, payload.data || payload);
+            if (action === "getTasks") return this.mod.getTasks(payload.listId || payload.list_id || payload.list || "");
+            if (action === "getTeams") return this.mod.getTeams();
+            if (action === "checkHealth") return this.mod.checkHealth();
+            break;
+          case "airtable":
+            if (action === "createRecord") return this.mod.createRecord(payload.table || payload.tableName || "", payload.fields || payload.data || payload);
+            if (action === "updateRecord") return this.mod.updateRecord(payload.table || payload.tableName || "", payload.recordId || payload.id || "", payload.fields || payload.data || payload);
+            if (action === "findRecords") return this.mod.findRecords(payload.table || payload.tableName || "", payload.filterFormula || payload.filter || "", payload.maxRecords);
+            if (action === "syncTask") return this.mod.syncTask(payload.task || payload, payload.result || payload.data || {});
+            if (action === "syncUser") return this.mod.syncUser(payload.user || payload.data || payload);
+            if (action === "syncApproval") return this.mod.syncApproval(payload.approval || payload.data || payload, payload.task || payload.taskData || {});
+            if (action === "checkHealth") return this.mod.checkHealth();
+            break;
+          default:
+            break;
+        }
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+
+    return { success: false, error: `Connector ${this.name} does not implement action "${action}".` };
+  }
+}
 
 /**
  * loadConnectors
@@ -46,20 +100,26 @@ function loadConnectors() {
       const mod            = require(filePath);
       const ConnectorClass = Object.values(mod)[0]; // first export = the class
 
-      if (typeof ConnectorClass !== "function") {
-        console.warn(`[connectors] ${entry.file} does not export a class.`);
-        continue;
-      }
-
       const apiKey   = entry.apiKeyEnv
         ? (readSecret(entry.apiKeyEnv) || process.env[entry.apiKeyEnv] || null)
         : null;
-      const instance = new ConnectorClass({
-        name:    entry.name,
-        version: entry.version,
-        apiKey,
-        enabled: entry.enabled,
-      });
+      let instance = null;
+
+      if (typeof ConnectorClass === "function" && ConnectorClass.prototype && typeof ConnectorClass.prototype.run === "function") {
+        instance = new ConnectorClass({
+          name:    entry.name,
+          version: entry.version,
+          apiKey,
+          enabled: entry.enabled,
+        });
+      } else {
+        instance = new LegacyConnectorAdapter({
+          name:    entry.name,
+          version: entry.version,
+          apiKey,
+          enabled: entry.enabled,
+        }, mod);
+      }
 
       registry.set(entry.name, instance);
       console.log(`[connectors] Loaded: ${entry.name} v${entry.version}`);

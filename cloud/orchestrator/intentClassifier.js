@@ -6,6 +6,7 @@ You classify user requests for an AI orchestrator called ACC.
 
 Return ONLY a JSON object with no preamble or markdown. Fields:
 - intent: one of ["research","write","document","task","job_search","tailor_resume","apply_job","communication","automation","browse","unknown"]
+- intent: one of ["research","write","document","task","job_search","tailor_resume","apply_job","communication","automation","browse","publish","unknown"]
 - connectors: array of connector names to use (e.g. ["notion","clickup","linkedin","indeed","browser","gmail"])
 - agents: array of agent types to use (e.g. ["claude","deepseek","browser"])
 - priority: "high" | "normal" | "low"

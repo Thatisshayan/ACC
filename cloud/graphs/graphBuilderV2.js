@@ -8,6 +8,18 @@ const { buildTailoredResumeGraph } = require("./graphBuilder_resume.js");
 const { buildAutoApplyGraph }      = require("./graphBuilder_apply.js");
 const { memoryEngine }             = require("../memory/memoryEngine.js");
 
+function pickSocialClawAction(text) {
+  const lower = String(text || "").toLowerCase();
+  if (/\bpreview\b|\bdraft\b/.test(lower)) return "preview";
+  if (/\bvalidate\b/.test(lower)) return "validate";
+  if (/\bdelete\b/.test(lower) && /\bpost\b/.test(lower)) return "posts:delete";
+  if (/\bstatus\b|\bhealth\b/.test(lower)) return "health";
+  if (/\baccounts?\s+list|\blist\s+accounts\b/.test(lower)) return "accounts:list";
+  if (/\bcapabilit/.test(lower) && /\baccounts?\b/.test(lower)) return "accounts:capabilities";
+  if (/\busage\b/.test(lower)) return "usage";
+  return "apply";
+}
+
 async function buildGraphFromUserRequestV2({ text, language = "en", userId, role }) {
   const intentInfo = await classifyIntent(text);
   const intent     = intentInfo.intent;
@@ -49,6 +61,53 @@ async function buildGraphFromUserRequestV2({ text, language = "en", userId, role
       id: "C1", agentType: "clickup",
       payload: { action: "createTask", listId: process.env.CLICKUP_JOB_LIST_ID || "REPLACE_CLICKUP_JOB_LIST", data: { name: text.slice(0, 80), description: `Generated from ACC.\nIntent: ${intent}` } },
       dependsOn: ["PLAN"], meta: { userId, role },
+    });
+  }
+
+  if (connectors.includes("socialclaw")) {
+    const socialAction = pickSocialClawAction(text);
+    const publishSummary = `Create a social-ready draft for: ${text.slice(0, 120)}`;
+    nodes.push({
+      id: "A1",
+      agentType: "alphonso",
+      payload: {
+        mode: "generate",
+        prompt: publishSummary,
+        format: "social_post",
+        language,
+        userId,
+        role,
+      },
+      dependsOn: ["PLAN"],
+      meta: {
+        userId,
+        role,
+        workflow_stage: "generate",
+        workflow_pipeline: "alphonso_to_socialclaw",
+      },
+    });
+    nodes.push({
+      id: "S1",
+      agentType: "socialclaw",
+      payload: {
+        action: socialAction,
+        schedule: {
+          title: text.slice(0, 80),
+          prompt: publishSummary,
+          language,
+          userId,
+          role,
+        },
+      },
+      dependsOn: ["A1"],
+      meta: {
+        userId,
+        role,
+        requiresApproval: true,
+        allowedRoles: ["Admin", "Operator"],
+        workflow_stage: "publish",
+        workflow_pipeline: "alphonso_to_socialclaw",
+      },
     });
   }
 
