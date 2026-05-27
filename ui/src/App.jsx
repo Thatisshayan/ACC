@@ -225,6 +225,184 @@ function AnimatedStatCard({ label, value, color = 'text-white', sub, icon }) {
   );
 }
 
+// ── Mini launcher (self-contained so launch state doesn't live in App) ────────
+function MiniLauncher({
+  miniWorkflow, runtimeOverall, bridgeStatus, bridgeConfigured,
+  quickCards, launcherWorkflows, backend, integrations, stats, pending,
+  setPage, setMiniWorkflowContext,
+}) {
+  const [launching, setLaunching] = React.useState(null);   // workflowId being launched
+  const [launchResult, setLaunchResult] = React.useState(null); // { ok, name, taskId, error }
+
+  async function handleLaunch(workflow) {
+    if (launching) return;
+    setLaunching(workflow.id);
+    setLaunchResult(null);
+    try {
+      const res = await runWorkflow(workflow.id, { created_by: 'ui:mini' });
+      setLaunchResult({ ok: true, name: workflow.name, taskId: res.task?.id });
+      // Navigate to tasks after short delay so user sees the success toast
+      setTimeout(() => { setPage('tasks'); }, 1400);
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Launch failed';
+      setLaunchResult({ ok: false, name: workflow.name, error: msg });
+    } finally {
+      setLaunching(null);
+    }
+  }
+
+  return (
+    <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+
+      {/* Launch result toast */}
+      {launchResult && (
+        <div className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-mono
+          ${launchResult.ok
+            ? 'border-acc-green/25 bg-acc-green/10 text-acc-green'
+            : 'border-red-500/25 bg-red-500/10 text-red-400'}`}>
+          <span>
+            {launchResult.ok
+              ? `Queued: ${launchResult.name} — task ${launchResult.taskId ? launchResult.taskId.slice(0, 8) : '…'}`
+              : `Failed: ${launchResult.name} — ${launchResult.error}`}
+          </span>
+          <button onClick={() => setLaunchResult(null)} className="opacity-50 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      <div className={`${shell} overflow-hidden`}>
+        <div className="relative p-5 md:p-7">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_28%)]" />
+          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <Badge tone="emerald">ACC mini web app</Badge>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                Shared launch surface for mobile and Telegram.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400 md:text-base">
+                This is the compact, public, workflow-first surface that both mobile and Telegram can open. It stays on the same ACC backend source of truth.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={runtimeOverall === 'healthy' ? 'emerald' : 'amber'}>{runtimeOverall}</Badge>
+              <Badge tone={bridgeConfigured ? 'emerald' : 'amber'}>{bridgeConfigured ? 'bridge ready' : 'bridge setup'}</Badge>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {quickCards.map((card) => (
+              <Metric key={card.label} label={card.label} value={card.value} detail={card.detail} />
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button onClick={() => setPage('tasks')} className="rounded-xl border border-acc-green/20 bg-acc-green/10 px-4 py-2 text-sm font-semibold text-acc-green">Open tasks</button>
+            <button onClick={() => setPage('approvals')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open approvals</button>
+            <button onClick={() => setPage('assistant')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open assistant</button>
+            <button onClick={() => setPage('dashboard')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open dashboard</button>
+          </div>
+          {miniWorkflow && (
+            <div className="mt-4 rounded-2xl border border-acc-green/15 bg-acc-green/[0.06] px-4 py-3 text-sm text-zinc-200">
+              Workflow context: <span className="font-semibold text-white">{miniWorkflow}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+        <div className={`${shell} p-5 md:p-6`}>
+          <SectionHeader
+            eyebrow="Launch lanes"
+            title="Quick actions"
+            description="Use this surface to jump straight into ACC's live workflows without the full dashboard overhead."
+          />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {[
+              ['Assistant', 'Parse an instruction or open a workflow.'],
+              ['Tasks', 'Review the live Task Bus queue.'],
+              ['Approvals', 'Approve or reject queued actions.'],
+              ['Messages', 'Open private chat and handoffs.'],
+              ['Workflows', 'Browse and launch the catalog.'],
+              ['Bridge', 'Inspect Alphonso packets and status.'],
+            ].map(([title, detail]) => (
+              <button
+                key={title}
+                onClick={() => {
+                  if (title === 'Assistant') setPage('assistant');
+                  else if (title === 'Tasks') setPage('tasks');
+                  else if (title === 'Approvals') setPage('approvals');
+                  else if (title === 'Messages') setPage('messages');
+                  else if (title === 'Workflows') setPage('mini');
+                  else setPage('dashboard');
+                }}
+                className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-left transition hover:border-acc-green/20 hover:bg-acc-green/[0.05]"
+              >
+                <div className="text-sm font-semibold text-white">{title}</div>
+                <div className="mt-1 text-xs leading-relaxed text-zinc-500">{detail}</div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Workflow launcher</div>
+                <div className="mt-1 text-sm font-semibold text-white">Top workflows from the live catalog</div>
+              </div>
+              <Badge tone="emerald">{launcherWorkflows.length} shown</Badge>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {launcherWorkflows.length === 0 ? (
+                <div className="col-span-full rounded-2xl border border-dashed border-white/[0.08] bg-black/20 px-4 py-8 text-center text-sm text-zinc-500">
+                  No workflows found yet.
+                </div>
+              ) : launcherWorkflows.map((workflow) => {
+                const isThis = launching === workflow.id;
+                return (
+                  <button
+                    key={workflow.id}
+                    disabled={!!launching}
+                    onClick={() => handleLaunch(workflow)}
+                    className={`rounded-2xl border p-4 text-left transition
+                      ${isThis
+                        ? 'border-acc-green/30 bg-acc-green/10 opacity-80'
+                        : 'border-white/[0.06] bg-black/20 hover:border-acc-green/20 hover:bg-acc-green/[0.05]'}
+                      ${launching && !isThis ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{workflow.name}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">{workflow.category}</div>
+                      </div>
+                      <Badge tone={workflow.approval ? 'amber' : 'emerald'}>{workflow.approval ? 'approval' : 'open'}</Badge>
+                    </div>
+                    <div className="mt-2 text-xs leading-relaxed text-zinc-400">{workflow.description}</div>
+                    <div className="mt-3 text-xs font-semibold text-acc-green">
+                      {isThis ? 'Queuing...' : 'Launch workflow'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className={`${shell} p-5 md:p-6`}>
+          <SectionHeader
+            eyebrow="Live truth"
+            title="Current runtime state"
+            description="The mini app mirrors the same runtime truth as the rest of ACC, so mobile and Telegram never drift from the source of truth."
+          />
+          <div className="mt-4 space-y-3">
+            <StateRow label="Backend" value={backend.status || 'ok'} detail={backend.detail || 'Backend reachable'} />
+            <StateRow label="Bot" value={integrations.telegram?.status || 'fallback'} detail={integrations.telegram?.note || 'Telegram fallback is available'} />
+            <StateRow label="Messenger" value="ready" detail={`${stats.total_tasks || 0} task records visible in ACC`} />
+            <StateRow label="Bridge" value={bridgeStatus} detail={bridgeConfigured ? 'Public mini app and bridge paths are wired' : 'Bridge needs setup'} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage]           = useState(() => typeof window !== 'undefined' ? pathToPage(window.location.pathname) : 'dashboard');
@@ -590,132 +768,20 @@ export default function App() {
     ];
 
     return (
-      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
-        <div className={`${shell} overflow-hidden`}>
-          <div className="relative p-5 md:p-7">
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_28%)]" />
-            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl">
-                <Badge tone="emerald">ACC mini web app</Badge>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                  Shared launch surface for mobile and Telegram.
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400 md:text-base">
-                  This is the compact, public, workflow-first surface that both mobile and Telegram can open. It stays on the same ACC backend source of truth.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge tone={runtimeOverall === 'healthy' ? 'emerald' : 'amber'}>{runtimeOverall}</Badge>
-                <Badge tone={bridgeConfigured ? 'emerald' : 'amber'}>{bridgeConfigured ? 'bridge ready' : 'bridge setup'}</Badge>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {quickCards.map((card) => (
-                <Metric key={card.label} label={card.label} value={card.value} detail={card.detail} />
-              ))}
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button onClick={() => setPage('tasks')} className="rounded-xl border border-acc-green/20 bg-acc-green/10 px-4 py-2 text-sm font-semibold text-acc-green">Open tasks</button>
-              <button onClick={() => setPage('approvals')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open approvals</button>
-              <button onClick={() => setPage('assistant')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open assistant</button>
-              <button onClick={() => setPage('dashboard')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open dashboard</button>
-            </div>
-            {miniWorkflow && (
-              <div className="mt-4 rounded-2xl border border-acc-green/15 bg-acc-green/[0.06] px-4 py-3 text-sm text-zinc-200">
-                Workflow context: <span className="font-semibold text-white">{miniWorkflow}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-          <div className={`${shell} p-5 md:p-6`}>
-            <SectionHeader
-              eyebrow="Launch lanes"
-              title="Quick actions"
-              description="Use this surface to jump straight into ACC's live workflows without the full dashboard overhead."
-            />
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {[
-                ['Assistant', 'Parse an instruction or open a workflow.'],
-                ['Tasks', 'Review the live Task Bus queue.'],
-                ['Approvals', 'Approve or reject queued actions.'],
-                ['Messages', 'Open private chat and handoffs.'],
-                ['Workflows', 'Browse and launch the catalog.'],
-                ['Bridge', 'Inspect Alphonso packets and status.'],
-              ].map(([title, detail]) => (
-                <button
-                  key={title}
-                  onClick={() => {
-                    if (title === 'Assistant') setPage('assistant');
-                    else if (title === 'Tasks') setPage('tasks');
-                    else if (title === 'Approvals') setPage('approvals');
-                    else if (title === 'Messages') setPage('messages');
-                    else if (title === 'Workflows') setPage('mini');
-                    else setPage('dashboard');
-                  }}
-                  className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-left transition hover:border-acc-green/20 hover:bg-acc-green/[0.05]"
-                >
-                  <div className="text-sm font-semibold text-white">{title}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">{detail}</div>
-                </button>
-              ))}
-            </div>
-            <div className="mt-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Workflow launcher</div>
-                  <div className="mt-1 text-sm font-semibold text-white">Top workflows from the live catalog</div>
-                </div>
-                <Badge tone="emerald">{launcherWorkflows.length} shown</Badge>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {launcherWorkflows.length === 0 ? (
-                  <div className="col-span-full rounded-2xl border border-dashed border-white/[0.08] bg-black/20 px-4 py-8 text-center text-sm text-zinc-500">
-                    No workflows found yet.
-                  </div>
-                ) : launcherWorkflows.map((workflow) => (
-                  <button
-                    key={workflow.id}
-                    onClick={() => {
-                      const nextUrl = `/mini?workflow=${encodeURIComponent(String(workflow.id))}`;
-                      setMiniWorkflowContext(String(workflow.id));
-                      window.history.pushState({}, '', nextUrl);
-                    }}
-                    className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-left transition hover:border-acc-green/20 hover:bg-acc-green/[0.05]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white">{workflow.name}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">{workflow.category}</div>
-                      </div>
-                      <Badge tone={workflow.approval ? 'amber' : 'emerald'}>{workflow.approval ? 'approval' : 'open'}</Badge>
-                    </div>
-                    <div className="mt-2 text-xs leading-relaxed text-zinc-400">{workflow.description}</div>
-                    <div className="mt-3 text-xs font-semibold text-acc-green">Open workflow</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className={`${shell} p-5 md:p-6`}>
-            <SectionHeader
-              eyebrow="Live truth"
-              title="Current runtime state"
-              description="The mini app mirrors the same runtime truth as the rest of ACC, so mobile and Telegram never drift from the source of truth."
-            />
-            <div className="mt-4 space-y-3">
-              <StateRow label="Backend" value={backend.status || 'ok'} detail={backend.detail || 'Backend reachable'} />
-              <StateRow label="Bot" value={integrations.telegram?.status || 'fallback'} detail={integrations.telegram?.note || 'Telegram fallback is available'} />
-              <StateRow label="Messenger" value="ready" detail={`${stats.total_tasks || 0} task records visible in ACC`} />
-              <StateRow label="Bridge" value={bridgeStatus} detail={bridgeConfigured ? 'Public mini app and bridge paths are wired' : 'Bridge needs setup'} />
-            </div>
-          </div>
-        </div>
-      </div>
+      <MiniLauncher
+        miniWorkflow={miniWorkflow}
+        runtimeOverall={runtimeOverall}
+        bridgeStatus={bridgeStatus}
+        bridgeConfigured={bridgeConfigured}
+        quickCards={quickCards}
+        launcherWorkflows={launcherWorkflows}
+        backend={backend}
+        integrations={integrations}
+        stats={stats}
+        pending={pending}
+        setPage={setPage}
+        setMiniWorkflowContext={setMiniWorkflowContext}
+      />
     );
   }
 

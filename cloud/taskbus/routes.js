@@ -171,6 +171,42 @@ app.get('/workflows', function(req, res) {
   }
 });
 
+// ── POST /api/taskbus/workflow/run ────────────────────────────────────────────
+// Body: { workflow: <key|id|name>, input?, created_by?, priority? }
+app.post('/workflow/run', async function(req, res) {
+  try {
+    var b = req.body || {};
+    if (!b.workflow) return res.status(400).json({ success: false, error: 'workflow key required' });
+    var result = await workflowDispatcher.launchWorkflow(b.workflow, {
+      input:      b.input      || '',
+      created_by: b.created_by || 'ui:mini',
+      priority:   b.priority   || 'normal',
+    });
+    if (!result.success) return res.status(404).json(result);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/taskbus/workflow/run/parallel ───────────────────────────────────
+// Body: { workflows: [<key>, ...], input?, created_by? }
+app.post('/workflow/run/parallel', async function(req, res) {
+  try {
+    var b = req.body || {};
+    if (!Array.isArray(b.workflows) || !b.workflows.length)
+      return res.status(400).json({ success: false, error: 'workflows array required' });
+    var result = await workflowDispatcher.launchWorkflowsInParallel(b.workflows, {
+      input:      b.input      || '',
+      created_by: b.created_by || 'ui:mini',
+      priority:   b.priority   || 'normal',
+    });
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // —— GET /api/taskbus/workflow/outreach-crm/health ——————————————————————————————
 app.get('/workflow/outreach-crm/health', function(req, res) {
   try {
