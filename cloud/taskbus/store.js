@@ -11,6 +11,9 @@ const uuid    = require('uuid').v4;
 const Database = require('better-sqlite3');
 const persistence = require('./persistence.js');
 
+// Lazy-load memory to avoid circular dependency at startup
+function _mem() { return require('../memory/store.js'); }
+
 // ── DB location ───────────────────────────────────────────────────────────────
 const DATA_DIR = path.join(__dirname, '../../data/taskbus');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -526,6 +529,24 @@ function updateTask(id, patch) {
 
   var updated = rowToTask(stmts.getTaskById.get(id));
   _fireTaskUpdateHook(updated);
+
+  // Write terminal outcomes to global memory so autonomy loops and /memory command see them
+  var newStatus = patch.status;
+  if (newStatus === 'done' || newStatus === 'failed' || newStatus === 'waiting_approval') {
+    try {
+      _mem().remember('global', 'task:last_' + newStatus, {
+        taskId: updated.id,
+        title:  updated.title,
+        agent:  updated.assigned_agent,
+        at:     updated.updated_at,
+        error:  updated.error || null,
+      }, { source: 'taskbus', importance: newStatus === 'waiting_approval' ? 9 : 7 });
+      _mem().logEvent('global', 'task_' + newStatus, {
+        taskId: updated.id, title: updated.title, agent: updated.assigned_agent,
+      }, 'taskbus');
+    } catch (_) {}
+  }
+
   return updated;
 }
 
@@ -629,6 +650,16 @@ function resolveApproval(id, decision, approvedBy, notes) {
   var approval = rowToApproval(stmts.getApprovalById.get(id));
   var task = getTask(approval.task_id);
   if (task) updateTask(task.id, { status: decision === 'approved' ? 'approved_pending_route' : 'failed' });
+
+  try {
+    _mem().remember('global', 'approval:last_' + decision, {
+      approvalId: id, taskId: approval.task_id, decision, approvedBy: approvedBy || 'Shayan', at: resolvedAt,
+    }, { source: 'taskbus', importance: 8 });
+    _mem().logEvent('global', 'approval_' + decision, {
+      approvalId: id, taskId: approval.task_id, decision, approvedBy: approvedBy || 'Shayan',
+    }, 'taskbus');
+  } catch (_) {}
+
   return approval;
 }
 

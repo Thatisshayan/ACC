@@ -7,6 +7,7 @@ const fs   = require('fs');
 const path = require('path');
 const { ImapFlow } = require('imapflow');
 const users = require('../users.js');
+const memory = require('../../memory/store.js');
 
 var _sendFn = null;
 function init(sendFunction) { _sendFn = sendFunction; }
@@ -42,22 +43,43 @@ function getMonitorFile(userId) {
   return path.join(users.getUserStorageDir(userId), 'email_monitor.json');
 }
 
+const EMPTY_STATE = () => ({ enabled: false, email: null, password: null, imapHost: null, imapPort: 993, lastChecked: null, seenIds: [] });
+
+function _memScope(userId) { return 'connectors:email:' + userId; }
+
 function getMonitorState(userId) {
   const fp = getMonitorFile(userId);
-  if (!fs.existsSync(fp)) return { enabled: false, email: null, password: null, imapHost: null, imapPort: 993, lastChecked: null, seenIds: [] };
-  try { return JSON.parse(fs.readFileSync(fp, 'utf8')); }
-  catch (_) { return { enabled: false, email: null, password: null, imapHost: null, imapPort: 993, lastChecked: null, seenIds: [] }; }
+  if (fs.existsSync(fp)) {
+    try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch (_) {}
+  }
+  // Fallback: restore from memory store (survives ephemeral filesystem on cloud)
+  const saved = memory.recall(_memScope(userId), 'config');
+  if (saved) {
+    // Write back to file so subsequent reads are fast
+    try {
+      fs.mkdirSync(users.getUserStorageDir(userId), { recursive: true });
+      fs.writeFileSync(fp, JSON.stringify(saved, null, 2), 'utf8');
+    } catch (_) {}
+    return saved;
+  }
+  return EMPTY_STATE();
 }
 
 function saveMonitorState(userId, state) {
   fs.mkdirSync(users.getUserStorageDir(userId), { recursive: true });
   fs.writeFileSync(getMonitorFile(userId), JSON.stringify(state, null, 2), 'utf8');
+  // Mirror to memory store — survives Railway redeploys when volume is mounted
+  memory.remember(_memScope(userId), 'config', state, { source: 'email_monitor', importance: 9 });
+  memory.logEvent(_memScope(userId), state.enabled ? 'monitor_enabled' : 'monitor_updated', {
+    email: state.email, imapHost: state.imapHost,
+  }, 'email_monitor');
 }
 
 function disableMonitor(userId) {
   const state = getMonitorState(userId);
   state.enabled = false;
   saveMonitorState(userId, state);
+  memory.remember('global', 'email_monitor:' + userId, { enabled: false, email: state.email }, { source: 'email_monitor', importance: 7 });
 }
 
 // ── Connection test ───────────────────────────────────────────────────────────
@@ -92,6 +114,11 @@ async function enableMonitor(userId, email, password, imapHost, imapPort) {
   state.imapPort  = imapPort || 993;
   state.lastChecked = new Date().toISOString();
   saveMonitorState(userId, state);
+  // Publish to global memory so /memory command and autonomy loops can see it
+  memory.remember('global', 'email_monitor:' + userId, {
+    enabled: true, email, imapHost, imapPort: imapPort || 993,
+    configuredAt: state.lastChecked,
+  }, { source: 'email_monitor', importance: 8 });
   return { success: true };
 }
 

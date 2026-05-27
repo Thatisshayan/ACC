@@ -142,8 +142,11 @@ app.post("/orchestrate", (req, res) => {
 });
 
 // ---------- Admin Dashboard ----------
+// Mounted at both /admin (legacy) and /api/admin (UI calls baseURL /api + /admin/*)
 app.use("/admin", adminRouter);
 app.use("/admin/dlq", dlqRoutes);
+app.use("/api/admin", adminRouter);
+app.use("/api/admin/dlq", dlqRoutes);
 
 // ---------- Task Bus auth middleware ----------
 // Set TASKBUS_API_KEY in .env to require Bearer token on all /api/taskbus/* routes.
@@ -161,10 +164,11 @@ function taskbusAuth(req, res, next) {
 app.use("/api/taskbus", taskbusAuth, taskbusRoutes);
 
 // ---------- App Hub (bidirectional app control) ----------
-app.use("/api/hub", hubRoutes);
+// Uses same Bearer token as taskbus. Open in dev (no TASKBUS_API_KEY set).
+app.use("/api/hub", taskbusAuth, hubRoutes);
 
 // ---------- Autonomy (self-scheduling loops) ----------
-app.use("/api/autonomy", autonomyRoutes);
+app.use("/api/autonomy", taskbusAuth, autonomyRoutes);
 
 // ---------- Security Approval + Telegram Webhook ----------
 app.use("/api", securityApproval);
@@ -187,6 +191,7 @@ app.use((req, res, next) => {
 });
 
 const httpServer = app.listen(PORT, () => {
+  autonomyLoop.seedDefaultLoops();
   autonomyLoop.start();
   console.log(`[server] ACC Cloud listening on http://localhost:${PORT}`);
   console.log(`[server] Routes: GET /api/health  POST /api/execute  GET /api/task/:id  POST /orchestrate`);

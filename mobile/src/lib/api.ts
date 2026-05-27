@@ -172,6 +172,13 @@ export function deleteSocialclawPost(payload: Json) {
   });
 }
 
+export function registerWithHub(payload: Json) {
+  return request('/api/hub/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function approveAdminApproval(id: string) {
   return request(`/api/admin/approvals/${encodeURIComponent(id)}/approve`, {
     method: 'POST',

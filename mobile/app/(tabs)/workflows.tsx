@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { apiBaseUrl, getTaskbusWorkflows } from '../../src/lib/api';
+import { apiBaseUrl, getTaskbusWorkflows, runWorkflow } from '../../src/lib/api';
 import { getMiniWebAppUrl } from '../../src/lib/config';
 import { useSession } from '../../src/lib/session';
 import { Card, Pill, SectionTitle } from '../../src/components/Ui';
@@ -20,6 +20,7 @@ export default function WorkflowsScreen() {
   const { session } = useSession();
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [query, setQuery] = useState('');
+  const [launching, setLaunching] = useState<string | null>(null);
 
   async function refresh() {
     const payload = await getTaskbusWorkflows().catch(() => ({ workflows: [] }));
@@ -48,6 +49,20 @@ export default function WorkflowsScreen() {
 
   const grouped = useMemo(() => groupByCategory(filtered), [filtered]);
   const miniWebUrl = getMiniWebAppUrl();
+
+  async function handleLaunch(workflow: any) {
+    const key = workflow.key || workflow.id;
+    if (launching) return;
+    setLaunching(key);
+    try {
+      const res = await runWorkflow({ workflow: key, created_by: 'mobile' });
+      Alert.alert('Queued', `${workflow.name}\nTask: ${String(res?.task?.id || '').slice(0, 8)}`);
+    } catch (err: any) {
+      Alert.alert('Launch failed', err?.message || 'Could not launch workflow.');
+    } finally {
+      setLaunching(null);
+    }
+  }
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
@@ -87,12 +102,23 @@ export default function WorkflowsScreen() {
               </View>
               <Text style={styles.workflowSub}>{workflow.description}</Text>
               <Text style={styles.workflowMeta}>{workflow.command || workflow.user_command}</Text>
-              <Text
-                onPress={() => router.push({ pathname: '/webapp', params: { url: `${miniWebUrl}?workflow=${encodeURIComponent(String(workflow.key || workflow.id))}`, title: workflow.name } })}
-                style={styles.launchLink}
-              >
-                Open in mini web app
-              </Text>
+              <View style={styles.launchRow}>
+                <Pressable
+                  onPress={() => handleLaunch(workflow)}
+                  disabled={!!launching}
+                  style={[styles.launchBtn, launching === (workflow.key || workflow.id) && styles.launchBtnBusy]}
+                >
+                  <Text style={styles.launchBtnText}>
+                    {launching === (workflow.key || workflow.id) ? 'Queuing...' : 'Launch'}
+                  </Text>
+                </Pressable>
+                <Text
+                  onPress={() => router.push({ pathname: '/webapp', params: { url: `${miniWebUrl}?workflow=${encodeURIComponent(String(workflow.key || workflow.id))}`, title: workflow.name } })}
+                  style={styles.launchLink}
+                >
+                  Open in mini web app
+                </Text>
+              </View>
             </View>
           ))}
         </Card>
@@ -134,5 +160,16 @@ const styles = StyleSheet.create({
   workflowTitle: { color: '#fff', fontWeight: '800', fontSize: 14, flex: 1 },
   workflowSub: { color: '#d1d5db', fontSize: 12, lineHeight: 18 },
   workflowMeta: { color: '#9ca3af', fontSize: 11, lineHeight: 16 },
-  launchLink: { color: '#34d399', fontSize: 12, fontWeight: '800', marginTop: 2 },
+  launchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
+  launchBtn: {
+    borderRadius: 12,
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  launchBtnBusy: { opacity: 0.5 },
+  launchBtnText: { color: '#34d399', fontSize: 12, fontWeight: '800' },
+  launchLink: { color: '#6b7280', fontSize: 12, fontWeight: '700' },
 });

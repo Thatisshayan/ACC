@@ -204,4 +204,49 @@ function stats() {
   return { total: loops.length, enabled, scheduled: Object.keys(_timers).length, recent_events: recent };
 }
 
-module.exports = { createLoop, getLoop, getAllLoops, updateLoop, deleteLoop, enableLoop, disableLoop, runNow, start, stop, stats };
+// ── Default loop seeds (run once on first boot) ───────────────────────────────
+
+var DEFAULT_LOOPS = [
+  {
+    id:          'default-daily-summary',
+    name:        'Daily task summary',
+    goal:        'Summarize all tasks completed today, highlight any failures or items waiting for approval, and report the overall ACC system health. Keep it concise — 5 bullets max.',
+    intervalMs:  24 * 60 * 60 * 1000,  // 24 hours
+    agent:       'claude',
+    onSuccess:   'notify',
+    initialDelayMs: 60 * 60 * 1000,    // first run after 1 hour
+  },
+  {
+    id:          'default-email-check',
+    name:        'Email monitor check',
+    goal:        'Check whether the email monitor is configured and active. If it is, report how many job-related emails have been seen in the last 24 hours. If it is not configured, remind the user to set it up via /settings in Telegram.',
+    intervalMs:  5 * 60 * 1000,        // every 5 minutes
+    agent:       'claude',
+    onSuccess:   'silent',             // email monitor itself sends notifications
+    initialDelayMs: 2 * 60 * 1000,
+  },
+  {
+    id:          'default-system-health',
+    name:        'System health watchdog',
+    goal:        'Check the ACC system health: backend status, active task count, any tasks stuck in waiting_approval for more than 1 hour, and bridge connectivity. Alert if anything is degraded.',
+    intervalMs:  30 * 60 * 1000,       // every 30 minutes
+    agent:       'claude',
+    onSuccess:   'silent',
+    initialDelayMs: 5 * 60 * 1000,
+  },
+];
+
+function seedDefaultLoops() {
+  var existing = getAllLoops();
+  var existingIds = new Set(existing.map(function(l) { return l.id; }));
+  var seeded = 0;
+  DEFAULT_LOOPS.forEach(function(spec) {
+    if (!existingIds.has(spec.id)) {
+      createLoop(spec);
+      seeded++;
+    }
+  });
+  if (seeded > 0) log('[autonomy] Seeded', seeded, 'default loops');
+}
+
+module.exports = { createLoop, getLoop, getAllLoops, updateLoop, deleteLoop, enableLoop, disableLoop, runNow, start, stop, stats, seedDefaultLoops };

@@ -1625,24 +1625,42 @@ async function handleMemory(chatId) {
   } catch(e) { await sendMsg(chatId, '❌ Memory error: ' + e.message); }
 }
 
+function resolveLoop(loops, ref) {
+  if (!ref) return null;
+  var exact = loops.find(function(l) { return l.id === ref; });
+  if (exact) return { loop: exact };
+  var matches = loops.filter(function(l) { return l.id.startsWith(ref); });
+  if (matches.length === 1) return { loop: matches[0] };
+  if (matches.length > 1) return { ambiguous: true, matches: matches };
+  return null;
+}
+
 async function handleLoopRun(chatId, userId, loopId) {
   try {
     var loopEngine = require('../autonomy/loop.js');
-    var loops = loopEngine.getAllLoops();
-    var loop = loops.find(function(l) { return l.id.startsWith(loopId); });
-    if (!loop) { await sendMsg(chatId, '❌ Loop not found: `' + loopId + '`'); return; }
-    await sendMsg(chatId, '▶️ Running loop now: *' + loop.name + '*');
-    loopEngine.runNow(loop.id);
+    var resolved = resolveLoop(loopEngine.getAllLoops(), loopId);
+    if (!resolved) { await sendMsg(chatId, '❌ Loop not found: `' + loopId + '`'); return; }
+    if (resolved.ambiguous) {
+      await sendMsg(chatId, '⚠️ Ambiguous — ' + resolved.matches.length + ' loops match. Use more characters:\n' +
+        resolved.matches.map(function(l) { return '• `' + l.id.slice(0,12) + '` ' + l.name; }).join('\n'));
+      return;
+    }
+    await sendMsg(chatId, '▶️ Running loop now: *' + resolved.loop.name + '*');
+    loopEngine.runNow(resolved.loop.id);
   } catch(e) { await sendMsg(chatId, '❌ ' + e.message); }
 }
 
 async function handleLoopToggle(chatId, userId, loopId, enable) {
   try {
     var loopEngine = require('../autonomy/loop.js');
-    var loops = loopEngine.getAllLoops();
-    var loop = loops.find(function(l) { return l.id.startsWith(loopId); });
-    if (!loop) { await sendMsg(chatId, '❌ Loop not found: `' + loopId + '`'); return; }
-    var updated = enable ? loopEngine.enableLoop(loop.id) : loopEngine.disableLoop(loop.id);
+    var resolved = resolveLoop(loopEngine.getAllLoops(), loopId);
+    if (!resolved) { await sendMsg(chatId, '❌ Loop not found: `' + loopId + '`'); return; }
+    if (resolved.ambiguous) {
+      await sendMsg(chatId, '⚠️ Ambiguous — use more characters:\n' +
+        resolved.matches.map(function(l) { return '• `' + l.id.slice(0,12) + '` ' + l.name; }).join('\n'));
+      return;
+    }
+    var updated = enable ? loopEngine.enableLoop(resolved.loop.id) : loopEngine.disableLoop(resolved.loop.id);
     await sendMsg(chatId, (enable ? '✅ Loop enabled' : '⏸ Loop paused') + ': *' + updated.name + '*');
   } catch(e) { await sendMsg(chatId, '❌ ' + e.message); }
 }

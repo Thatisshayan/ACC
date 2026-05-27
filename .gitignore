@@ -51,3 +51,10 @@ mobile/.expo-shared/
 mobile/android/
 mobile/ios/
 mobile/dist/
+mobile/my-app/
+
+# EAS build artifacts
+*.apk
+*.ipa
+*.tar.gz
+eas-log-*.txt
