@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { getRuntimeApiBaseUrl } from './lib/api.js';
 
-const API = 'http://localhost:4000';
+const API = getRuntimeApiBaseUrl();
 
 export default function VoiceInput({ onResult }) {
   const [listening, setListening]   = useState(false);
@@ -42,7 +43,7 @@ export default function VoiceInput({ onResult }) {
     form.append('audio', blob, 'voice.webm');
 
     try {
-      var res = await fetch(API + '/api/voice/transcribe', { method: 'POST', body: form });
+      var res = await fetch((API ? API : '') + '/api/voice/transcribe', { method: 'POST', body: form });
       var data = await res.json();
       if (data.success) {
         setTranscript(data.command || data.transcript);

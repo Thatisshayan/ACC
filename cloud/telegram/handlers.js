@@ -7,6 +7,26 @@ const axios = require('axios');
 
 const router = Router();
 
+function resolveApiBaseUrl() {
+  const explicit = [
+    process.env.ACC_API_BASE_URL,
+    process.env.ACC_PUBLIC_URL,
+    process.env.ACC_WEBAPP_URL,
+  ].find((value) => typeof value === 'string' && value.trim());
+
+  if (explicit) {
+    try {
+      return new URL(explicit.trim()).origin;
+    } catch {
+      return String(explicit).trim().replace(/\/+$/, '');
+    }
+  }
+
+  return `http://127.0.0.1:${process.env.PORT || 4000}`;
+}
+
+const API_BASE = resolveApiBaseUrl();
+
 // Parse incoming Telegram messages
 async function handleMessage(msg) {
   const { text, from, chat } = msg;
@@ -52,7 +72,7 @@ async function routeMessage(text, msg) {
 
   // Route to Claude for processing
   try {
-    const response = await axios.post('http://localhost:4000/api/execute', {
+    const response = await axios.post(`${API_BASE}/api/execute`, {
       instruction: text,
       agent: 'claude',
       user_id: chat.id,
@@ -206,7 +226,7 @@ async function sendNotesMenu(chatId) {
 async function handleJobCallback(chatId, params) {
   await sendMessage(chatId, '🔍 Searching jobs... (Check your browser dashboard for results)');
   // Actual search happens via API
-  await axios.post('http://localhost:4000/api/execute', {
+  await axios.post(`${API_BASE}/api/execute`, {
     instruction: 'Search for job opportunities',
     agent: 'claude',
     user_id: chatId
@@ -233,7 +253,7 @@ async function handleApprovalCallback(chatId, params, queryId) {
   const taskId = params[0];
   console.log(`[approval] Task ${taskId} APPROVED by user ${chatId}`);
   
-  await axios.post(`http://localhost:4000/api/execute/approve`, {
+  await axios.post(`${API_BASE}/api/execute/approve`, {
     task_id: taskId,
     user_id: chatId,
     action: 'approve'
@@ -246,7 +266,7 @@ async function handleRejectionCallback(chatId, params, queryId) {
   const taskId = params[0];
   console.log(`[approval] Task ${taskId} REJECTED by user ${chatId}`);
   
-  await axios.post(`http://localhost:4000/api/execute/reject`, {
+  await axios.post(`${API_BASE}/api/execute/reject`, {
     task_id: taskId,
     user_id: chatId,
     action: 'reject'

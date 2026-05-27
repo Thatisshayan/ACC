@@ -8,11 +8,13 @@ import {
   publishSocialclawCampaign, deleteSocialclawPost,
 } from './api.js';
 import api from './api.js';
+import { getRuntimeApiBaseUrl } from './lib/api.js';
 import MessengerPage from './pages/Messenger.jsx';
 import AssistantPage from './pages/Assistant.jsx';
 import AdminPage     from './pages/Admin.jsx';
 
-const API = (typeof window !== 'undefined' && window.electronAPI) ? 'http://localhost:4000' : '';
+const IS_ELECTRON_FILE = typeof window !== 'undefined' && window.location?.protocol === 'file:';
+const API = getRuntimeApiBaseUrl();
 
 // ── Live pulse hook ───────────────────────────────────────────────────────────
 function useLivePulse(ms = 1800) {
@@ -96,7 +98,7 @@ const MOBILE_NAV = [
   { id: 'settings',   label: 'More',    icon: '⚙️' },
 ];
 
-const PAGE_PATHS = new Set(['dashboard','tasks','approvals','messages','assistant','agents','integrations','admin','settings']);
+const PAGE_PATHS = new Set(['dashboard','mini','tasks','approvals','messages','assistant','agents','integrations','admin','settings']);
 function pathToPage(p) { const n = String(p||'').replace(/^\/+/,'').trim().toLowerCase(); return PAGE_PATHS.has(n) ? n : 'dashboard'; }
 
 // ── Shared UI components ──────────────────────────────────────────────────────
@@ -149,8 +151,9 @@ function MetricCard({ label, value, detail, icon, tone = '' }) {
 }
 
 // ── Live status bar ───────────────────────────────────────────────────────────
-function StatusBar({ backend, uptime }) {
+function StatusBar({ backend }) {
   const pulse = useLivePulse(1200);
+  const uptime = useElapsed();
   const isOnline = backend.status === 'Online';
   return (
     <div className="flex items-center gap-3 text-[11px] font-mono">
@@ -231,6 +234,7 @@ export default function App() {
   const [integrations, setInt]    = useState({});
   const [backend, setBackend]     = useState(DEFAULT_BACKEND_STATUS);
   const [agents, setAgents]       = useState([]);
+  const [workflowCatalog, setWorkflowCatalog] = useState([]);
   const [approvalBusy, setApprovalBusy] = useState(new Set());
   const [approvalMsg, setApprovalMsg]   = useState({});
   const [socialclawDraft, setSocialclawDraft] = useState('ACC + SocialClaw publish lane: preview a polished social post about the latest workflow and bridge updates.');
@@ -239,15 +243,17 @@ export default function App() {
   const [socialclawError, setSocialclawError]   = useState('');
   const [pipelineAction, setPipelineAction]     = useState('');
   const [activityLog, setActivityLog]           = useState([]);
-
-  const uptime = useElapsed();
-
+  const [updateInfo, setUpdateInfo]             = useState(null); // { status, version, percent }
+  const [miniWorkflowContext, setMiniWorkflowContext] = useState(() =>
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('workflow') : ''
+  );
   async function fetchAll() {
-    const [s, t, i, a] = await Promise.all([
+    const [s, t, i, a, w] = await Promise.all([
       getTaskbusStats().catch(() => ({})),
       getTaskbusTasks().catch(() => ({ tasks: [] })),
       getTaskbusIntegrations().catch(() => ({})),
       listAgents().catch(() => ({ agents: [] })),
+      listWorkflows().catch(() => ({ workflows: [] })),
     ]);
     setStats(s.stats || s || {});
     const newTasks = Array.isArray(t.tasks) ? t.tasks : Array.isArray(t) ? t : [];
@@ -264,6 +270,7 @@ export default function App() {
     });
     setInt(i.integrations || {});
     setAgents(Array.isArray(a.agents) ? a.agents : []);
+    setWorkflowCatalog(Array.isArray(w.workflows) ? w.workflows : []);
   }
 
   async function handleApproval(taskId, decision) {
@@ -279,16 +286,22 @@ export default function App() {
     }
   }
 
+  // Data polling — runs once on mount, never re-runs on page change
   useEffect(() => {
     let active = true;
-    let cleanupBackend = () => {};
+    fetchAll();
+    const id = setInterval(fetchAll, 8000);
+    return () => { active = false; clearInterval(id); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const syncBackendStatus = async () => {
-      if (window.electronAPI?.backendStatus) {
-        try { const cur = await window.electronAPI.backendStatus(); if (active) setBackend(normalizeBackendStatus(cur)); } catch {}
-        if (window.electronAPI?.onBackendStatus) cleanupBackend = window.electronAPI.onBackendStatus(n => { if (active) setBackend(normalizeBackendStatus(n)); });
-        return;
-      }
+  // Backend health — runs once on mount
+  useEffect(() => {
+    let active = true;
+    let cleanup = () => {};
+    if (IS_ELECTRON_FILE && window.electronAPI?.backendStatus) {
+      window.electronAPI.backendStatus().then(cur => { if (active) setBackend(normalizeBackendStatus(cur)); }).catch(() => {});
+      if (window.electronAPI?.onBackendStatus) cleanup = window.electronAPI.onBackendStatus(n => { if (active) setBackend(normalizeBackendStatus(n)); });
+    } else {
       const refresh = async () => {
         try {
           const ok = await fetch(API + '/api/health').then(r => r.ok).catch(() => false);
@@ -298,26 +311,41 @@ export default function App() {
           );
         } catch { if (active) setBackend({ status: 'Failed', detail: 'Health check failed', lastCheckedAt: null }); }
       };
-      await refresh();
+      refresh();
       const id = setInterval(refresh, 5000);
-      cleanupBackend = () => clearInterval(id);
-    };
+      cleanup = () => clearInterval(id);
+    }
+    return () => { active = false; cleanup(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    fetchAll();
-    const id = setInterval(fetchAll, 8000);
-    syncBackendStatus();
+  // Auto-updater — runs once on mount
+  useEffect(() => {
+    if (!IS_ELECTRON_FILE || !window.electronAPI?.onUpdaterStatus) return;
+    return window.electronAPI.onUpdaterStatus(info => setUpdateInfo(info));
+  }, []);
 
-    const syncRoute = () => { if (typeof window === 'undefined') return; const np = pathToPage(window.location.pathname); if (np !== page) setPage(np); };
-    if (typeof window !== 'undefined') { window.addEventListener('popstate', syncRoute); syncRoute(); }
-
-    return () => { active = false; clearInterval(id); cleanupBackend(); if (typeof window !== 'undefined') window.removeEventListener('popstate', syncRoute); };
+  // Route sync — push history when page state changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname !== `/${page}`) window.history.pushState({}, '', `/${page}`);
   }, [page]);
+
+  // popstate — listen for browser back/forward
+  useEffect(() => {
+    const syncRoute = () => setPage(pathToPage(window.location.pathname));
+    window.addEventListener('popstate', syncRoute);
+    return () => window.removeEventListener('popstate', syncRoute);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const cur = pathToPage(window.location.pathname);
-    if (cur !== page || window.location.pathname !== `/${page}`) window.history.pushState({}, '', `/${page}`);
-  }, [page]);
+    const syncMiniContext = () => {
+      setMiniWorkflowContext(new URLSearchParams(window.location.search).get('workflow') || '');
+    };
+    syncMiniContext();
+    window.addEventListener('popstate', syncMiniContext);
+    return () => window.removeEventListener('popstate', syncMiniContext);
+  }, []);
 
   const pending      = tasks.filter(t => t.status === 'waiting_approval');
   const socialclaw   = integrations.socialclaw || {};
@@ -399,7 +427,7 @@ export default function App() {
 
           {/* System status ticker */}
           <div className="border-t border-white/[0.06] bg-black/80 px-5 py-2.5 flex flex-wrap items-center gap-4 text-[11px] font-mono">
-            <StatusBar backend={backend} uptime={uptime} />
+            <StatusBar backend={backend} />
             <span className="text-zinc-700 hidden sm:inline">│</span>
             <span className="text-zinc-500 hidden sm:inline">{totalTasks} tasks total</span>
             <span className="text-zinc-700 hidden sm:inline">│</span>
@@ -537,6 +565,156 @@ export default function App() {
             )}
           </div>
         </Surface>
+      </div>
+    );
+  }
+
+  function renderMini() {
+    const miniWorkflow = miniWorkflowContext;
+    const workflowCount = workflowCatalog.length || (Array.isArray(stats.workflows) ? stats.workflows.length : (stats.total_workflows || 0));
+    const runtimeOverall = backend.status === 'Online' ? 'healthy' : 'partial';
+    const bridgeStatus = integrations.socialclaw?.status || 'configured';
+    const bridgeConfigured = bridgeStatus !== 'setup_required' && bridgeStatus !== 'blocked';
+    const launcherWorkflows = workflowCatalog.slice(0, 8).map((workflow) => ({
+      id: workflow.key || workflow.id || workflow.name,
+      name: workflow.name || workflow.title || 'Unnamed workflow',
+      description: workflow.description || workflow.summary || 'No description available.',
+      category: workflow.category || 'General',
+      approval: Boolean(workflow.approval_required_for?.length),
+    }));
+    const quickCards = [
+      { label: 'Open tasks', value: stats.total_tasks || 0, detail: 'Live Task Bus queue' },
+      { label: 'Pending approvals', value: pending.length, detail: 'Human review needed' },
+      { label: 'Workflows', value: workflowCount, detail: 'Launch catalog' },
+      { label: 'Bridge packets', value: stats.total_results || 0, detail: 'Alphonso traffic' },
+    ];
+
+    return (
+      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+        <div className={`${shell} overflow-hidden`}>
+          <div className="relative p-5 md:p-7">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_28%)]" />
+            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <Badge tone="emerald">ACC mini web app</Badge>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                  Shared launch surface for mobile and Telegram.
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400 md:text-base">
+                  This is the compact, public, workflow-first surface that both mobile and Telegram can open. It stays on the same ACC backend source of truth.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={runtimeOverall === 'healthy' ? 'emerald' : 'amber'}>{runtimeOverall}</Badge>
+                <Badge tone={bridgeConfigured ? 'emerald' : 'amber'}>{bridgeConfigured ? 'bridge ready' : 'bridge setup'}</Badge>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {quickCards.map((card) => (
+                <Metric key={card.label} label={card.label} value={card.value} detail={card.detail} />
+              ))}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button onClick={() => setPage('tasks')} className="rounded-xl border border-acc-green/20 bg-acc-green/10 px-4 py-2 text-sm font-semibold text-acc-green">Open tasks</button>
+              <button onClick={() => setPage('approvals')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open approvals</button>
+              <button onClick={() => setPage('assistant')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open assistant</button>
+              <button onClick={() => setPage('dashboard')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open dashboard</button>
+            </div>
+            {miniWorkflow && (
+              <div className="mt-4 rounded-2xl border border-acc-green/15 bg-acc-green/[0.06] px-4 py-3 text-sm text-zinc-200">
+                Workflow context: <span className="font-semibold text-white">{miniWorkflow}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+          <div className={`${shell} p-5 md:p-6`}>
+            <SectionHeader
+              eyebrow="Launch lanes"
+              title="Quick actions"
+              description="Use this surface to jump straight into ACC's live workflows without the full dashboard overhead."
+            />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                ['Assistant', 'Parse an instruction or open a workflow.'],
+                ['Tasks', 'Review the live Task Bus queue.'],
+                ['Approvals', 'Approve or reject queued actions.'],
+                ['Messages', 'Open private chat and handoffs.'],
+                ['Workflows', 'Browse and launch the catalog.'],
+                ['Bridge', 'Inspect Alphonso packets and status.'],
+              ].map(([title, detail]) => (
+                <button
+                  key={title}
+                  onClick={() => {
+                    if (title === 'Assistant') setPage('assistant');
+                    else if (title === 'Tasks') setPage('tasks');
+                    else if (title === 'Approvals') setPage('approvals');
+                    else if (title === 'Messages') setPage('messages');
+                    else if (title === 'Workflows') setPage('mini');
+                    else setPage('dashboard');
+                  }}
+                  className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-left transition hover:border-acc-green/20 hover:bg-acc-green/[0.05]"
+                >
+                  <div className="text-sm font-semibold text-white">{title}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">{detail}</div>
+                </button>
+              ))}
+            </div>
+            <div className="mt-6">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Workflow launcher</div>
+                  <div className="mt-1 text-sm font-semibold text-white">Top workflows from the live catalog</div>
+                </div>
+                <Badge tone="emerald">{launcherWorkflows.length} shown</Badge>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {launcherWorkflows.length === 0 ? (
+                  <div className="col-span-full rounded-2xl border border-dashed border-white/[0.08] bg-black/20 px-4 py-8 text-center text-sm text-zinc-500">
+                    No workflows found yet.
+                  </div>
+                ) : launcherWorkflows.map((workflow) => (
+                  <button
+                    key={workflow.id}
+                    onClick={() => {
+                      const nextUrl = `/mini?workflow=${encodeURIComponent(String(workflow.id))}`;
+                      setMiniWorkflowContext(String(workflow.id));
+                      window.history.pushState({}, '', nextUrl);
+                    }}
+                    className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-left transition hover:border-acc-green/20 hover:bg-acc-green/[0.05]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{workflow.name}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">{workflow.category}</div>
+                      </div>
+                      <Badge tone={workflow.approval ? 'amber' : 'emerald'}>{workflow.approval ? 'approval' : 'open'}</Badge>
+                    </div>
+                    <div className="mt-2 text-xs leading-relaxed text-zinc-400">{workflow.description}</div>
+                    <div className="mt-3 text-xs font-semibold text-acc-green">Open workflow</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className={`${shell} p-5 md:p-6`}>
+            <SectionHeader
+              eyebrow="Live truth"
+              title="Current runtime state"
+              description="The mini app mirrors the same runtime truth as the rest of ACC, so mobile and Telegram never drift from the source of truth."
+            />
+            <div className="mt-4 space-y-3">
+              <StateRow label="Backend" value={backend.status || 'ok'} detail={backend.detail || 'Backend reachable'} />
+              <StateRow label="Bot" value={integrations.telegram?.status || 'fallback'} detail={integrations.telegram?.note || 'Telegram fallback is available'} />
+              <StateRow label="Messenger" value="ready" detail={`${stats.total_tasks || 0} task records visible in ACC`} />
+              <StateRow label="Bridge" value={bridgeStatus} detail={bridgeConfigured ? 'Public mini app and bridge paths are wired' : 'Bridge needs setup'} />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -794,6 +972,7 @@ export default function App() {
 
   const pages = {
     dashboard:    renderDashboard,
+    mini:         renderMini,
     tasks:        renderTasks,
     approvals:    renderApprovals,
     messages:     () => <MessengerPage />,
@@ -805,8 +984,37 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-acc-bg text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-acc-bg text-white overflow-hidden">
 
+      {/* ── Update banner ──────────────────────────────────────────────────── */}
+      {updateInfo?.status === 'available' && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-acc-green/10 border-b border-acc-green/20 text-xs font-mono shrink-0">
+          <span className="text-acc-green">↓ Update v{updateInfo.version} is downloading in background...</span>
+          <button onClick={() => setUpdateInfo(null)} className="text-zinc-500 hover:text-white">✕</button>
+        </div>
+      )}
+      {updateInfo?.status === 'downloading' && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-acc-green/10 border-b border-acc-green/20 text-xs font-mono shrink-0">
+          <span className="text-acc-green">↓ Downloading update... {updateInfo.percent}%</span>
+          <div className="flex-1 max-w-xs h-1 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full bg-acc-green rounded-full transition-all duration-300" style={{ width: `${updateInfo.percent}%` }} />
+          </div>
+        </div>
+      )}
+      {updateInfo?.status === 'ready' && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-acc-green/15 border-b border-acc-green/30 text-xs font-mono shrink-0">
+          <span className="text-acc-green font-bold">✓ ACC v{updateInfo.version} ready to install</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => IS_ELECTRON_FILE && window.electronAPI?.updaterInstall()}
+              className="px-3 py-1 rounded bg-acc-green text-black font-bold hover:bg-acc-green/80 transition-colors">
+              Restart &amp; Update
+            </button>
+            <button onClick={() => setUpdateInfo(null)} className="text-zinc-500 hover:text-white">Later</button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
       {/* ── Sidebar ────────────────────────────────────────────────────────── */}
       <div className={`hidden md:flex flex-shrink-0 flex-col transition-all duration-200 border-r border-white/[0.06] bg-[#070710] ${sidebar ? 'w-56' : 'w-16'}`}>
         {/* Logo */}
@@ -842,8 +1050,8 @@ export default function App() {
         <div className="px-3 py-3 border-t border-white/[0.06]">
           {sidebar ? (
             <div className="rounded-xl border border-white/[0.07] bg-black/30 px-3 py-2.5 space-y-1.5">
-              <StatusBar backend={backend} uptime={uptime} />
-              {(backend.status === 'Failed' || backend.status === 'Offline') && window.electronAPI?.retryBackendStart && (
+              <StatusBar backend={backend} />
+              {(backend.status === 'Failed' || backend.status === 'Offline') && IS_ELECTRON_FILE && window.electronAPI?.retryBackendStart && (
                 <button onClick={() => window.electronAPI.retryBackendStart()}
                   className="w-full rounded-lg border border-acc-green/20 bg-acc-green/8 px-3 py-1.5 text-xs text-acc-green hover:bg-acc-green/14">
                   Retry backend
@@ -878,7 +1086,7 @@ export default function App() {
               <span>·</span>
               <span>{stats.total_results || 0} results</span>
             </div>
-            <StatusBar backend={backend} uptime={uptime} />
+            <StatusBar backend={backend} />
           </div>
         </div>
 
@@ -899,6 +1107,7 @@ export default function App() {
             </button>
           ))}
         </div>
+      </div>
       </div>
     </div>
   );

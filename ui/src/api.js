@@ -3,7 +3,23 @@ import axios from "axios";
 
 const TASKBUS_KEY = import.meta.env.VITE_TASKBUS_API_KEY || '';
 
-const api = axios.create({ baseURL: "/api" });
+function trimUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function resolveApiBase() {
+  const explicit = trimUrl(import.meta.env.VITE_ACC_API_BASE_URL);
+  if (explicit) return explicit;
+
+  if (typeof window !== 'undefined' && window.location?.protocol === 'file:') {
+    return 'http://127.0.0.1:4000';
+  }
+
+  return '';
+}
+
+const API_BASE = resolveApiBase();
+const api = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' });
 
 if (TASKBUS_KEY) {
   api.defaults.headers.common['Authorization'] = `Bearer ${TASKBUS_KEY}`;

@@ -29,6 +29,25 @@ var TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
 var CHAT_ID  = process.env.SHAYAN_TELEGRAM_CHAT_ID || 'REDACTED';
 var ACC_PORT = process.env.PORT || '4000';
 var BASE     = 'https://api.telegram.org/bot' + TOKEN;
+function resolveMiniWebappUrl() {
+  var explicit = process.env.ACC_WEBAPP_URL || process.env.ACC_PUBLIC_URL;
+  if (explicit) {
+    try {
+      return new URL(explicit).origin.replace(/\/+$/, '') + '/mini';
+    } catch (_) {
+      return String(explicit).replace(/\/+$/, '').replace(/\/mini$/, '') + '/mini';
+    }
+  }
+
+  if (process.env.ACC_API_BASE_URL) {
+    try {
+      return new URL(process.env.ACC_API_BASE_URL).origin.replace(/\/+$/, '') + '/mini';
+    } catch (_) {}
+  }
+
+  return 'https://acc-production-a26c.up.railway.app/mini';
+}
+var MINI_WEBAPP_URL = resolveMiniWebappUrl();
 
 if (!TOKEN) { console.error('[bot] TELEGRAM_BOT_TOKEN not set'); process.exit(1); }
 log('[bot] Token: ' + TOKEN.slice(0,15) + '... | ChatID: ' + CHAT_ID);
@@ -89,6 +108,9 @@ function sendVideo(chatId, videoUrl, caption, extra) {
 
 function dashboardMenu() {
   return [
+    [
+      { text: '🌐 Mini Web App', web_app: { url: MINI_WEBAPP_URL } },
+    ],
     [
       { text: '📋 Live Task Lanes', callback_data: 'dash_lanes' },
       { text: '✅ Approvals Inbox', callback_data: 'task_approvals' }
@@ -413,6 +435,21 @@ async function handleMessage(msg) {
     return;
   }
   if (text === '/settings')    { await handleSettings(chatId, userId); return; }
+  if (text === '/hub' || text === '/apps')   { await handleHubStatus(chatId, userId); return; }
+  if (text === '/loops' || text === '/auto') { await handleLoops(chatId, userId); return; }
+  if (text === '/memory')      { await handleMemory(chatId, userId); return; }
+  if (/^\/loop_run\s+\S+/.test(text)) {
+    var loopId = text.split(/\s+/)[1];
+    await handleLoopRun(chatId, userId, loopId); return;
+  }
+  if (/^\/loop_off\s+\S+/.test(text)) {
+    var loopOffId = text.split(/\s+/)[1];
+    await handleLoopToggle(chatId, userId, loopOffId, false); return;
+  }
+  if (/^\/loop_on\s+\S+/.test(text)) {
+    var loopOnId = text.split(/\s+/)[1];
+    await handleLoopToggle(chatId, userId, loopOnId, true); return;
+  }
   if (text === '/notes')       { await sendButtons(chatId, '📝 *Notes Vault*', notesMenu(userId)); return; }
   if (text === '/tracker')     { await sendMsg(chatId, jobTracker.formatTracker(userId, user.language)); return; }
   if (text === '/jobs')        { await sendButtons(chatId, t(userId,'main_menu',{name:user.name||'friend'}), jobsMenu(userId)); return; }
@@ -1393,6 +1430,7 @@ function trimWorkflowLabel(label, maxLen) {
 function workflowMenu(userId) {
   var workflows = getSortedWorkflows();
   var rows = [];
+  rows.push([{ text: '🌐 Open ACC Mini Web App', web_app: { url: MINI_WEBAPP_URL } }]);
   workflows.forEach(function(workflow, index) {
     rows.push([{
       text: trimWorkflowLabel((workflow.category ? workflow.category + ': ' : '') + workflow.name, 34),
@@ -1461,16 +1499,27 @@ var running = true;
 var lastOffset = 0;
 var lastPollErrorKey = null;
 var lastPollErrorAt = 0;
+var heartbeatPath = require('path').join(__dirname, '../../data/run/bot-heartbeat.json');
 
-// Write heartbeat every 30s so admin/system can detect bot is alive
-setInterval(function() {
-  try { require('fs').writeFileSync(require('path').join(__dirname,'../../data/run/bot-heartbeat.json'), JSON.stringify({pid:process.pid,lastPoll:Date.now(),online:true})); } catch(e){}
-}, 30000);
+function writeHeartbeat() {
+  try {
+    require('fs').writeFileSync(
+      heartbeatPath,
+      JSON.stringify({ pid: process.pid, lastPoll: Date.now(), online: true })
+    );
+  } catch (e) {}
+}
+
+setInterval(writeHeartbeat, 30000);
 
 async function poll() {
   while (running) {
     try {
-      var updates = await tgGet('getUpdates', { offset: lastOffset, timeout: 20, allowed_updates: ['message','callback_query'] });
+      var updates = await tgGet('getUpdates', {
+        offset: lastOffset,
+        timeout: 20,
+        allowed_updates: ['message', 'callback_query']
+      });
       lastPollErrorKey = null;
       lastPollErrorAt = 0;
       if (updates && updates.length) {
@@ -1478,12 +1527,15 @@ async function poll() {
           var u = updates[i];
           lastOffset = u.update_id + 1;
           try {
-            if (u.message)        await handleMessage(u.message);
+            if (u.message) await handleMessage(u.message);
             if (u.callback_query) await handleCallback(u.callback_query);
-          } catch(e) { log('[bot] handler err:', e.message); }
+          } catch (e) {
+            log('[bot] handler err:', e.message);
+          }
         }
       }
-    } catch(e) {
+      writeHeartbeat();
+    } catch (e) {
       if (running) {
         var detail = e && (e.response && e.response.data && e.response.data.description
           ? e.response.data.description
@@ -1498,17 +1550,117 @@ async function poll() {
         var waitMs = 3000;
         if (/EACCES/i.test(errorKey)) waitMs = 60000;
         else if (/Conflict/i.test(errorKey)) waitMs = 15000;
-        await new Promise(function(r){ setTimeout(r, waitMs); });
+        await new Promise(function(r) { setTimeout(r, waitMs); });
       }
     }
   }
 }
 
+// ── Hub / Memory / Autonomy Telegram handlers ─────────────────────────────────
+
+async function handleHubStatus(chatId) {
+  try {
+    var hubRoutes = require('../hub/registry.js');
+    var memStore  = require('../memory/store.js');
+    var apps = hubRoutes.getAllApps();
+    var online = apps.filter(function(a) { return a.status === 'online'; });
+    var memStats = memStore.stats();
+    var msg = '🌐 *ACC App Hub*\n\n' +
+      '📱 Registered apps: ' + apps.length + '\n' +
+      '🟢 Online: ' + online.length + '\n' +
+      '🧠 Memories stored: ' + memStats.total_memories + '\n' +
+      '📝 Events logged: ' + memStats.total_events + '\n\n';
+    if (apps.length) {
+      msg += apps.map(function(a) {
+        return (a.status === 'online' ? '🟢' : '🔴') + ' *' + a.name + '* (' + a.type + ')\n' +
+          '_' + (a.capabilities || []).join(', ') + '_';
+      }).join('\n\n');
+    } else {
+      msg += '_No apps registered yet._\n\nTo register an app, POST to `/api/hub/register`';
+    }
+    await sendMsg(chatId, msg);
+  } catch(e) { await sendMsg(chatId, '❌ Hub error: ' + e.message); }
+}
+
+async function handleLoops(chatId) {
+  try {
+    var loopEngine = require('../autonomy/loop.js');
+    var loops = loopEngine.getAllLoops();
+    var s = loopEngine.stats();
+    var msg = '🔄 *Autonomous Loops*\n\n' +
+      'Active: ' + s.enabled + '/' + s.total + '\n\n';
+    if (!loops.length) {
+      msg += '_No loops running yet._\n\nCreate one via `/api/autonomy/loops` or ask me to set one up.';
+    } else {
+      msg += loops.map(function(l) {
+        var icon = l.enabled ? '🟢' : '🔴';
+        var next = l.nextRunAt ? new Date(l.nextRunAt).toLocaleTimeString() : '—';
+        var last = l.lastStatus ? (l.lastStatus === 'success' ? '✅' : '❌') : '—';
+        return icon + ' *' + l.name + '*\n' +
+          'Last: ' + last + ' | Next: ' + next + '\n' +
+          '`/loop_run ' + l.id.slice(0,8) + '` · `/loop_off ' + l.id.slice(0,8) + '`';
+      }).join('\n\n');
+    }
+    await sendMsg(chatId, msg);
+  } catch(e) { await sendMsg(chatId, '❌ Loops error: ' + e.message); }
+}
+
+async function handleMemory(chatId) {
+  try {
+    var memStore = require('../memory/store.js');
+    var mems = memStore.recallAll('global', { limit: 10, minImportance: 5 });
+    var s = memStore.stats();
+    var msg = '🧠 *ACC Memory*\n\n' +
+      'Total: ' + s.total_memories + ' memories across ' + s.scopes.length + ' scopes\n' +
+      'Events: ' + s.total_events + '\n\n';
+    if (mems.length) {
+      msg += '*Recent global memories:*\n' + mems.map(function(m) {
+        var val = typeof m.value === 'string' ? m.value.slice(0,60) : JSON.stringify(m.value).slice(0,60);
+        return '• `' + m.key + '`: ' + val;
+      }).join('\n');
+    } else {
+      msg += '_No global memories yet. ACC will remember important context as it works._';
+    }
+    await sendMsg(chatId, msg);
+  } catch(e) { await sendMsg(chatId, '❌ Memory error: ' + e.message); }
+}
+
+async function handleLoopRun(chatId, userId, loopId) {
+  try {
+    var loopEngine = require('../autonomy/loop.js');
+    var loops = loopEngine.getAllLoops();
+    var loop = loops.find(function(l) { return l.id.startsWith(loopId); });
+    if (!loop) { await sendMsg(chatId, '❌ Loop not found: `' + loopId + '`'); return; }
+    await sendMsg(chatId, '▶️ Running loop now: *' + loop.name + '*');
+    loopEngine.runNow(loop.id);
+  } catch(e) { await sendMsg(chatId, '❌ ' + e.message); }
+}
+
+async function handleLoopToggle(chatId, userId, loopId, enable) {
+  try {
+    var loopEngine = require('../autonomy/loop.js');
+    var loops = loopEngine.getAllLoops();
+    var loop = loops.find(function(l) { return l.id.startsWith(loopId); });
+    if (!loop) { await sendMsg(chatId, '❌ Loop not found: `' + loopId + '`'); return; }
+    var updated = enable ? loopEngine.enableLoop(loop.id) : loopEngine.disableLoop(loop.id);
+    await sendMsg(chatId, (enable ? '✅ Loop enabled' : '⏸ Loop paused') + ': *' + updated.name + '*');
+  } catch(e) { await sendMsg(chatId, '❌ ' + e.message); }
+}
+
 scheduler.start();
 emailMon.startPolling(5); // check email every 5 minutes
 
-// Skip polling in webhook mode (Railway 24/7 deployment)
-var isWebhookMode = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_NAME || process.env.TELEGRAM_BOT_MODE === 'webhook';
+// Skip polling if webhook is active (hosted cloud deployment or WEBHOOK_URL set in .env)
+var isWebhookMode = process.env.TELEGRAM_BOT_MODE === 'webhook'
+  || !!process.env.WEBHOOK_URL
+  || !!process.env.TELEGRAM_WEBHOOK_URL
+  || !!process.env.ACC_PUBLIC_URL
+  || !!process.env.ACC_WEBAPP_URL
+  || !!process.env.ACC_API_BASE_URL
+  || !!process.env.PUBLIC_URL
+  || !!process.env.RAILWAY_ENVIRONMENT
+  || !!process.env.RAILWAY_SERVICE_NAME
+  || !!process.env.RAILWAY_PUBLIC_DOMAIN;
 if (isWebhookMode) {
   log('[bot] Webhook mode — polling disabled. Updates arrive via HTTP.');
 } else {

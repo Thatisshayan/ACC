@@ -10,27 +10,63 @@ startWorker({ intervalMs: 500 });
 startLeadCollectorPoller();
 console.log("[start] ACC v2 server started on :" + port);
 
-// ── Telegram Bot — smart mode selection ──────────────────────────────────────
-// On Railway (RAILWAY_ENVIRONMENT or PORT=8080): use webhook
-// Locally (no RAILWAY_ENVIRONMENT): use polling
-// ─────────────────────────────────────────────────────────────────────────────
+function trimUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function resolveWebhookBaseUrl() {
+  var explicit = process.env.TELEGRAM_WEBHOOK_URL || process.env.ACC_WEBHOOK_BASE_URL || process.env.ACC_PUBLIC_URL || process.env.ACC_WEBAPP_URL || process.env.ACC_API_BASE_URL || process.env.PUBLIC_URL;
+  if (explicit) {
+    try {
+      return new URL(explicit).origin;
+    } catch (_) {
+      return trimUrl(explicit).replace(/\/mini$/, '');
+    }
+  }
+  if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL) {
+    return 'https://' + (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL);
+  }
+  return '';
+}
+
+function resolveWebhookUrl() {
+  if (process.env.TELEGRAM_WEBHOOK_URL) return process.env.TELEGRAM_WEBHOOK_URL;
+  var base = resolveWebhookBaseUrl();
+  return base ? base.replace(/\/+$/, '') + '/api/webhook/telegram' : '';
+}
+
+var isHostedWebhook = Boolean(
+  process.env.TELEGRAM_BOT_MODE === 'webhook'
+  || process.env.ACC_PUBLIC_URL
+  || process.env.ACC_WEBAPP_URL
+  || process.env.ACC_API_BASE_URL
+  || process.env.PUBLIC_URL
+  || process.env.RAILWAY_ENVIRONMENT
+  || process.env.RAILWAY_SERVICE_NAME
+  || process.env.RAILWAY_PUBLIC_DOMAIN
+);
+
 if (!process.env.TELEGRAM_BOT_TOKEN) {
-  console.warn("[start] TELEGRAM_BOT_TOKEN not set — bot not started.");
+  console.warn("[start] TELEGRAM_BOT_TOKEN not set â€” bot not started.");
 } else if (process.env.ACC_SKIP_TELEGRAM_BOT === '1' || process.env.ACC_SUPERVISED === '1') {
   console.log("[start] Telegram bot startup skipped by supervisor.");
-} else {
-  var isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_NAME || process.env.RAILWAY_PUBLIC_DOMAIN;
-  
-  if (isRailway) {
-    // WEBHOOK MODE — register webhook with Telegram then serve updates
-    console.log("[start] Railway detected — using webhook mode for Telegram bot.");
-    var railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL || 'acc-production-a26c.up.railway.app';
-    var webhookUrl = 'https://' + railwayDomain + '/api/webhook/telegram';
-    
-    var https = require('https');
-    var token = process.env.TELEGRAM_BOT_TOKEN;
-    
-    // Register webhook with Telegram (include secret_token if configured)
+} else if (isHostedWebhook) {
+  console.log("[start] Hosted deployment detected â€” using webhook mode for Telegram bot.");
+  var webhookUrl = resolveWebhookUrl();
+
+  var https = require('https');
+  var token = process.env.TELEGRAM_BOT_TOKEN;
+
+  if (!webhookUrl) {
+    console.warn('[start] Hosted deployment requested, but no webhook URL is configured. Falling back to polling.');
+    try {
+      require("../cloud/telegram/bot.js");
+      console.log("[start] Telegram bot started (polling fallback).");
+    } catch(e) {
+      console.error("[start] Telegram bot failed:", e.message);
+    }
+  } else {
+    // WEBHOOK MODE â€” register webhook with Telegram then serve updates
     var regUrl = 'https://api.telegram.org/bot' + token + '/setWebhook?url=' + encodeURIComponent(webhookUrl) + '&drop_pending_updates=true';
     if (process.env.TELEGRAM_WEBHOOK_SECRET) {
       regUrl += '&secret_token=' + encodeURIComponent(process.env.TELEGRAM_WEBHOOK_SECRET);
@@ -53,34 +89,29 @@ if (!process.env.TELEGRAM_BOT_TOKEN) {
     });
 
     // Wire webhook updates into the real bot handler
-    // The bot.js exports handleMessage and handleCallback for this
     setTimeout(function() {
       try {
         var bot = require("../cloud/telegram/bot.js");
-        // Expose handlers on global so webhookHandler can call them
         if (typeof bot.handleMessage === 'function') {
           global.__accBotHandleMessage  = bot.handleMessage;
           global.__accBotHandleCallback = bot.handleCallback;
           console.log("[start] Bot handlers wired to webhook.");
         } else {
-          // bot.js auto-starts polling — in webhook mode we just need the webhook route
-          // to receive updates and the bot.js logic won't conflict since it detected webhook
           console.log("[start] Bot loaded in webhook mode.");
         }
       } catch(e) {
         console.error("[start] Bot load error:", e.message);
       }
     }, 2000);
-
-  } else {
-    // POLLING MODE — local development
-    console.log("[start] Local mode — starting Telegram bot with long-polling.");
-    try {
-      require("../cloud/telegram/bot.js");
-      console.log("[start] Telegram bot started (polling).");
-    } catch(e) {
-      console.error("[start] Telegram bot failed:", e.message);
-    }
+  }
+} else {
+  // POLLING MODE â€” local development
+  console.log("[start] Local mode â€” starting Telegram bot with long-polling.");
+  try {
+    require("../cloud/telegram/bot.js");
+    console.log("[start] Telegram bot started (polling).");
+  } catch(e) {
+    console.error("[start] Telegram bot failed:", e.message);
   }
 }
 

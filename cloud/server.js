@@ -16,6 +16,9 @@ const messagesRoutes           = require("./api/messages.js");
 const assistantRoutes          = require("./api/assistant.js");
 const uiRoutes                 = require("./api/uiRoutes.js");
 const taskbusRoutes            = require("./taskbus/routes.js");
+const hubRoutes                = require("./hub/routes.js");
+const autonomyRoutes           = require("./autonomy/routes.js");
+const autonomyLoop             = require("./autonomy/loop.js");
 const { startWSServer }        = require("./ws/server.js");
 const orchestrator = require("./orchestrator.js");
 const cloudRouter  = require("./router.js");
@@ -24,22 +27,39 @@ const app  = express();
 const PORT = process.env.PORT || 4000;
 const UI_DIST_PATH = path.join(__dirname, "../ui/dist");
 
-// Rate limiting
+// Rate limiting — relaxed in dev, strict in prod
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // 100 requests per windowMs
+  windowMs: 1 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
   message: "Too many requests, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/api/health' || req.path === '/health',
 });
 
 // CORS — allow Railway domain + any explicitly listed origins.
 // Set CORS_ALLOWED_ORIGINS=https://foo.up.railway.app,https://example.com to extend.
 // Requests with no Origin header (server-to-server, curl) always pass through.
+function toOrigin(value) {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    try {
+      return new URL(`https://${String(value).replace(/^https?:\/\//, '')}`).origin;
+    } catch {
+      return null;
+    }
+  }
+}
+
 const _corsOrigins = [
   'https://acc-production-a26c.up.railway.app',
+  toOrigin(process.env.ACC_PUBLIC_URL),
+  toOrigin(process.env.ACC_WEBAPP_URL),
+  toOrigin(process.env.ACC_API_BASE_URL),
   ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
-];
+].filter(Boolean);
 app.use(cors({
   origin: function(origin, cb) {
     if (!origin) return cb(null, true); // same-origin / server-to-server
@@ -140,6 +160,12 @@ function taskbusAuth(req, res, next) {
 // ---------- Agent Task Bus ----------
 app.use("/api/taskbus", taskbusAuth, taskbusRoutes);
 
+// ---------- App Hub (bidirectional app control) ----------
+app.use("/api/hub", hubRoutes);
+
+// ---------- Autonomy (self-scheduling loops) ----------
+app.use("/api/autonomy", autonomyRoutes);
+
 // ---------- Security Approval + Telegram Webhook ----------
 app.use("/api", securityApproval);
 app.use("/api", telegramWebhook);
@@ -161,6 +187,7 @@ app.use((req, res, next) => {
 });
 
 const httpServer = app.listen(PORT, () => {
+  autonomyLoop.start();
   console.log(`[server] ACC Cloud listening on http://localhost:${PORT}`);
   console.log(`[server] Routes: GET /api/health  POST /api/execute  GET /api/task/:id  POST /orchestrate`);
   console.log(`[server] Admin:  GET /admin/users  /admin/graphs  /admin/tasks  /admin/system`);

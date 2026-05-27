@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { taskbusApi, serverApi } from '../lib/api';
+import { taskbusApi, serverApi, getRuntimeApiBaseUrl } from '../lib/api';
 
 // Poll the old-style /api/task/:id endpoint for results from executor
 async function pollOldTask(taskId) {
   try {
-    const BASE = (typeof window !== 'undefined' && window.location.protocol === 'file:')
-      ? 'http://localhost:4000' : '';
+    const BASE = getRuntimeApiBaseUrl();
     const r = await fetch(BASE + '/api/task/' + taskId);
     if (!r.ok) return null;
     return await r.json();
@@ -56,8 +55,7 @@ export function useTaskBus() {
 
   // Create task via old executor (for bot-style natural language tasks)
   const executePrompt = useCallback(async (prompt, agentType) => {
-    const BASE = (typeof window !== 'undefined' && window.location.protocol === 'file:')
-      ? 'http://localhost:4000' : '';
+    const BASE = getRuntimeApiBaseUrl();
     const r = await fetch(BASE + '/api/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

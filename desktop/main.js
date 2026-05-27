@@ -6,6 +6,7 @@ const path  = require('path');
 const http  = require('http');
 const fs    = require('fs');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 const DEV_ROOT = path.resolve(__dirname, '..');
 const BACKEND_PORT = 4000;
@@ -331,10 +332,60 @@ function createTray() {
   tray.on('double-click', () => { if (!win) createWindow(); else win.show(); });
 }
 
+// ── Auto-updater ──────────────────────────────────────────────────────────────
+function setupAutoUpdater() {
+  if (!app.isPackaged) return; // only runs in built app, not dev
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    appendDesktopLog('updater: checking for update');
+    broadcastUpdate({ status: 'checking' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    appendDesktopLog(`updater: update available v${info.version}`);
+    broadcastUpdate({ status: 'available', version: info.version, releaseNotes: info.releaseNotes });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    appendDesktopLog('updater: up to date');
+    broadcastUpdate({ status: 'up-to-date' });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    const pct = Math.round(progress.percent);
+    broadcastUpdate({ status: 'downloading', percent: pct, bytesPerSecond: progress.bytesPerSecond });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    appendDesktopLog(`updater: downloaded v${info.version} — ready to install`);
+    broadcastUpdate({ status: 'ready', version: info.version });
+  });
+
+  autoUpdater.on('error', (err) => {
+    appendDesktopLog(`updater: error — ${err.message}`);
+    broadcastUpdate({ status: 'error', message: err.message });
+  });
+
+  // Check on launch, then every 4 hours
+  setTimeout(() => autoUpdater.checkForUpdates(), 8000);
+  setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000);
+}
+
+function broadcastUpdate(payload) {
+  for (const bw of BrowserWindow.getAllWindows()) {
+    bw.webContents.send('updater-status', payload);
+  }
+}
+
 // ── IPC ───────────────────────────────────────────────────────────────────────
 ipcMain.handle('server-health', () => checkBackendHealth());
 ipcMain.handle('backend-status:get', () => backendState);
 ipcMain.handle('backend-status:retry', () => ensureBackend());
+ipcMain.handle('updater:check', () => { if (app.isPackaged) autoUpdater.checkForUpdates(); });
+ipcMain.handle('updater:install', () => { autoUpdater.quitAndInstall(false, true); });
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
@@ -344,6 +395,7 @@ app.whenReady().then(() => {
   ensureBackend().catch((err) => {
     notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend bootstrap failed: ${err.message}`);
   });
+  setupAutoUpdater();
 });
 
 app.on('second-instance', () => {

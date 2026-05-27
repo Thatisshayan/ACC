@@ -5,6 +5,7 @@ const store = require('./store.js');
 const taskbusStore = require('../taskbus/store.js');
 const telegramUsers = require('../telegram/users.js');
 const workflowDispatcher = require('../workflows/dispatcher.js');
+const workflowRegistry = require('../workflows/registry.js');
 const socialclaw = require('../integrations/socialclaw.js');
 const bridgeService = require('../services/alphonsoBridgeService.js');
 const { getBridgeStatus } = require('../services/alphonsoBridgeService.js');
@@ -277,6 +278,10 @@ function parseAssistantIntent(text) {
     return { intent: 'bridge.packets', confidence: 0.84, arguments: {}, needsClarification: false };
   }
 
+  if (/\b(open workflows|workflow catalog|list workflows|show workflows|workflow launcher)\b/.test(lower)) {
+    return { intent: 'workflow.catalog', confidence: 0.9, arguments: {}, needsClarification: false };
+  }
+
   const workflowArgs = buildWorkflowLaunchArgs(input, lower);
   if (workflowArgs) {
     return {
@@ -385,6 +390,25 @@ async function executeAssistantIntent(payload) {
       success: true,
       intent: 'bridge.packets',
       packets: listRecentBridgePackets(payload.limit || 8),
+    };
+  }
+
+  if (parsed.intent === 'workflow.catalog') {
+    const workflows = workflowRegistry.listWorkflows();
+    return {
+      success: true,
+      intent: 'workflow.catalog',
+      total: workflows.length,
+      workflows: workflows.slice(0, payload.limit || 12).map((workflow) => ({
+        id: workflow.id,
+        key: workflow.key,
+        name: workflow.name,
+        category: workflow.category,
+        description: workflow.description,
+        command: workflow.command,
+        user_command: workflow.user_command,
+        approval_required_for: workflow.approval_required_for || [],
+      })),
     };
   }
 

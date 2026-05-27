@@ -1,0 +1,40 @@
+# Keep the EAS upload focused on the actual app and backend code.
+
+# Python virtualenvs inside workflow samples
+cloud/workflows/**/.venv/
+cloud/workflows/**/.venv/**
+cloud/workflows/**/__pycache__/
+cloud/workflows/**/__pycache__/**
+cloud/workflows/**/.pytest_cache/
+cloud/workflows/**/.pytest_cache/**
+
+# Node deps and build noise in nested examples
+node_modules/
+ui/node_modules/
+mobile/node_modules/
+desktop/node_modules/
+desktop/dist/
+desktop/dist/**
+desktop/dist-verify/
+desktop/dist-verify/**
+desktop/dist-verify2/
+desktop/dist-verify2/**
+desktop/dist-verify3/
+desktop/dist-verify3/**
+desktop/NVIDIA Corporation/
+desktop/NVIDIA Corporation/**
+ui/dist/
+ui/dist/**
+cloud/workflows/**/node_modules/
+cloud/workflows/**/node_modules/**
+cloud/workflows/**/dist/
+cloud/workflows/**/dist/**
+
+# Local-only agent/session artifacts
+.claude/
+.tmp/
+data/
+*.log
+
+# Old/template mobile workspace leftovers
+mobile/my-app/

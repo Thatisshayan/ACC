@@ -9,13 +9,19 @@
     "build": "electron-builder --win --publish never",
     "build:dir": "electron-builder --win --dir --publish never",
     "build:win": "electron-builder --win --publish never",
-    "build:portable": "electron-builder --win portable --publish never"
+    "build:portable": "electron-builder --win portable --publish never",
+    "release": "electron-builder --win --publish always"
   },
   "build": {
     "appId": "com.acc.v2",
     "productName": "ACC v2",
     "directories": {
       "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Thatisshayan",
+      "repo": "ACC"
     },
     "files": [
       "main.js",
@@ -47,7 +53,7 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
@@ -66,5 +72,8 @@
   "devDependencies": {
     "electron": "28.3.3",
     "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }
