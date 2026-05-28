@@ -11,6 +11,7 @@ const securityApproval         = require("./api/securityApproval.js");
 const telegramWebhook          = require("./api/telegramWebhook.js");
 const webhookHandler           = require("./telegram/webhookHandler.js");
 const alphonsoBridge           = require("./api/alphonsoBridge.js");
+const outreachRoutes           = require("./api/outreachRoutes.js");
 const statusSummary            = require("./api/statusSummary.js");
 const messagesRoutes           = require("./api/messages.js");
 const assistantRoutes          = require("./api/assistant.js");
@@ -177,6 +178,7 @@ app.use("/api", webhookHandler);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/assistant", assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
+app.use("/api/outreach", outreachRoutes);
 app.use("/api/status", statusSummary);
 
 // ---------- UI Routes ----------
