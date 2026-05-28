@@ -12,6 +12,7 @@ const telegramWebhook          = require("./api/telegramWebhook.js");
 const webhookHandler           = require("./telegram/webhookHandler.js");
 const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const outreachRoutes           = require("./api/outreachRoutes.js");
+const synapseRoutes            = require("./api/synapseRoutes.js");
 const statusSummary            = require("./api/statusSummary.js");
 const messagesRoutes           = require("./api/messages.js");
 const assistantRoutes          = require("./api/assistant.js");
@@ -179,6 +180,7 @@ app.use("/api/messages", messagesRoutes);
 app.use("/api/assistant", assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
 app.use("/api/outreach", outreachRoutes);
+app.use("/api/synapse", synapseRoutes);
 app.use("/api/status", statusSummary);
 
 // ---------- UI Routes ----------

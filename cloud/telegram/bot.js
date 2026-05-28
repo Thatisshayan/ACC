@@ -490,6 +490,12 @@ async function handleMessage(msg) {
     return;
   }
 
+  // Synapse waiting for input?
+  if (user.state === 'synapse_waiting') {
+    await handleSynapseMessage(chatId, userId, text);
+    return;
+  }
+
   // Interview simulator active?
   var iSess = interview.getSession(userId);
   if (iSess && user.state === 'in_interview') {
@@ -1187,6 +1193,9 @@ async function handleCallback(cb) {
     return;
   }
 
+  // Synapse
+  if (data === 'synapse_quick') { await handleSynapseQuick(chatId, userId); return; }
+
   // Menus
   if (data==='menu_more') {
     var fa = user.language==='fa';
@@ -1205,6 +1214,7 @@ async function handleCallback(cb) {
       [{text:'💡 Brainstorm',callback_data:'brainstorm'},{text:'⚖️ Legal Help',callback_data:'legal_assistant'}],
       [{text:'📅 Planner',callback_data:'scheduler_tool'},{text:'✈️ Travel Plan',callback_data:'travel_planner'}],
       [{text:'📊 Status',callback_data:'menu_status'},{text:'⚙️ Settings',callback_data:'menu_settings'}],
+      [{text:'🧠 Synapse — 4 AIs',callback_data:'synapse_quick'}],
       [{text:'◀️ Back',callback_data:'back_main'}],
     ]);
     return;
@@ -1554,6 +1564,43 @@ async function poll() {
       }
     }
   }
+}
+
+// ── Synapse Telegram handlers ─────────────────────────────────────────────────
+
+async function handleSynapseQuick(chatId, userId) {
+  await sendMsg(chatId, '🧠 *Synapse — Multi-Agent Room*\n\nSend me any question or task and I\'ll broadcast it to *Claude + GPT-4o + Gemini + DeepSeek* simultaneously.\n\nThey\'ll respond in parallel and I\'ll synthesize the best answer.\n\n_Just type your message now:_');
+  users.updateUser(userId, { state: 'synapse_waiting' });
+}
+
+async function handleSynapseMessage(chatId, userId, message) {
+  await sendMsg(chatId, '🔄 _Broadcasting to 4 AI agents… this takes ~15 seconds_');
+  try {
+    var synapse = require('../integrations/synapse.js');
+    var result = await synapse.broadcast({
+      message: message,
+      preset: 'brainstorm',
+      roomName: 'Telegram Room',
+      synthesize: true,
+    });
+    var successful = result.results.filter(function(r) { return r.status === 'success'; });
+    // Send each agent response
+    for (var i = 0; i < successful.length; i++) {
+      var r = successful[i];
+      var header = '🤖 *' + r.name + '* (' + r.provider + '):\n\n';
+      await sendMsg(chatId, header + r.content.slice(0, 1000) + (r.content.length > 1000 ? '…' : ''));
+    }
+    // Send synthesis
+    if (result.synthesis) {
+      await sendMsg(chatId, '📋 *Synthesis Memo:*\n\n' + result.synthesis.slice(0, 3000));
+    }
+    var summary = '\n✅ *' + result.successful + '/' + result.agents.length + ' agents responded*';
+    if (result.failed > 0) summary += ' (' + result.failed + ' failed)';
+    await sendButtons(chatId, summary, [[{text:'🧠 Ask Synapse again', callback_data:'synapse_quick'},{text:'◀️ Menu',callback_data:'back_main'}]]);
+  } catch(e) {
+    await sendMsg(chatId, '❌ Synapse error: ' + e.message);
+  }
+  users.updateUser(userId, { state: 'active' });
 }
 
 // ── Hub / Memory / Autonomy Telegram handlers ─────────────────────────────────
