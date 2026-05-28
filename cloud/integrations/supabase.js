@@ -2,17 +2,15 @@
 // cloud/integrations/supabase.js — Supabase auth/db adapter
 
 var axios = require('axios');
-var URL = process.env.SUPABASE_URL;
-var KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!URL) console.warn('[supabase] SUPABASE_URL not set — integration disabled');
-if (!KEY) console.warn('[supabase] SUPABASE_SERVICE_ROLE_KEY not set — integration disabled');
+function getURL() { return (process.env.SUPABASE_URL || '').trim(); }
+function getKEY() { return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || ''; }
 
 function enabled() {
-  return !!(URL && KEY);
+  return !!(getURL() && getKEY());
 }
 
 async function checkHealth() {
+  var URL = getURL(); var KEY = getKEY();
   if (!enabled()) return { status: 'disabled', note: 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing' };
   try {
     var r = await axios.get(String(URL).replace(/\/$/, '') + '/rest/v1/', {
