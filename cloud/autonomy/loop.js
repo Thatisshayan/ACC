@@ -116,7 +116,7 @@ async function _runLoop(loopId) {
   });
 
   try {
-    var result = await router.executeTask(task);
+    var result = await router.routeTask(task.id);
     var output = (result && (result.output || result.summary || result.result)) || null;
     var patch = {
       lastRunAt:          new Date().toISOString(),
