@@ -279,21 +279,25 @@ async function bootstrapOutreachCrm(params) {
 
     receipt.completed_at = new Date().toISOString();
 
-    const result = store.addResult({
-      task_id: taskIds[0] || null,
-      agent: 'claude',
-      provider_used: 'manual',
-      cost_tier: 'manual',
-      is_real_ai_result: false,
-      provider_chain_attempted: ['manual'],
-      summary: 'Outreach/CRM bootstrap created ' + receipt.tasks_created + ' approval-gated tasks.',
-      output: JSON.stringify(receipt, null, 2),
-      request_id: requestId,
-      receipt: receipt,
-      failure_class: receipt.failures.length ? 'partial_failure' : null
-    });
+    var resultId = null;
+    if (taskIds.length > 0) {
+      const result = store.addResult({
+        task_id: taskIds[0],
+        agent: 'claude',
+        provider_used: 'manual',
+        cost_tier: 'manual',
+        is_real_ai_result: false,
+        provider_chain_attempted: ['manual'],
+        summary: 'Outreach/CRM bootstrap created ' + receipt.tasks_created + ' approval-gated tasks.',
+        output: JSON.stringify(receipt, null, 2),
+        request_id: requestId,
+        receipt: receipt,
+        failure_class: receipt.failures.length ? 'partial_failure' : null
+      });
+      resultId = result.id;
+    }
 
-    return { success: true, request_id: requestId, task_ids: taskIds, receipt: receipt, result_id: result.id };
+    return { success: true, request_id: requestId, task_ids: taskIds, receipt: receipt, result_id: resultId };
   } catch (err) {
     const failureClass = classifyFailure(err);
     return {

@@ -573,7 +573,7 @@ function addResult(opts) {
   var now = new Date().toISOString();
   var row = {
     id:                       uuid(),
-    task_id:                  opts.task_id,
+    task_id:                  opts.task_id || 'system-' + Date.now(),
     agent:                    opts.agent || 'claude',
     provider_used:            opts.provider_used || opts.adapter_used || null,
     provider_chain_attempted: JSON.stringify(opts.provider_chain_attempted || []),
