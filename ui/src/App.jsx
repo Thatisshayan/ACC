@@ -12,6 +12,7 @@ import { getRuntimeApiBaseUrl } from './lib/api.js';
 import MessengerPage from './pages/Messenger.jsx';
 import AssistantPage from './pages/Assistant.jsx';
 import AdminPage     from './pages/Admin.jsx';
+import AuditPage     from './pages/Audit.jsx';
 
 const IS_ELECTRON_FILE = typeof window !== 'undefined' && window.location?.protocol === 'file:';
 const API = getRuntimeApiBaseUrl();
@@ -86,6 +87,7 @@ const NAV = [
   { id: 'assistant',    label: 'Assistant',    icon: '🎙️' },
   { id: 'agents',       label: 'Agents',        icon: '🤖' },
   { id: 'integrations', label: 'Integrations',  icon: '🔗' },
+  { id: 'audit',        label: 'Audit',         icon: '🔍' },
   { id: 'admin',        label: 'Admin',         icon: '🛡️' },
   { id: 'settings',     label: 'Settings',      icon: '⚙️' },
 ];
@@ -98,7 +100,7 @@ const MOBILE_NAV = [
   { id: 'settings',   label: 'More',    icon: '⚙️' },
 ];
 
-const PAGE_PATHS = new Set(['dashboard','mini','tasks','approvals','messages','assistant','agents','integrations','admin','settings']);
+const PAGE_PATHS = new Set(['dashboard','mini','tasks','approvals','messages','assistant','agents','integrations','audit','admin','settings']);
 function pathToPage(p) { const n = String(p||'').replace(/^\/+/,'').trim().toLowerCase(); return PAGE_PATHS.has(n) ? n : 'dashboard'; }
 
 // ── Shared UI components ──────────────────────────────────────────────────────
@@ -1045,6 +1047,7 @@ export default function App() {
     assistant:    () => <AssistantPage />,
     agents:       renderAgents,
     integrations: renderIntegrations,
+    audit:        () => <AuditPage />,
     admin:        () => <AdminPage />,
     settings:     renderSettings,
   };

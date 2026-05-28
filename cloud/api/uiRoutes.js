@@ -8,6 +8,7 @@ const { signApproval }          = require("../security/signedApprovals.js");
 const { listSecrets }           = require("../security/vaultStub.js");
 const { saveToNotion }          = require("../memory/notionStorage.js");
 const { log }                   = require("../utils/logger.js");
+const { getAuditTrail }         = require("../utils/auditLog.js");
 
 const router = express.Router();
 
@@ -86,6 +87,12 @@ router.post("/snapshot/:id/reject", (req, res) => {
 // ── Approvals (signed records) ────────────────────────────────────────────────
 router.get("/approvals", (req, res) => {
   return res.json({ success: true, approvals: listApprovals() });
+});
+
+// ── Audit trail ───────────────────────────────────────────────────────────────
+router.get("/audit", (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+  return res.json({ success: true, entries: getAuditTrail(limit) });
 });
 
 // ── Secrets list (Admin only — names only, never values) ──────────────────────
