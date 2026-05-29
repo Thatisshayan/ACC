@@ -60,6 +60,13 @@ async function notifyApprovalRequest({ snapshotId, summary }) {
  */
 async function handleTelegramUpdate(update) {
   try {
+    // Route inline button callbacks (card approvals, etc.)
+    if (update.callback_query) {
+      const { handleCardCallback } = require('./cardApprovalBot.js');
+      const handled = await handleCardCallback(update.callback_query);
+      if (handled) return;
+    }
+
     const message = update.message || update.edited_message;
     if (!message?.text) return;
 

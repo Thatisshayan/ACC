@@ -92,4 +92,94 @@ async function checkHealth() {
   }
 }
 
-module.exports = { searchJobs, webSearch, screenshot, checkHealth, SANDBOX };
+/**
+ * fillForm — navigate to a URL and fill+submit a form
+ * @param {string} url
+ * @param {Array<{selector: string, value: string}>} fields
+ * @param {string} submitSelector — CSS selector for submit button
+ */
+async function fillForm(url, fields, submitSelector) {
+  if (SANDBOX) {
+    log('[browser] SANDBOX fillForm:', url, fields.length, 'fields');
+    return { success: true, sandbox: true, message: 'Form fill simulated. Set BROWSER_SANDBOX=false for live.' };
+  }
+  return withPage(async function(page) {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    for (const field of fields) {
+      try {
+        await page.waitForSelector(field.selector, { timeout: 5000 });
+        await page.fill(field.selector, field.value);
+      } catch (e) {
+        log('[browser] fillForm: could not fill', field.selector, e.message);
+      }
+    }
+    if (submitSelector) {
+      await page.waitForSelector(submitSelector, { timeout: 5000 });
+      await page.click(submitSelector);
+      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    }
+    const finalUrl = page.url();
+    const title    = await page.title();
+    return { success: true, sandbox: false, finalUrl, pageTitle: title };
+  });
+}
+
+/**
+ * navigateAndExtract — go to URL, extract structured data
+ * @param {string} url
+ * @param {Object} selectors — { key: 'css selector', ... }
+ */
+async function navigateAndExtract(url, selectors) {
+  return withPage(async function(page) {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const result = {};
+    for (const [key, selector] of Object.entries(selectors)) {
+      try {
+        const elements = await page.$$(selector);
+        result[key] = await Promise.all(elements.slice(0, 20).map(el => el.innerText().catch(() => '')));
+        if (result[key].length === 1) result[key] = result[key][0];
+      } catch (e) {
+        result[key] = null;
+      }
+    }
+    return { success: true, url, extracted: result };
+  });
+}
+
+/**
+ * clickAndWait — navigate to URL, click an element, return resulting page
+ * @param {string} url
+ * @param {string} selector
+ */
+async function clickAndWait(url, selector) {
+  if (SANDBOX) {
+    return { success: true, sandbox: true, message: 'Click simulated. Set BROWSER_SANDBOX=false for live.' };
+  }
+  return withPage(async function(page) {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForSelector(selector, { timeout: 8000 });
+    await page.click(selector);
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    return { success: true, sandbox: false, finalUrl: page.url(), pageTitle: await page.title() };
+  });
+}
+
+/**
+ * runBrowserTask — unified entry point used by executor.js
+ */
+async function runBrowserTask(payload) {
+  try {
+    const action = payload?.action || 'webSearch';
+    if (action === 'search' || action === 'webSearch')   return await webSearch(payload.query || payload.prompt || '');
+    if (action === 'searchJobs')                          return await searchJobs(payload.query, payload.location, payload.type);
+    if (action === 'screenshot')                          return await screenshot(payload.url);
+    if (action === 'fillForm')                            return await fillForm(payload.url, payload.fields || [], payload.submitSelector);
+    if (action === 'extract')                             return await navigateAndExtract(payload.url, payload.selectors || {});
+    if (action === 'click')                               return await clickAndWait(payload.url, payload.selector);
+    return { success: false, error: `Browser: unknown action "${action}". Valid: search, searchJobs, screenshot, fillForm, extract, click` };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+module.exports = { searchJobs, webSearch, screenshot, fillForm, navigateAndExtract, clickAndWait, runBrowserTask, checkHealth, SANDBOX };

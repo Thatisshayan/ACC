@@ -328,6 +328,29 @@ function parseAssistantIntent(text) {
     };
   }
 
+  // Search / browse web
+  if (/\b(search the web|google|look up|find online|browse|web search)\b/.test(lower)) {
+    const q = input.replace(/^(search the web for|google|look up|find online|browse|web search)\s*/i, '').trim();
+    return { intent: 'browser.search', confidence: 0.88, arguments: { query: q }, needsClarification: false };
+  }
+
+  // Run code
+  if (/\b(run code|execute code|run this|eval|calculate|compute)\b/.test(lower)) {
+    return { intent: 'code.run', confidence: 0.85, arguments: { prompt: input }, needsClarification: false };
+  }
+
+  // HTTP API call
+  if (/\b(call api|http request|fetch url|get url|post to)\b/.test(lower)) {
+    const urlMatch = input.match(/https?:\/\/[^\s]+/);
+    return { intent: 'agent.http', confidence: 0.82, arguments: { url: urlMatch ? urlMatch[0] : null, prompt: input }, needsClarification: !urlMatch };
+  }
+
+  // Screenshot a page
+  if (/\b(screenshot|take a screenshot|capture|snap)\b/.test(lower)) {
+    const urlMatch = input.match(/https?:\/\/[^\s]+/);
+    return { intent: 'browser.screenshot', confidence: 0.85, arguments: { url: urlMatch ? urlMatch[0] : null }, needsClarification: !urlMatch };
+  }
+
   return {
     intent: 'assistant.chat',
     confidence: 0.4,
@@ -586,6 +609,37 @@ async function executeAssistantIntent(payload) {
       return Object.assign({ success: true, intent: parsed.intent }, await socialclaw.checkHealth());
     }
   }
+
+  // ── Real execution intents ────────────────────────────────────────────────
+  if (parsed.intent === 'browser.search') {
+    const { runBrowserTask } = require('../connectors/browser.js');
+    const query = parsed.arguments.query || text;
+    const result = await runBrowserTask({ action: 'webSearch', query });
+    return { success: result.success, intent: parsed.intent, query, results: result.results || [], error: result.error };
+  }
+
+  if (parsed.intent === 'browser.screenshot') {
+    const { runBrowserTask } = require('../connectors/browser.js');
+    const url = parsed.arguments.url;
+    if (!url) return { success: false, intent: parsed.intent, needsClarification: true, questions: ['What URL should I screenshot?'] };
+    const result = await runBrowserTask({ action: 'screenshot', url });
+    return { success: result.success, intent: parsed.intent, url, image: result.image, mimeType: result.mimeType, error: result.error };
+  }
+
+  if (parsed.intent === 'code.run') {
+    const { runCodeExecTask } = require('../connectors/codeExec.js');
+    const result = await runCodeExecTask({ action: 'runJS', code: `result = (function(){ ${parsed.arguments.prompt} })()` });
+    return { success: result.success, intent: parsed.intent, output: result.output, error: result.error };
+  }
+
+  if (parsed.intent === 'agent.http') {
+    const { runCodeExecTask } = require('../connectors/codeExec.js');
+    const url = parsed.arguments.url;
+    if (!url) return { success: false, intent: parsed.intent, needsClarification: true, questions: ['What URL should I fetch?'] };
+    const result = await runCodeExecTask({ action: 'http', method: 'GET', url });
+    return { success: result.success, intent: parsed.intent, url, status: result.status, data: result.data, error: result.error };
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   return {
     success: true,

@@ -55,9 +55,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "accApiBaseUrl": "https://acc-production-a26c.up.railway.app",
-      "accPublicUrl": "https://acc-production-a26c.up.railway.app",
-      "accWebAppUrl": "https://acc-production-a26c.up.railway.app",
+      "accApiBaseUrl": "https://tryacc.app",
+      "accPublicUrl": "https://tryacc.app",
+      "accWebAppUrl": "https://tryacc.app",
       "router": {
         "origin": false
       },

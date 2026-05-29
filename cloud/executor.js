@@ -3,6 +3,7 @@ const { runClaudeTask }      = require("./connectors/claude.js");
 const { runOpenAITask }      = require("./connectors/openai.js");
 const { runLocalLLMTask }    = require("./connectors/local.js");
 const { runBrowserTask }     = require("./connectors/browser.js");
+const { runCodeExecTask }    = require("./connectors/codeExec.js");
 const { runRunwayTask }      = require("./connectors/runway.js");
 const { runPikaTask }        = require("./connectors/pika.js");
 const { runLumaTask }        = require("./connectors/luma.js");
@@ -147,9 +148,10 @@ async function executeTask(task = {}) {
     return result;
   }
 
-  // ---------- LOCAL + BROWSER ----------
+  // ---------- LOCAL + BROWSER + CODE ----------
   if (agentType === "local")        { result = await runLocalLLMTask(payload); }
   else if (agentType === "browser") { result = await runBrowserTask(payload); }
+  else if (agentType === "code")    { result = await runCodeExecTask(payload); }
   if (result) {
     logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: result.success ? "completed" : "failed" });
     return result;

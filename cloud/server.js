@@ -14,6 +14,10 @@ const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const outreachRoutes           = require("./api/outreachRoutes.js");
 const synapseRoutes            = require("./api/synapseRoutes.js");
 const fscRoutes                = require("./api/fscRoutes.js");
+const cardRoutes               = require("./api/cardRoutes.js");
+const phoneRoutes              = require("./api/phoneRoutes.js");
+const billingRoutes            = require("./api/billingRoutes.js");
+const memoryRoutes             = require("./api/memoryRoutes.js");
 const statusSummary            = require("./api/statusSummary.js");
 const messagesRoutes           = require("./api/messages.js");
 const assistantRoutes          = require("./api/assistant.js");
@@ -58,6 +62,8 @@ function toOrigin(value) {
 
 const _corsOrigins = [
   'https://acc-production-a26c.up.railway.app',
+  'https://tryacc.app',
+  'https://www.tryacc.app',
   toOrigin(process.env.ACC_PUBLIC_URL),
   toOrigin(process.env.ACC_WEBAPP_URL),
   toOrigin(process.env.ACC_API_BASE_URL),
@@ -183,6 +189,10 @@ app.use("/api/alphonso-bridge", alphonsoBridge);
 app.use("/api/outreach", outreachRoutes);
 app.use("/api/synapse", synapseRoutes);
 app.use("/api/fsc", fscRoutes);
+app.use("/api/card", cardRoutes);
+app.use("/api/phone", phoneRoutes);
+app.use("/api/billing", billingRoutes);
+app.use("/api/memory", memoryRoutes);
 app.use("/api/status", statusSummary);
 
 // ---------- UI Routes ----------
