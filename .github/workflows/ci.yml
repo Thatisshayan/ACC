@@ -28,14 +28,25 @@ jobs:
           node --check cloud/taskbus/store.js
           node --check cloud/taskbus/router.js
           node --check cloud/connectors/stripe.js
-          node --check cloud/integrations/crewai.js
+          node --check cloud/api/cardRoutes.js
+          node --check cloud/api/phoneRoutes.js
+          node --check cloud/api/billingRoutes.js
+          node --check cloud/api/memoryRoutes.js
+          node --check cloud/connectors/twilio.js
+          node --check cloud/connectors/codeExec.js
+          node --check cloud/connectors/browser.js
+          node --check cloud/services/privacyCard.js
+          node --check cloud/storage/supabaseMemory.js
 
       - name: Module load test
         run: |
-          node -e "require('./cloud/connectors/stripe.js');   console.log('stripe OK')"
-          node -e "require('./cloud/integrations/crewai.js'); console.log('crewai OK')"
-          node -e "require('./cloud/taskbus/store.js');        console.log('store OK')"
-          node -e "require('./cloud/taskbus/router.js');       console.log('router OK')"
+          node -e "require('./cloud/connectors/stripe.js');         console.log('stripe OK')"
+          node -e "require('./cloud/taskbus/store.js');             console.log('store OK')"
+          node -e "require('./cloud/api/cardRoutes.js');            console.log('cardRoutes OK')"
+          node -e "require('./cloud/api/phoneRoutes.js');           console.log('phoneRoutes OK')"
+          node -e "require('./cloud/api/billingRoutes.js');         console.log('billingRoutes OK')"
+          node -e "require('./cloud/connectors/codeExec.js');       console.log('codeExec OK')"
+          node -e "require('./cloud/storage/supabaseMemory.js');    console.log('supabaseMemory OK')"
         env:
           NODE_ENV: test
 

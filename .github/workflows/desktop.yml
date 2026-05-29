@@ -1,0 +1,55 @@
+name: Desktop Build
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:   # allow manual trigger from GitHub UI
+
+jobs:
+  build:
+    name: Build Windows portable exe
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        run: cd desktop && npm ci
+
+      - name: Build portable exe
+        run: cd desktop && npm run build:portable
+
+      - name: Upload portable exe as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACC-portable-${{ github.sha }}
+          path: desktop/dist/ACC*.exe
+          retention-days: 30
+
+      - name: Create GitHub Release (on master only)
+        if: github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ github.run_number }}
+          name: "ACC Desktop v2.0.${{ github.run_number }}"
+          body: |
+            ## ACC Desktop — portable build
+
+            **No installation required.** Download `ACC-portable.exe`, double-click, done.
+            Loads live from https://acccommand.center — always up to date.
+
+            Built from commit ${{ github.sha }}
+          files: desktop/dist/ACC*.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
