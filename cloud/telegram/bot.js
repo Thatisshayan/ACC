@@ -33,19 +33,19 @@ function resolveMiniWebappUrl() {
   var explicit = process.env.ACC_WEBAPP_URL || process.env.ACC_PUBLIC_URL;
   if (explicit) {
     try {
-      return new URL(explicit).origin.replace(/\/+$/, '') + '/mini';
+      return new URL(explicit).origin.replace(/\/+$/, '');
     } catch (_) {
-      return String(explicit).replace(/\/+$/, '').replace(/\/mini$/, '') + '/mini';
+      return String(explicit).replace(/\/+$/, '').replace(/\/mini$/, '');
     }
   }
 
   if (process.env.ACC_API_BASE_URL) {
     try {
-      return new URL(process.env.ACC_API_BASE_URL).origin.replace(/\/+$/, '') + '/mini';
+      return new URL(process.env.ACC_API_BASE_URL).origin.replace(/\/+$/, '');
     } catch (_) {}
   }
 
-  return 'https://acc-production-a26c.up.railway.app/mini';
+  return 'https://acc-production-a26c.up.railway.app';
 }
 var MINI_WEBAPP_URL = resolveMiniWebappUrl();
 
@@ -691,8 +691,15 @@ async function handleStateInput(chatId, userId, text, state, sendButtons) {
       await executeAndReply(chatId, 'writer', 'Salary negotiation coach: analyze this offer and give exact counter-offer scripts and numbers: ' + text, user.language);
       break;
 
+    case 'awaiting_resume':
+      await sendMsg(chatId, user.language === 'fa'
+        ? '📎 لطفاً فایل رزومه‌ات را بفرست (PDF یا Word).\n\nروی 📎 بزن و فایل را انتخاب کن.'
+        : '📎 Please send your resume file (PDF or Word).\n\nTap the 📎 attachment icon and select your file.');
+      setState(userId, 'awaiting_resume');
+      break;
+
     case 'awaiting_note_title':
-      setState(userId, 'awaiting_note_content', { title: text }); 
+      setState(userId, 'awaiting_note_content', { title: text });
       await sendMsg(chatId, '📝 ' + (user.language==='fa'?'محتوای یادداشت:':'Note content:')); break;
 
     case 'awaiting_note_content':
@@ -982,8 +989,15 @@ async function handleCallback(cb) {
   if (data && data.indexOf('approval_open:') === 0) {
     var approvalId = data.split(':')[1];
     var tbCmd5 = require('./taskbus/telegramCommands.js');
-    await tbCmd5.handleTaskBusCommand(chatId, userId, '/approvals', sendMsg, user, sendButtons);
-    await sendMsg(chatId, 'Use /taskbus_approve_' + approvalId + ' or /taskbus_reject_' + approvalId + ' for a quick decision.');
+    await tbCmd5.handleTaskBusCommand(chatId, userId, '/task_' + approvalId, sendMsg, user, sendButtons);
+    await sendButtons(chatId,
+      '🛡️ *Approval required* for task `' + approvalId + '`\n\nTap to approve or reject:',
+      [
+        [{ text: '✅ Approve', callback_data: 'taskbus_approve_' + approvalId },
+         { text: '❌ Reject',  callback_data: 'taskbus_reject_'  + approvalId }],
+        [{ text: '📋 All Approvals', callback_data: 'task_approvals' }],
+      ]
+    );
     return;
   }
 
@@ -1229,6 +1243,12 @@ async function handleCallback(cb) {
   if (data==='menu_status')      { await handleStatus(chatId, userId); return; }
   if (data==='menu_help')        { await handleHelp(chatId, userId); return; }
   if (data==='lang_menu')        { await sendButtons(chatId, t(userId,'ask_language'), langMenu()); return; }
+
+  // ── Back to main menu ────────────────────────────────────────────────────────
+  if (data === 'back_main') {
+    await sendButtons(chatId, t(userId, 'main_menu', { name: user.name || 'friend' }), mainMenu(userId));
+    return;
+  }
 
   // Chef AI
   if (data==='menu_chef') {
