@@ -29,27 +29,6 @@
       "node_modules/**/*",
       "!node_modules/.cache"
     ],
-    "extraResources": [
-      {
-        "from": "../ui/dist",
-        "to": "ui/dist",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "../cloud",
-        "to": "cloud"
-      },
-      {
-        "from": "../scripts",
-        "to": "scripts"
-      },
-      {
-        "from": "../node_modules",
-        "to": "node_modules"
-      }
-    ],
     "win": {
       "target": [
         {

@@ -1,245 +1,46 @@
-// desktop/main.js — ACC v2 Electron Desktop App
+// desktop/main.js — ACC Desktop (thin shell → acccommand.center)
+// Loads the live Railway deployment. No local backend. Always up to date.
 'use strict';
 
 const { app, BrowserWindow, Menu, Tray, nativeImage, shell, ipcMain } = require('electron');
-const path  = require('path');
-const http  = require('http');
-const fs    = require('fs');
-const { spawn } = require('child_process');
+const path   = require('path');
+const https  = require('https');
+const fs     = require('fs');
 const { autoUpdater } = require('electron-updater');
 
-const DEV_ROOT = path.resolve(__dirname, '..');
-const BACKEND_PORT = 4000;
-const BACKEND_HEALTH_PATH = '/api/health';
-const BACKEND_START_TIMEOUT_MS = 30000;
-const BACKEND_CHECK_INTERVAL_MS = 1000;
-
-const BACKEND_STATUS = Object.freeze({
-  ONLINE: 'Online',
-  STARTING: 'Starting',
-  OFFLINE: 'Offline',
-  FAILED: 'Failed',
-});
+const CLOUD_URL   = 'https://acccommand.center';
+const HEALTH_URL  = `${CLOUD_URL}/api/health`;
 
 let win  = null;
 let tray = null;
-let backendProcess = null;
-let backendStartPromise = null;
-let backendState = {
-  status: BACKEND_STATUS.OFFLINE,
-  detail: 'Checking backend...',
-  lastCheckedAt: null,
-};
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+
+// ── Logging ───────────────────────────────────────────────────────────────────
 let logFilePath = null;
-
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-  app.quit();
-}
-
-function ensureDesktopLogFile() {
-  if (logFilePath) return logFilePath;
-
-  const logsDir = path.join(app.getPath('userData'), 'logs');
-  fs.mkdirSync(logsDir, { recursive: true });
-  logFilePath = path.join(logsDir, 'desktop.log');
-  return logFilePath;
-}
-
-function appendDesktopLog(message) {
+function log(msg) {
   try {
-    const file = ensureDesktopLogFile();
-    fs.appendFileSync(file, `[${new Date().toISOString()}] ${message}\n`);
-  } catch (err) {
-    console.error('[acc] log write failed:', err.message);
-  }
+    if (!logFilePath) {
+      const dir = path.join(app.getPath('userData'), 'logs');
+      fs.mkdirSync(dir, { recursive: true });
+      logFilePath = path.join(dir, 'desktop.log');
+    }
+    fs.appendFileSync(logFilePath, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch (_) {}
 }
 
-function resolveUiDistPath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'ui', 'dist', 'index.html');
-  }
-
-  return path.join(DEV_ROOT, 'ui', 'dist', 'index.html');
-}
-
-// ── Health check ──────────────────────────────────────────────────────────────
-function checkBackendHealth(timeoutMs = 2000) {
+// ── Railway health check ──────────────────────────────────────────────────────
+function checkHealth() {
   return new Promise((resolve) => {
-    const req = http.request(
-      { hostname: '127.0.0.1', port: BACKEND_PORT, path: BACKEND_HEALTH_PATH, timeout: timeoutMs },
-      (res) => {
-        res.resume();
-        resolve(res.statusCode === 200);
-      }
-    );
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(false);
-    });
-    req.end();
+    https.get(HEALTH_URL, (res) => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    }).on('error', () => resolve(false));
   });
 }
 
-// ── Ensure backend is running via PM2 (or direct node) ───────────────────────
-function notifyBackendStatus(status, detail, extra = {}) {
-  backendState = {
-    status,
-    detail,
-    lastCheckedAt: new Date().toISOString(),
-    ...extra,
-  };
-
-  appendDesktopLog(`backend:${status} ${detail}`);
-
-  for (const browserWindow of BrowserWindow.getAllWindows()) {
-    browserWindow.webContents.send('backend-status', backendState);
-  }
-}
-
-function findBackendRoot() {
-  const pathCandidates = [
-    DEV_ROOT,
-    path.resolve(DEV_ROOT, '..'),
-    path.resolve(DEV_ROOT, '..', '..'),
-  ];
-
-  if (process.resourcesPath) {
-    pathCandidates.push(
-      process.resourcesPath,
-      path.resolve(process.resourcesPath, '..'),
-      path.resolve(process.resourcesPath, '..', '..'),
-      path.resolve(process.resourcesPath, '..', '..', '..'),
-      path.resolve(process.resourcesPath, '..', '..', '..', '..'),
-    );
-  }
-
-  const seen = new Set();
-  for (const candidate of pathCandidates) {
-    const resolved = path.resolve(candidate);
-    if (seen.has(resolved)) continue;
-    seen.add(resolved);
-
-    const startScript = path.join(resolved, 'scripts', 'start.js');
-    const cloudServer = path.join(resolved, 'cloud', 'server.js');
-    const expressPkg = path.join(resolved, 'node_modules', 'express', 'package.json');
-
-    if (fs.existsSync(startScript) && fs.existsSync(cloudServer) && fs.existsSync(expressPkg)) {
-      return resolved;
-    }
-  }
-
-  return null;
-}
-
-function resolveNodeBin() {
-  // Prefer a real node.exe from PATH over Electron-as-Node to avoid edge cases
-  // on Windows where Electron's node emulation can behave differently.
-  const candidates = ['node', 'node.exe'];
-  for (const bin of candidates) {
-    try {
-      require('child_process').execFileSync(bin, ['--version'], { timeout: 3000, windowsHide: true });
-      return bin;
-    } catch (_) {}
-  }
-  // Fall back to Electron-as-Node
-  return process.execPath;
-}
-
-function launchBackend(repoRoot) {
-  const startScript = path.join(repoRoot, 'scripts', 'start.js');
-  const nodeBin = resolveNodeBin();
-  const child = spawn(nodeBin, [startScript], {
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      PORT: String(BACKEND_PORT),
-      ACC_SKIP_TELEGRAM_BOT: '1',   // bot is on Railway; never start locally
-      ELECTRON_RUN_AS_NODE: undefined, // don't leak this into the real node process
-    },
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
-
-  child.unref();
-  return child;
-}
-
-async function ensureBackend() {
-  if (backendStartPromise) {
-    return backendStartPromise;
-  }
-
-  backendStartPromise = (async () => {
-    if (await checkBackendHealth()) {
-      notifyBackendStatus(BACKEND_STATUS.ONLINE, `Backend already listening on http://localhost:${BACKEND_PORT}.`);
-      return true;
-    }
-
-    notifyBackendStatus(BACKEND_STATUS.STARTING, `Starting the local backend on http://localhost:${BACKEND_PORT}...`);
-
-    const repoRoot = findBackendRoot();
-    if (!repoRoot) {
-      notifyBackendStatus(
-        BACKEND_STATUS.FAILED,
-        'Backend start script not found. Open the ACC repo root and run npm install there if needed.'
-      );
-      return false;
-    }
-
-    let backendReachedOnline = false;
-
-    try {
-      backendProcess = launchBackend(repoRoot);
-    } catch (err) {
-      notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend launch failed: ${err.message}`);
-      return false;
-    }
-
-    backendProcess.once('error', (err) => {
-      if (!backendReachedOnline) {
-        notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend launch failed: ${err.message}`);
-      }
-    });
-
-    backendProcess.once('exit', (code, signal) => {
-      const reason = signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`;
-      if (!backendReachedOnline) {
-        notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend exited before it became online (${reason}).`);
-      } else {
-        notifyBackendStatus(
-          BACKEND_STATUS.OFFLINE,
-          `Backend stopped after launch (${reason}). Restart ACC to bring it back online.`
-        );
-      }
-    });
-
-    const deadline = Date.now() + BACKEND_START_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      if (await checkBackendHealth()) {
-        backendReachedOnline = true;
-        notifyBackendStatus(BACKEND_STATUS.ONLINE, `Backend is online at http://localhost:${BACKEND_PORT}.`);
-        return true;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, BACKEND_CHECK_INTERVAL_MS));
-    }
-
-    notifyBackendStatus(
-      BACKEND_STATUS.FAILED,
-      `Backend did not respond on http://localhost:${BACKEND_PORT} after startup. Run npm run start in the repo root and retry.`
-    );
-    return false;
-  })().finally(() => {
-    backendStartPromise = null;
-  });
-
-  return backendStartPromise;
-}
-
-// ── Create window ─────────────────────────────────────────────────────────────
+// ── Window ────────────────────────────────────────────────────────────────────
 function createWindow() {
   win = new BrowserWindow({
     width:           1400,
@@ -247,29 +48,26 @@ function createWindow() {
     minWidth:        960,
     minHeight:       600,
     backgroundColor: '#0A0A0F',
-    title:           'ACC v2 — Agent Command Center',
+    title:           'ACC — Agent Command Center',
     show:            false,
     webPreferences: {
       nodeIntegration:  false,
       contextIsolation: true,
-      webSecurity:      false,   // allows file:// to call http://localhost:4000
       preload:          path.join(__dirname, 'preload.js'),
     },
   });
 
-  // Always load from built dist — no dev server dependency
-  win.loadFile(resolveUiDistPath());
-  win.webContents.once('did-finish-load', () => {
-    win?.webContents.send('backend-status', backendState);
-  });
-
+  win.loadURL(CLOUD_URL);
   win.once('ready-to-show', () => { win.show(); win.focus(); });
   win.on('closed', () => { win = null; });
 
-  // External links → browser
+  // Open external links in the system browser, not a new Electron window
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http')) shell.openExternal(url);
-    return { action: 'deny' };
+    if (url.startsWith('http') && !url.startsWith(CLOUD_URL)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
   });
 
   buildMenu();
@@ -281,32 +79,34 @@ function buildMenu() {
     {
       label: 'ACC',
       submenu: [
-        { label: 'Reload UI',  accelerator: 'F5',        click: () => win?.reload() },
-        { label: 'Dev Tools',  accelerator: 'F12',       click: () => win?.webContents.toggleDevTools() },
+        { label: 'Reload',     accelerator: 'F5',           click: () => win?.reload() },
+        { label: 'Hard Reload',accelerator: 'CmdOrCtrl+F5', click: () => win?.webContents.reloadIgnoringCache() },
+        { label: 'Dev Tools',  accelerator: 'F12',          click: () => win?.webContents.toggleDevTools() },
         { type: 'separator' },
-        { label: 'Quit ACC',   accelerator: 'CmdOrCtrl+Q', click: () => { app.isQuiting = true; app.quit(); } },
+        { label: 'Quit ACC',   accelerator: 'CmdOrCtrl+Q',  click: () => { app.isQuiting = true; app.quit(); } },
       ],
     },
     {
       label: 'Navigate',
       submenu: [
-        { label: 'Task Router',  click: () => win?.webContents.executeJavaScript('if(window.__ACC_NAV__)window.__ACC_NAV__("router")') },
-        { label: 'Dashboard',   click: () => win?.webContents.executeJavaScript('if(window.__ACC_NAV__)window.__ACC_NAV__("dashboard")') },
-        { label: 'Vault',       click: () => win?.webContents.executeJavaScript('if(window.__ACC_NAV__)window.__ACC_NAV__("vault")') },
-        { label: 'History',     click: () => win?.webContents.executeJavaScript('if(window.__ACC_NAV__)window.__ACC_NAV__("history")') },
+        { label: 'Dashboard',    click: () => win?.loadURL(`${CLOUD_URL}/dashboard`) },
+        { label: 'Landing Page', click: () => win?.loadURL(`${CLOUD_URL}/landing`) },
+        { label: 'API Health',   click: () => win?.loadURL(HEALTH_URL) },
         { type: 'separator' },
-        { label: 'Zoom In',     role: 'zoomIn' },
-        { label: 'Zoom Out',    role: 'zoomOut' },
-        { label: 'Reset Zoom',  role: 'resetZoom' },
-        { label: 'Fullscreen',  role: 'togglefullscreen' },
+        { label: 'Zoom In',    role: 'zoomIn' },
+        { label: 'Zoom Out',   role: 'zoomOut' },
+        { label: 'Reset Zoom', role: 'resetZoom' },
+        { label: 'Fullscreen', role: 'togglefullscreen' },
       ],
     },
     {
       label: 'Services',
       submenu: [
-        { label: 'API Health',  click: () => shell.openExternal('http://localhost:4000/api/health') },
-        { label: 'Task Bus',    click: () => shell.openExternal('http://localhost:4000/api/taskbus/stats') },
-        { label: 'Telegram Bot',click: () => shell.openExternal('https://t.me/OurAccbot') },
+        { label: 'API Health',   click: () => shell.openExternal(HEALTH_URL) },
+        { label: 'Task Bus',     click: () => shell.openExternal(`${CLOUD_URL}/api/taskbus/stats`) },
+        { label: 'Telegram Bot', click: () => shell.openExternal('https://t.me/OurAccbot') },
+        { label: 'Supabase',     click: () => shell.openExternal('https://supabase.com/dashboard/project/xacfnatsovuxqttnzdaw') },
+        { label: 'Railway',      click: () => shell.openExternal('https://railway.app') },
       ],
     },
   ]));
@@ -314,102 +114,64 @@ function buildMenu() {
 
 // ── Tray ──────────────────────────────────────────────────────────────────────
 function createTray() {
-  // Use a small colored square as icon (works without external file)
   const img  = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray.png'));
   const icon = img.isEmpty() ? nativeImage.createEmpty() : img;
   tray = new Tray(icon);
-  tray.setToolTip('ACC v2 — Agent Command Center');
-  const menu = Menu.buildFromTemplate([
-    { label: '🤖 Open ACC v2',   click: () => { if (!win) createWindow(); else win.show(); } },
+  tray.setToolTip('ACC — Agent Command Center');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open ACC',        click: () => { if (!win) createWindow(); else win.show(); } },
     { type: 'separator' },
-    { label: '❤️ Server Health', click: () => shell.openExternal('http://localhost:4000/api/health') },
-    { label: '📋 Task Bus',      click: () => shell.openExternal('http://localhost:4000/api/taskbus/stats') },
-    { label: '📱 Telegram Bot',  click: () => shell.openExternal('https://t.me/OurAccbot') },
+    { label: 'API Health',      click: () => shell.openExternal(HEALTH_URL) },
+    { label: 'Telegram Bot',    click: () => shell.openExternal('https://t.me/OurAccbot') },
     { type: 'separator' },
-    { label: '❌ Quit',          click: () => { app.isQuiting = true; app.quit(); } },
-  ]);
-  tray.setContextMenu(menu);
+    { label: 'Quit',            click: () => { app.isQuiting = true; app.quit(); } },
+  ]));
   tray.on('double-click', () => { if (!win) createWindow(); else win.show(); });
 }
 
-// ── Auto-updater ──────────────────────────────────────────────────────────────
+// ── Auto-updater (electron shell updates via GitHub Releases) ─────────────────
 function setupAutoUpdater() {
-  if (!app.isPackaged) return; // only runs in built app, not dev
+  if (!app.isPackaged) return;
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on('checking-for-update', () => {
-    appendDesktopLog('updater: checking for update');
-    broadcastUpdate({ status: 'checking' });
-  });
+  autoUpdater.on('update-available',  (i) => { log(`updater: available v${i.version}`);  broadcast('updater-status', { status: 'available', version: i.version }); });
+  autoUpdater.on('update-downloaded', (i) => { log(`updater: ready v${i.version}`);      broadcast('updater-status', { status: 'ready',     version: i.version }); });
+  autoUpdater.on('update-not-available', () =>                                            broadcast('updater-status', { status: 'up-to-date' }));
+  autoUpdater.on('error', (e) =>                                                          broadcast('updater-status', { status: 'error', message: e.message }));
+  autoUpdater.on('download-progress', (p) =>                                              broadcast('updater-status', { status: 'downloading', percent: Math.round(p.percent) }));
 
-  autoUpdater.on('update-available', (info) => {
-    appendDesktopLog(`updater: update available v${info.version}`);
-    broadcastUpdate({ status: 'available', version: info.version, releaseNotes: info.releaseNotes });
-  });
-
-  autoUpdater.on('update-not-available', () => {
-    appendDesktopLog('updater: up to date');
-    broadcastUpdate({ status: 'up-to-date' });
-  });
-
-  autoUpdater.on('download-progress', (progress) => {
-    const pct = Math.round(progress.percent);
-    broadcastUpdate({ status: 'downloading', percent: pct, bytesPerSecond: progress.bytesPerSecond });
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    appendDesktopLog(`updater: downloaded v${info.version} — ready to install`);
-    broadcastUpdate({ status: 'ready', version: info.version });
-  });
-
-  autoUpdater.on('error', (err) => {
-    appendDesktopLog(`updater: error — ${err.message}`);
-    broadcastUpdate({ status: 'error', message: err.message });
-  });
-
-  // Check on launch, then every 4 hours
-  setTimeout(() => autoUpdater.checkForUpdates(), 8000);
+  setTimeout(()  => autoUpdater.checkForUpdates(), 8000);
   setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000);
 }
 
-function broadcastUpdate(payload) {
-  for (const bw of BrowserWindow.getAllWindows()) {
-    bw.webContents.send('updater-status', payload);
-  }
+function broadcast(channel, payload) {
+  BrowserWindow.getAllWindows().forEach(w => w.webContents.send(channel, payload));
 }
 
 // ── IPC ───────────────────────────────────────────────────────────────────────
-ipcMain.handle('server-health', () => checkBackendHealth());
-ipcMain.handle('backend-status:get', () => backendState);
-ipcMain.handle('backend-status:retry', () => ensureBackend());
-ipcMain.handle('updater:check', () => { if (app.isPackaged) autoUpdater.checkForUpdates(); });
-ipcMain.handle('updater:install', () => { autoUpdater.quitAndInstall(false, true); });
+ipcMain.handle('server-health',      () => checkHealth());
+ipcMain.handle('updater:check',      () => { if (app.isPackaged) autoUpdater.checkForUpdates(); });
+ipcMain.handle('updater:install',    () => autoUpdater.quitAndInstall(false, true));
+ipcMain.handle('open-external',      (_, url) => shell.openExternal(url));
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
-  appendDesktopLog('desktop app launching');
+  log('ACC desktop launching → ' + CLOUD_URL);
   createTray();
   createWindow();
-  ensureBackend().catch((err) => {
-    notifyBackendStatus(BACKEND_STATUS.FAILED, `Backend bootstrap failed: ${err.message}`);
-  });
   setupAutoUpdater();
 });
 
 app.on('second-instance', () => {
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-    return;
-  }
-  createWindow();
+  if (!win) return createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 });
 
 app.on('window-all-closed', () => {
-  // Windows: stay in tray unless user explicitly quit
   if (process.platform === 'darwin' || app.isQuiting) app.quit();
 });
 
