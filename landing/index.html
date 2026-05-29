@@ -278,7 +278,11 @@ nav.solid{background:rgba(0,0,0,.88);backdrop-filter:blur(20px);-webkit-backdrop
 .dash-main{flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
 .dash-lbl{font-family:var(--fm);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--t3)}
 .dash-agents{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
-.da{padding:7px 5px;background:var(--s2);border:1px solid var(--border);border-radius:4px;text-align:center}
+.da{padding:7px 5px;background:var(--s2);border:1px solid var(--border);border-radius:4px;text-align:center;border-top:2px solid var(--border);transition:border-top-color .3s}
+.da.da-claude{border-top-color:#CF8252}
+.da.da-gpt{border-top-color:#74AA9C}
+.da.da-gemini{border-top-color:#8E7AFC}
+.da.da-deep{border-top-color:#4D6BFE}
 .da-n{font-family:var(--fm);font-size:8px;font-weight:700;color:var(--t1);margin-bottom:3px}
 .da-s{display:flex;align-items:center;justify-content:center;gap:3px;font-size:8px;color:var(--green)}
 .da-dot{width:4px;height:4px;border-radius:50%;background:var(--green);animation:dot-p 2s ease infinite}
@@ -442,12 +446,13 @@ h2.sh{font-family:var(--fh);font-size:clamp(32px,3.8vw,52px);font-weight:700;let
 .int-sec{border-top:1px solid var(--border)}
 .int-grid{display:flex;flex-wrap:wrap;gap:7px;margin-top:48px}
 .ib{
-  display:flex;align-items:center;gap:6px;padding:7px 13px;
+  display:flex;align-items:center;gap:7px;padding:7px 14px;
   border:1px solid var(--border);border-radius:3px;font-size:12px;font-weight:500;color:var(--t2);
-  transition:border-color .2s,color .2s,transform .15s;
+  transition:border-color .2s,color .2s,transform .15s,box-shadow .2s;
 }
-.ib:hover{border-color:var(--border-g);color:var(--t1);transform:translateY(-2px)}
-.ib-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.ib:hover{border-color:var(--border-g);color:var(--t1);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.ib img,.ib svg{width:14px;height:14px;flex-shrink:0;display:block;opacity:.75;transition:opacity .2s}
+.ib:hover img,.ib:hover svg{opacity:1}
 
 /* ── WAITLIST ───────────────────────────────────── */
 .wl-sec{
@@ -648,10 +653,10 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
               <div class="dash-main">
                 <div class="dash-lbl">Active Agents</div>
                 <div class="dash-agents">
-                  <div class="da"><div class="da-n">CLAUDE</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
-                  <div class="da"><div class="da-n">GPT-4o</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
-                  <div class="da"><div class="da-n">GEMINI</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
-                  <div class="da"><div class="da-n">DEEP</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
+                  <div class="da da-claude"><img src="https://cdn.simpleicons.org/anthropic/CF8252" width="10" height="10" alt="" style="margin:0 auto 3px;display:block;opacity:.8" onerror="this.style.display='none'"/><div class="da-n">CLAUDE</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
+                  <div class="da da-gpt"><img src="https://cdn.simpleicons.org/openai/74AA9C" width="10" height="10" alt="" style="margin:0 auto 3px;display:block;opacity:.8" onerror="this.style.display='none'"/><div class="da-n">GPT-4o</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
+                  <div class="da da-gemini"><img src="https://cdn.simpleicons.org/googlegemini/8E7AFC" width="10" height="10" alt="" style="margin:0 auto 3px;display:block;opacity:.8" onerror="this.style.display='none'"/><div class="da-n">GEMINI</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
+                  <div class="da da-deep"><img src="https://cdn.simpleicons.org/deepseek/4D6BFE" width="10" height="10" alt="" style="margin:0 auto 3px;display:block;opacity:.8" onerror="this.style.display='none'"/><div class="da-n">DEEP</div><div class="da-s"><div class="da-dot"></div>Live</div></div>
                 </div>
                 <div class="dash-chart">
                   <div class="chart-lbl">Tasks / Hour</div>
@@ -814,26 +819,136 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
     <h2 class="sh rev d1">Everything connected.</h2>
     <p class="ss rev d2">One unified API layer on top of every platform you already use.</p>
     <div class="int-grid rev d2">
-      <div class="ib"><div class="ib-dot" style="color:#00ff88"></div>Claude AI</div>
-      <div class="ib"><div class="ib-dot" style="color:#10a37f"></div>GPT-4o</div>
-      <div class="ib"><div class="ib-dot" style="color:#4285f4"></div>Gemini</div>
-      <div class="ib"><div class="ib-dot" style="color:#7c3aed"></div>DeepSeek</div>
-      <div class="ib"><div class="ib-dot" style="color:#ff6b35"></div>Runway ML</div>
-      <div class="ib"><div class="ib-dot" style="color:#ff4081"></div>Pika Labs</div>
-      <div class="ib"><div class="ib-dot" style="color:#f59e0b"></div>ElevenLabs</div>
-      <div class="ib"><div class="ib-dot" style="color:#10b981"></div>Supabase</div>
-      <div class="ib"><div class="ib-dot" style="color:#3e73e6"></div>Notion</div>
-      <div class="ib"><div class="ib-dot" style="color:#7b68ee"></div>ClickUp</div>
-      <div class="ib"><div class="ib-dot" style="color:#0088cc"></div>Telegram</div>
-      <div class="ib"><div class="ib-dot" style="color:#0a66c2"></div>LinkedIn</div>
-      <div class="ib"><div class="ib-dot" style="color:#2c5f2e"></div>Hunter.io</div>
-      <div class="ib"><div class="ib-dot" style="color:#ff6b6b"></div>Resend</div>
-      <div class="ib"><div class="ib-dot" style="color:#00d4ff"></div>Netlify</div>
-      <div class="ib"><div class="ib-dot" style="color:#c0392b"></div>Railway</div>
-      <div class="ib"><div class="ib-dot" style="color:#f5a623"></div>Cloudflare R2</div>
-      <div class="ib"><div class="ib-dot" style="color:#e4711f"></div>HubSpot</div>
-      <div class="ib"><div class="ib-dot" style="color:#00b8a9"></div>Airtable</div>
-      <div class="ib"><div class="ib-dot" style="color:#635bff"></div>Stripe</div>
+
+      <!-- Claude / Anthropic -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/anthropic/CF8252" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Claude AI
+      </div>
+
+      <!-- OpenAI / GPT-4o -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/openai/74AA9C" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        GPT-4o
+      </div>
+
+      <!-- Google Gemini -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/googlegemini/8E7AFC" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Gemini
+      </div>
+
+      <!-- DeepSeek -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/deepseek/4D6BFE" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        DeepSeek
+      </div>
+
+      <!-- Runway ML -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/runway/39B3FF" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Runway ML
+      </div>
+
+      <!-- Pika Labs — not in Simple Icons, using inline SVG spark -->
+      <div class="ib">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 1.5L6 6.5H9L7 12.5L12 5.5H9L11 1.5H9Z" fill="#FF4081"/>
+        </svg>
+        Pika Labs
+      </div>
+
+      <!-- ElevenLabs -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/elevenlabs/F5A623" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        ElevenLabs
+      </div>
+
+      <!-- Supabase -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/supabase/3ECF8E" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Supabase
+      </div>
+
+      <!-- Notion -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/notion/AAAAAA" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Notion
+      </div>
+
+      <!-- ClickUp -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/clickup/7B68EE" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        ClickUp
+      </div>
+
+      <!-- Telegram -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/telegram/2AABEE" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Telegram
+      </div>
+
+      <!-- LinkedIn -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/linkedin/0A66C2" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        LinkedIn
+      </div>
+
+      <!-- Hunter.io — not in Simple Icons, using inline crosshair SVG -->
+      <div class="ib">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="7" cy="7" r="5" stroke="#F47C20" stroke-width="1.2"/>
+          <circle cx="7" cy="7" r="1.8" fill="#F47C20"/>
+          <line x1="7" y1="1" x2="7" y2="2.5" stroke="#F47C20" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="7" y1="11.5" x2="7" y2="13" stroke="#F47C20" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="1" y1="7" x2="2.5" y2="7" stroke="#F47C20" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="11.5" y1="7" x2="13" y2="7" stroke="#F47C20" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        Hunter.io
+      </div>
+
+      <!-- Resend -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/resend/AAAAAA" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Resend
+      </div>
+
+      <!-- Netlify -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/netlify/00C7B7" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Netlify
+      </div>
+
+      <!-- Railway -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/railway/AAAAAA" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Railway
+      </div>
+
+      <!-- Cloudflare R2 -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/cloudflare/F38020" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Cloudflare R2
+      </div>
+
+      <!-- HubSpot -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/hubspot/FF7A59" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        HubSpot
+      </div>
+
+      <!-- Airtable -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/airtable/18BFFF" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Airtable
+      </div>
+
+      <!-- Stripe -->
+      <div class="ib">
+        <img src="https://cdn.simpleicons.org/stripe/635BFF" alt="" loading="lazy" onerror="this.style.display='none'"/>
+        Stripe
+      </div>
+
     </div>
   </div>
 </section>
