@@ -188,6 +188,40 @@ app.use("/api/status", statusSummary);
 // ---------- UI Routes ----------
 app.use("/api/ui", uiRoutes);
 
+// ---------- Waitlist ----------
+app.post("/api/waitlist", async (req, res) => {
+  const { email } = req.body || {};
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ success: false, error: "Valid email required." });
+  }
+  try {
+    const { createClient } = require("@supabase/supabase-js");
+    const supabase = createClient(
+      (process.env.SUPABASE_URL || '').trim(),
+      process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || ''
+    );
+    if (supabase) {
+      const { error } = await supabase
+        .from("acc_waitlist")
+        .insert({ email, created_at: new Date().toISOString() });
+      if (error && error.code === '23505') {
+        return res.status(409).json({ success: true, message: "Already registered." });
+      }
+      if (error) throw error;
+    }
+    console.log(`[waitlist] New signup: ${email}`);
+    return res.json({ success: true, message: "You're on the list!" });
+  } catch (err) {
+    console.error("[waitlist] error:", err.message);
+    return res.status(500).json({ success: false, error: "Failed to save. Try again." });
+  }
+});
+
+// Landing page route
+app.get("/landing", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/index.html"));
+});
+
 // SPA fallback for non-API routes.
 app.use((req, res, next) => {
   if (req.path.startsWith("/api")) return next();
