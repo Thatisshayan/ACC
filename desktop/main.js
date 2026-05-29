@@ -48,7 +48,7 @@ function createWindow() {
     minWidth:        960,
     minHeight:       600,
     backgroundColor: '#0A0A0F',
-    title:           'ACC — Agent Command Center',
+    title:           'ACC — Agent Command Center | acccommand.center',
     show:            false,
     webPreferences: {
       nodeIntegration:  false,

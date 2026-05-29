@@ -1,7 +1,8 @@
 {
-  "name": "acc-v2-desktop",
+  "name": "acc-desktop",
   "version": "2.0.0",
-  "description": "ACC v2 Desktop Application",
+  "description": "ACC — Agent Command Center Desktop",
+  "author": "Shayan Ezraeil <shayanezraeil@gmail.com>",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -13,8 +14,9 @@
     "release": "electron-builder --win --publish always"
   },
   "build": {
-    "appId": "com.acc.v2",
-    "productName": "ACC v2",
+    "appId": "com.acccommand.center",
+    "productName": "ACC",
+    "icon": "assets/icon.png",
     "directories": {
       "output": "dist"
     },
