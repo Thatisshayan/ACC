@@ -5,7 +5,7 @@ import { getApiBaseUrlOverride } from './session';
 const LOCAL_API_BASE_URL = 'http://127.0.0.1:4000';
 const DEFAULT_PUBLIC_APP_URL = 'https://acc-production-a26c.up.railway.app';
 const DEFAULT_PUBLIC_API_BASE_URL = 'https://acc-production-a26c.up.railway.app';
-const DEFAULT_PUBLIC_WEBAPP_URL = 'https://acc-production-a26c.up.railway.app/mini';
+const DEFAULT_PUBLIC_WEBAPP_URL = 'https://acc-production-a26c.up.railway.app';
 const MINI_WEBAPP_PATH = '/mini';
 
 function trimUrl(value?: string | null) {

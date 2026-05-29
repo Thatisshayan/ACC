@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "ACC",
+    "slug": "agent-command-center",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.shayan.acc",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "ACC uses the microphone for voice commands to control your agents.",
+        "NSCameraUsageDescription": "ACC uses the camera for document scanning and image analysis.",
+        "NSPhotoLibraryUsageDescription": "ACC can access your photos for uploading resume files."
+      }
+    },
+    "android": {
+      "package": "com.shayan.acc",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "acc",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "ACC uses the microphone for voice commands."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "accApiBaseUrl": "https://acc-production-a26c.up.railway.app",
+      "accPublicUrl": "https://acc-production-a26c.up.railway.app",
+      "accWebAppUrl": "https://acc-production-a26c.up.railway.app",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
