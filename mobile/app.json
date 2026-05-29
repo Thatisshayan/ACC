@@ -55,9 +55,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "accApiBaseUrl": "https://tryacc.app",
-      "accPublicUrl": "https://tryacc.app",
-      "accWebAppUrl": "https://tryacc.app",
+      "accApiBaseUrl": "https://acccommand.center",
+      "accPublicUrl": "https://acccommand.center",
+      "accWebAppUrl": "https://acccommand.center",
       "router": {
         "origin": false
       },

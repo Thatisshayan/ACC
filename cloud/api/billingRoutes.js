@@ -13,7 +13,7 @@
 //   STRIPE_PRICE_STARTER      — price_... (Stripe price ID for Starter)
 //   STRIPE_PRICE_BUILDER      — price_... (Stripe price ID for Builder)
 //   STRIPE_PRICE_OPERATOR     — price_... (Stripe price ID for Operator)
-//   ACC_PUBLIC_URL            — https://tryacc.app (for redirect URLs)
+//   ACC_PUBLIC_URL            — https://acccommand.center (for redirect URLs)
 
 const express = require('express');
 const router  = express.Router();
@@ -70,7 +70,7 @@ function stripe() {
 }
 
 function baseUrl() {
-  return process.env.ACC_PUBLIC_URL || 'https://tryacc.app';
+  return process.env.ACC_PUBLIC_URL || 'https://acccommand.center';
 }
 
 // GET /api/billing/plans

@@ -62,8 +62,8 @@ function toOrigin(value) {
 
 const _corsOrigins = [
   'https://acc-production-a26c.up.railway.app',
-  'https://tryacc.app',
-  'https://www.tryacc.app',
+  'https://acccommand.center',
+  'https://www.acccommand.center',
   toOrigin(process.env.ACC_PUBLIC_URL),
   toOrigin(process.env.ACC_WEBAPP_URL),
   toOrigin(process.env.ACC_API_BASE_URL),
