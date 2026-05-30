@@ -169,7 +169,7 @@ app.get("/app", (req, res) => {
 });
 
 // React app inner routes (SPA — serve index.html for any /app/* path)
-app.get("/app/*", (req, res) => {
+app.get("/app/*splat", (req, res) => {
   res.sendFile(path.join(UI_DIST_PATH, "index.html"), (err) => {
     if (err) res.redirect("/app");
   });
