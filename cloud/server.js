@@ -104,6 +104,45 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "ACC Module 7", version: "2.3.0", routes: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, time: new Date().toISOString() });
 });
 
+// ONE-TIME SETUP — remove after running
+app.get("/api/admin/setup", async (req, res) => {
+  const results = {};
+  // 1. Waitlist count
+  try {
+    const { createClient } = require("@supabase/supabase-js");
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const { count, error } = await sb.from("acc_waitlist").select("*", { count: "exact", head: true });
+    results.waitlist = error ? { error: error.message } : { count };
+  } catch(e) { results.waitlist = { error: e.message }; }
+  // 2. Stripe products
+  try {
+    const Stripe = require("stripe");
+    const stripe = Stripe(process.env.STRIPE_API_KEY);
+    const existing = await stripe.products.list({ limit: 20, active: true });
+    const hasStarter = existing.data.find(p => p.name === "ACC Starter");
+    const hasBuilder = existing.data.find(p => p.name === "ACC Builder");
+    const hasOperator = existing.data.find(p => p.name === "ACC Operator");
+    const created = {};
+    if (!hasStarter) {
+      const p = await stripe.products.create({ name: "ACC Starter", description: "AI OS for individuals — up to 50 tasks/mo" });
+      const price = await stripe.prices.create({ product: p.id, unit_amount: 1900, currency: "usd", recurring: { interval: "month" } });
+      created.starter = { product: p.id, price: price.id };
+    } else { created.starter = { note: "already exists", product: hasStarter.id }; }
+    if (!hasBuilder) {
+      const p = await stripe.products.create({ name: "ACC Builder", description: "For builders & small teams — up to 200 tasks/mo" });
+      const price = await stripe.prices.create({ product: p.id, unit_amount: 4900, currency: "usd", recurring: { interval: "month" } });
+      created.builder = { product: p.id, price: price.id };
+    } else { created.builder = { note: "already exists", product: hasBuilder.id }; }
+    if (!hasOperator) {
+      const p = await stripe.products.create({ name: "ACC Operator", description: "Full operator access — unlimited tasks" });
+      const price = await stripe.prices.create({ product: p.id, unit_amount: 9900, currency: "usd", recurring: { interval: "month" } });
+      created.operator = { product: p.id, price: price.id };
+    } else { created.operator = { note: "already exists", product: hasOperator.id }; }
+    results.stripe = created;
+  } catch(e) { results.stripe = { error: e.message }; }
+  res.json(results);
+});
+
 app.get("/api/debug", (req, res) => {
   const tests = {};
   ["./api/cardRoutes.js","./api/phoneRoutes.js","./api/billingRoutes.js","./api/memoryRoutes.js"].forEach(m => {
