@@ -106,39 +106,41 @@ app.get("/api/health", (req, res) => {
 
 // ONE-TIME SETUP — remove after running
 app.get("/api/admin/setup", async (req, res) => {
-  const results = {};
-  // 1. Waitlist count
+  const results = { env: { stripe: !!process.env.STRIPE_API_KEY, supabase: !!process.env.SUPABASE_URL, svcKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY } };
+  // 1. Waitlist count — use same init pattern as supabaseMemory.js
   try {
     const { createClient } = require("@supabase/supabase-js");
-    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const ws = require("ws");
+    const sb = createClient(
+      (process.env.SUPABASE_URL || "").trim(),
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
+      { realtime: { transport: ws } }
+    );
     const { count, error } = await sb.from("acc_waitlist").select("*", { count: "exact", head: true });
     results.waitlist = error ? { error: error.message } : { count };
   } catch(e) { results.waitlist = { error: e.message }; }
-  // 2. Stripe products
+  // 2. Stripe products — use same lazy pattern as billingRoutes.js
   try {
-    const Stripe = require("stripe");
-    const stripe = Stripe(process.env.STRIPE_API_KEY);
+    const key = process.env.STRIPE_API_KEY;
+    if (!key) throw new Error("STRIPE_API_KEY not set in Railway env");
+    const stripe = require("stripe")(key);
     const existing = await stripe.products.list({ limit: 20, active: true });
-    const hasStarter = existing.data.find(p => p.name === "ACC Starter");
-    const hasBuilder = existing.data.find(p => p.name === "ACC Builder");
-    const hasOperator = existing.data.find(p => p.name === "ACC Operator");
-    const created = {};
-    if (!hasStarter) {
-      const p = await stripe.products.create({ name: "ACC Starter", description: "AI OS for individuals — up to 50 tasks/mo" });
-      const price = await stripe.prices.create({ product: p.id, unit_amount: 1900, currency: "usd", recurring: { interval: "month" } });
-      created.starter = { product: p.id, price: price.id };
-    } else { created.starter = { note: "already exists", product: hasStarter.id }; }
-    if (!hasBuilder) {
-      const p = await stripe.products.create({ name: "ACC Builder", description: "For builders & small teams — up to 200 tasks/mo" });
-      const price = await stripe.prices.create({ product: p.id, unit_amount: 4900, currency: "usd", recurring: { interval: "month" } });
-      created.builder = { product: p.id, price: price.id };
-    } else { created.builder = { note: "already exists", product: hasBuilder.id }; }
-    if (!hasOperator) {
-      const p = await stripe.products.create({ name: "ACC Operator", description: "Full operator access — unlimited tasks" });
-      const price = await stripe.prices.create({ product: p.id, unit_amount: 9900, currency: "usd", recurring: { interval: "month" } });
-      created.operator = { product: p.id, price: price.id };
-    } else { created.operator = { note: "already exists", product: hasOperator.id }; }
-    results.stripe = created;
+    const has = name => existing.data.find(p => p.name === name);
+    const upsert = async (name, desc, cents) => {
+      const found = has(name);
+      if (found) {
+        const prices = await stripe.prices.list({ product: found.id, active: true, limit: 1 });
+        return { note: "already exists", product: found.id, price: prices.data[0]?.id };
+      }
+      const p = await stripe.products.create({ name, description: desc });
+      const price = await stripe.prices.create({ product: p.id, unit_amount: cents, currency: "usd", recurring: { interval: "month" } });
+      return { product: p.id, price: price.id };
+    };
+    results.stripe = {
+      starter:  await upsert("ACC Starter",  "AI OS for individuals — 50 tasks/mo",          1900),
+      builder:  await upsert("ACC Builder",  "For builders & small teams — 200 tasks/mo",    4900),
+      operator: await upsert("ACC Operator", "Full operator access — unlimited tasks",        9900),
+    };
   } catch(e) { results.stripe = { error: e.message }; }
   res.json(results);
 });
