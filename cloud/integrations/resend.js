@@ -7,7 +7,7 @@ var axios   = require('axios');
 var fs      = require('fs');
 var path    = require('path');
 var KEY     = process.env.RESEND_API_KEY || '';
-var FROM    = process.env.RESEND_FROM_EMAIL || 'ACC v2 <noreply@acc.app>';
+var FROM    = process.env.RESEND_FROM_EMAIL || 'ACC <auth@acccommand.center>';
 var BASE    = 'https://api.resend.com';
 var TMPL_DIR = path.join(__dirname, '../../data/email-templates');
 

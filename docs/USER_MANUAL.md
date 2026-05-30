@@ -72,7 +72,7 @@ Think of it as a smart friend you can text anytime. It can answer questions, wri
 ### 🆘 8. How to get help
 - Type `/help` anytime.
 - Tap the **❓ Help** button in the menu.
-- If something's broken, contact support: [support@ouraccbot.com](mailto:support@ouraccbot.com) or @OurAccSupport on Telegram.
+- If something's broken, contact support: [support@acccommand.center](mailto:support@acccommand.center) or @OurAccbot on Telegram.
 
 ---
 

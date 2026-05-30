@@ -2,7 +2,7 @@
   "name": "acc-desktop",
   "version": "2.0.0",
   "description": "ACC — Agent Command Center Desktop",
-  "author": "Shayan Ezraeil <shayanezraeil@gmail.com>",
+  "author": "Shayan Ezraeil <developer@acccommand.center>",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
