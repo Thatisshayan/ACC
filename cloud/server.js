@@ -165,6 +165,11 @@ app.get("/login", (req, res) => {
   res.sendFile(path.join(__dirname, "../landing/login.html"));
 });
 
+// Admin login page — served before the taskbusAuth-protected /admin/* routes
+app.get("/admin/login", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/admin-login.html"));
+});
+
 // App entry point — auth-check wrapper, then React dashboard
 app.get("/app", (req, res) => {
   res.sendFile(path.join(__dirname, "../landing/auth-check.html"));
@@ -222,11 +227,32 @@ app.use("/api", webhookHandler);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/assistant", assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
-app.use("/api/outreach", taskbusAuth, outreachRoutes);
-app.use("/api/synapse",  taskbusAuth, synapseRoutes);
+// ---------- Subscription enforcement ----------
+// requireTier(tier) gates a route behind an active billing subscription.
+// Reads email from Bearer token (if JWT) or from req.body/query.
+// Falls back to open in dev (no TASKBUS_API_KEY set) so local testing works.
+function requireTier(minTier) {
+  const TIER_RANK = { starter: 1, builder: 2, operator: 3 };
+  return function subscriptionGate(req, res, next) {
+    if (!_TASKBUS_KEY) return next(); // dev: no enforcement
+    if (!billingRoutes) return next(); // billing module not loaded
+    const email = req.body?.email || req.query?.email || req.headers['x-acc-email'] || '';
+    const tier  = billingRoutes.getTier ? billingRoutes.getTier(email) : null;
+    const rank  = TIER_RANK[tier] || 0;
+    if (rank >= (TIER_RANK[minTier] || 1)) return next();
+    return res.status(402).json({
+      success: false,
+      error:   `This feature requires an active ${minTier} subscription or higher.`,
+      upgrade: '/api/billing/plans',
+    });
+  };
+}
+
+app.use("/api/outreach", taskbusAuth, requireTier('starter'), outreachRoutes);
+app.use("/api/synapse",  taskbusAuth, requireTier('builder'), synapseRoutes);
 app.use("/api/fsc",      taskbusAuth, fscRoutes);
-if (cardRoutes)    app.use("/api/card",    taskbusAuth, cardRoutes);
-if (phoneRoutes)   app.use("/api/phone",   taskbusAuth, phoneRoutes);
+if (cardRoutes)    app.use("/api/card",    taskbusAuth, requireTier('builder'), cardRoutes);
+if (phoneRoutes)   app.use("/api/phone",   taskbusAuth, requireTier('builder'), phoneRoutes);
 if (billingRoutes) app.use("/api/billing", billingRoutes);  // /api/billing/plans is public pricing data; checkout/webhook have own validation
 if (memoryRoutes)  app.use("/api/memory",  taskbusAuth, memoryRoutes);
 app.use("/api/status", statusSummary);

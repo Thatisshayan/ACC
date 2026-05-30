@@ -11,6 +11,9 @@ COPY . .
 # Install root dependencies — compiles better-sqlite3 for Linux
 RUN npm ci --omit=dev
 
+# Install Playwright Chromium for live browser automation (used when BROWSER_SANDBOX=false)
+RUN npx playwright install chromium --with-deps 2>/dev/null || true
+
 # Build UI
 RUN cd ui && npm ci && npm run build
 

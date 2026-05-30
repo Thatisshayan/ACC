@@ -1128,6 +1128,7 @@ if(nm){
 
 /* ── COMMAND PALETTE ────────────────────────────────── */
 const PAL_ITEMS=[
+  {icon:'🚀',title:'Open Dashboard',desc:'Launch the ACC web app',action:()=>{closePal();window.location.href='/app/dashboard';},key:'D'},
   {icon:'🔎',title:'acc job-search',desc:'--platforms linkedin,indeed,upwork',action:()=>runDemo('jobs'),key:'J'},
   {icon:'📧',title:'acc outreach',desc:'--source hunter --count 20 --model deepseek',action:()=>runDemo('outreach'),key:'O'},
   {icon:'🎬',title:'acc media-pipeline',desc:'--topic "..." --publish youtube',action:()=>runDemo('media'),key:'M'},

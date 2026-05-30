@@ -21,6 +21,27 @@ class Snapshot {
   setNodeOutput(id, output){ this.outputs[id] = output; }
 }
 
+// Recursively walk a payload object and replace "{{NODE_ID.output}}" tokens
+// with the text/output from already-completed nodes in the snapshot.
+function resolvePayloadRefs(payload, snapshot) {
+  if (typeof payload === 'string') {
+    return payload.replace(/\{\{([A-Z0-9_]+)\.output\}\}/g, (_, nodeId) => {
+      const out = snapshot.getNodeOutput(nodeId);
+      if (!out) return `[${nodeId} output pending]`;
+      return typeof out.text === 'string' ? out.text
+           : typeof out.output === 'string' ? out.output
+           : JSON.stringify(out);
+    });
+  }
+  if (Array.isArray(payload)) return payload.map(v => resolvePayloadRefs(v, snapshot));
+  if (payload && typeof payload === 'object') {
+    const resolved = {};
+    for (const [k, v] of Object.entries(payload)) resolved[k] = resolvePayloadRefs(v, snapshot);
+    return resolved;
+  }
+  return payload;
+}
+
 async function runGraph(nodes, context = {}) {
   const snapshot = new Snapshot(nodes);
   memoryEngine.initSTM(snapshot);
@@ -29,10 +50,13 @@ async function runGraph(nodes, context = {}) {
     const node = snapshot.nodes[i];
     log("Running node:", node.id, `(${node.agentType})`);
 
+    // Resolve {{NODE_ID.output}} placeholders in payload strings before execution
+    const resolvedPayload = resolvePayloadRefs(node.payload, snapshot);
+
     const result = await executeTask({
       id:        node.id,
       agentType: node.agentType,
-      payload:   node.payload,
+      payload:   resolvedPayload,
       meta:      { ...node.meta, snapshotId: context.snapshotId || null },
       snapshot,
     });

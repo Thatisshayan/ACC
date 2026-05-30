@@ -6,6 +6,14 @@ const { log } = require('../utils/logger.js');
 
 var SANDBOX = process.env.BROWSER_SANDBOX !== 'false';
 
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+];
+function randomUA() { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]; }
+
 // Lazy-load playwright — only imported when a real browser action runs.
 // This prevents playwright from blocking server startup or slow builds.
 function getChromium() {
@@ -13,17 +21,27 @@ function getChromium() {
   catch (e) { throw new Error('playwright not available — run: npm install playwright && npx playwright install chromium'); }
 }
 
-async function withPage(fn) {
+async function withPage(fn, retries = 2) {
   const chromium = getChromium();
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
-  const page = await (await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120',
-  })).newPage();
-  try { return await fn(page); }
-  finally { await browser.close(); }
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+    const page = await (await browser.newContext({ userAgent: randomUA() })).newPage();
+    try {
+      const result = await fn(page);
+      return result;
+    } catch (e) {
+      lastErr = e;
+      log('[browser] attempt', attempt + 1, 'failed:', e.message);
+      if (attempt < retries) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+    } finally {
+      await browser.close();
+    }
+  }
+  throw lastErr;
 }
 
 async function searchJobs(query, location, type) {

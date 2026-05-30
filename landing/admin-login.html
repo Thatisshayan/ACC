@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ACC Admin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#000;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;color:#fff}
+.card{width:100%;max-width:360px;border:1px solid rgba(255,255,255,0.08);border-radius:20px;background:#0d0d14;padding:32px;box-shadow:0 24px 80px rgba(0,0,0,0.6)}
+.logo{font-size:11px;letter-spacing:0.25em;color:rgba(0,255,136,0.6);text-transform:uppercase;margin-bottom:20px}
+h1{font-size:18px;font-weight:600;color:#fff;margin-bottom:6px}
+p{font-size:12px;color:#666;margin-bottom:24px;line-height:1.5}
+label{display:block;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#555;margin-bottom:6px}
+input{width:100%;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:rgba(0,0,0,0.4);color:#fff;padding:10px 14px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s}
+input:focus{border-color:rgba(0,255,136,0.4)}
+button{margin-top:16px;width:100%;border:1px solid rgba(0,255,136,0.3);border-radius:10px;background:rgba(0,255,136,0.1);color:#00ff88;padding:11px;font-size:13px;font-family:inherit;cursor:pointer;transition:background 0.2s}
+button:hover{background:rgba(0,255,136,0.18)}
+button:disabled{opacity:0.5;cursor:not-allowed}
+.err{margin-top:12px;border:1px solid rgba(255,68,68,0.3);border-radius:8px;background:rgba(255,68,68,0.1);color:#ff9999;padding:10px 12px;font-size:12px;display:none}
+.err.show{display:block}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="card">
+  <div class="logo">ACC · Admin</div>
+  <h1>Admin access</h1>
+  <p>Enter the admin API key to access the system panel.</p>
+  <label for="key">Admin API Key</label>
+  <input type="password" id="key" placeholder="acc_admin_…" autocomplete="current-password"/>
+  <button id="btn" onclick="login()">Authenticate</button>
+  <div class="err" id="err"></div>
+</div>
+<script>
+async function login() {
+  const key = document.getElementById('key').value.trim();
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('err');
+  if (!key) { showErr('Enter the admin API key.'); return; }
+  btn.disabled = true; btn.textContent = 'Checking…';
+  err.classList.remove('show');
+  try {
+    const res = await fetch('/admin/health', { headers: { 'Authorization': 'Bearer ' + key } });
+    if (res.ok || res.status === 404) {
+      sessionStorage.setItem('acc_admin_key', key);
+      window.location.href = '/admin/dashboard';
+    } else {
+      showErr('Invalid API key. Check ADMIN_API_KEY in Railway env vars.');
+    }
+  } catch(e) {
+    showErr('Connection failed: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Authenticate';
+  }
+}
+function showErr(msg) {
+  const el = document.getElementById('err');
+  el.textContent = msg; el.classList.add('show');
+}
+document.getElementById('key').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+// If already have a key stored, skip straight to dashboard
+if (sessionStorage.getItem('acc_admin_key')) window.location.href = '/admin/dashboard';
+</script>
+</body>
+</html>
