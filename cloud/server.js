@@ -276,7 +276,7 @@ app.use("/api/ui", uiRoutes);
 
 // ---------- Waitlist ----------
 app.post("/api/waitlist", async (req, res) => {
-  const { email } = req.body || {};
+  const { email, automate, role, control } = req.body || {};
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ success: false, error: "Valid email required." });
   }
@@ -284,12 +284,12 @@ app.post("/api/waitlist", async (req, res) => {
     const { createClient } = require("@supabase/supabase-js");
     const supabase = createClient(
       (process.env.SUPABASE_URL || '').trim(),
-      process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || ''
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || ''
     );
     if (supabase) {
       const { error } = await supabase
         .from("acc_waitlist")
-        .insert({ email, created_at: new Date().toISOString() });
+        .insert({ email, automate, role, control, created_at: new Date().toISOString() });
       if (error && error.code === '23505') {
         return res.status(409).json({ success: true, message: "Already registered." });
       }

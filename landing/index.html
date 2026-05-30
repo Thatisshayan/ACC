@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>ACC — Agent Command Center</title>
-<meta name="description" content="One command deploys 20+ AI agents across jobs, outreach, content and media — autonomously, 24/7."/>
+<title>ACC — Telegram-First Command Center for Founder Ops</title>
+<meta name="description" content="ACC coordinates AI agents for outreach, content, research and admin — then asks for your approval before anything ships. Human-in-the-loop by default."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -584,7 +584,7 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
       <span class="nav-live-txt">Live</span>
     </div>
     <button class="nav-slash" onclick="openPal()">Press /</button>
-    <a href="#waitlist" class="nav-cta">Get Access</a>
+    <a href="#waitlist" class="nav-cta">Apply Now</a>
   </div>
 </nav>
 
@@ -596,28 +596,29 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
   <div class="hero-inner">
     <!-- LEFT -->
     <div>
-      <div class="hero-tag"><div class="tag-dot"></div>Private Beta · 247 Founders Waiting</div>
+      <div class="hero-tag"><div class="tag-dot"></div>Private Beta · Onboarding Founders Now</div>
 
       <h1 class="hero-h1">
-        <span class="hl"><span>Stop doing</span></span>
-        <span class="hl"><span>your job.</span></span>
-        <span class="hl"><span class="g" id="scramble-target">Let agents do it.</span></span>
+        <span class="hl"><span>Run founder ops</span></span>
+        <span class="hl"><span>from one command.</span></span>
+        <span class="hl"><span class="g" id="scramble-target">You approve. It ships.</span></span>
       </h1>
 
       <p class="hero-p">
-        ACC deploys <strong>20+ AI agents</strong> across jobs, outreach, content and media — simultaneously. One command. They execute, approve through Telegram, report back.
+        ACC coordinates <strong>AI agents</strong> for outreach, content, research and admin — then asks for your approval before anything sensitive ships. <strong>Human-in-the-loop by default.</strong>
       </p>
 
       <div class="hero-btns">
         <a href="#waitlist" class="btn-p" id="hcta">
-          Join Waitlist
+          Apply for private onboarding
           <svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5h11M7 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
-        <a href="#demo" class="btn-s">Watch it run</a>
+        <a href="#demo" class="btn-s">Watch a real run</a>
       </div>
 
-      <div class="hero-hint">
-        <kbd>/</kbd> to command ACC from anywhere on this page
+      <div class="hero-hint" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <span>Live backend online · Telegram approvals · Approval before every send</span>
+        <span><kbd>/</kbd> to open command palette</span>
       </div>
     </div>
 
@@ -637,7 +638,7 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
             </svg>
             <div class="dash-bar">
               <div class="dash-dots"><i></i><i></i><i></i></div>
-              <div class="dash-url">acc-production-a26c.up.railway.app</div>
+              <div class="dash-url">acccommand.center/app</div>
               <div class="dash-live"><div class="dash-live-dot"></div>LIVE</div>
             </div>
             <div class="dash-body">
@@ -666,7 +667,7 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
                     <path d="M0,28 L30,22 L60,26 L90,18 L120,20 L150,12 L180,16 L210,8 L240,14 L270,6 L300,10" fill="none" stroke="#00ff88" stroke-width="1.5"/>
                   </svg>
                 </div>
-                <div class="dash-lbl">Live Activity</div>
+                <div class="dash-lbl">Sample Activity <span style="color:var(--t4);font-size:9px">(demo)</span></div>
                 <div class="dash-feed" id="dash-feed">
                   <div class="df-item"><span class="df-icon">✓</span><span class="df-text"><strong>Resume tailored</strong> — Stripe SE</span><span class="df-time">2s</span></div>
                   <div class="df-item"><span class="df-icon">→</span><span class="df-text"><strong>Job search</strong> running on LinkedIn</span><span class="df-time">now</span></div>
@@ -685,7 +686,7 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
 </section>
 
 <!-- ═══════ MARQUEE ═══════ -->
-<div class="marquee-wrap">
+<div class="marquee-wrap" title="Sample workflow data — not live task output">
   <div class="marquee-track">
     <div class="marquee-item"><span class="ok">✓</span>Resume tailored — Stripe SE · 94% match</div>
     <div class="marquee-item"><span class="ok">✓</span>47 LinkedIn matches found</div>
@@ -716,15 +717,15 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
   <div class="pf rev"><div class="pf-n" data-to="20" data-sfx="+">0+</div><div class="pf-l">AI models connected<br>and routing live</div><div class="pf-live" id="sys-status"><div class="pf-live-dot" id="sys-dot"></div><span id="sys-txt">Checking...</span></div></div>
   <div class="pf rev d1"><div class="pf-n" data-to="15" data-sfx="+">0+</div><div class="pf-l">Platform integrations<br>wired and tested</div></div>
   <div class="pf rev d2"><div class="pf-n" data-to="17" data-sfx="/17">0</div><div class="pf-l">Smoke tests passing<br>in production</div></div>
-  <div class="pf rev d3"><div class="pf-n" data-to="247" data-sfx="">0</div><div class="pf-l">Founders on<br>the waitlist</div></div>
+  <div class="pf rev d3"><div class="pf-n" id="wl-proof-cnt" data-to="247" data-sfx="">0</div><div class="pf-l">Founders applied<br>for private access</div></div>
 </div>
 
 <!-- ═══════ CLI DEMO ═══════ -->
 <section class="sec demo-sec" id="demo">
   <div class="wrap">
-    <div class="ey rev">// LIVE DEMO</div>
-    <h2 class="sh rev d1">Pick a command.<br>Watch it happen.</h2>
-    <p class="ss rev d2" style="margin-bottom:0">Real commands. Real integrations. Real output.</p>
+    <div class="ey rev">// DEMO WORKFLOW</div>
+    <h2 class="sh rev d1">Pick a command.<br>See how it runs.</h2>
+    <p class="ss rev d2" style="margin-bottom:0">Real commands against the real system. The execution flow below is a <strong style="color:var(--t1)">simulated walkthrough</strong> — the actual integrations (Hunter.io, Resend, Telegram approvals) are live when you're onboarded.</p>
 
     <div class="demo-win rev d2">
       <div class="demo-l">
@@ -758,7 +759,7 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
       <div class="fc rev d2"><div class="fc-num">03</div><span class="fc-ico">🎬</span><div class="fc-t">Full Media Pipeline</div><div class="fc-d">Script → image → video → narration → published. DALL·E, Runway, ElevenLabs, Luma. SEO metadata and YouTube manifests included.</div><div class="fc-chips"><span class="chip">DALL·E</span><span class="chip">Runway</span><span class="chip">ElevenLabs</span><span class="chip">Luma</span></div></div>
       <div class="fc rev"><div class="fc-num">04</div><span class="fc-ico">🧠</span><div class="fc-t">Multi-Agent Orchestration</div><div class="fc-d">Graph-based routing with dynamic dependency resolution. Provider fallback if any model fails. Dead letter queue for retries.</div><div class="fc-chips"><span class="chip">Graph Runner</span><span class="chip">DLQ</span><span class="chip">Fallback</span></div></div>
       <div class="fc rev d1"><div class="fc-num">05</div><span class="fc-ico">📱</span><div class="fc-t">Telegram Command Interface</div><div class="fc-d">Full control from your phone. Human-in-the-loop approvals before anything sensitive fires. HMAC-signed requests only.</div><div class="fc-chips"><span class="chip">@OurAccbot</span><span class="chip">HMAC</span><span class="chip">Real-time</span></div></div>
-      <div class="fc rev d2"><div class="fc-num">06</div><span class="fc-ico">🔐</span><div class="fc-t">Enterprise Security</div><div class="fc-d">AES-256-GCM encrypted vault. PII redactor strips emails, phones and SSNs from logs. Per-connector rate limiting.</div><div class="fc-chips"><span class="chip">AES-256-GCM</span><span class="chip">PII Redactor</span><span class="chip">Rate Limiter</span></div></div>
+      <div class="fc rev d2"><div class="fc-num">06</div><span class="fc-ico">🔐</span><div class="fc-t">Security-minded by design</div><div class="fc-d">AES-256-GCM encrypted vault. PII redactor strips emails, phones and SSNs from logs. HMAC-signed webhooks. Per-connector rate limiting.</div><div class="fc-chips"><span class="chip">AES-256-GCM</span><span class="chip">PII Redactor</span><span class="chip">HMAC Signed</span><span class="chip">Rate Limiter</span></div></div>
     </div>
   </div>
 </section>
@@ -805,7 +806,7 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
         <div class="founder-links">
           <a href="https://t.me/OurAccbot" target="_blank" class="fl-btn">📱 Message the bot → @OurAccbot</a>
           <a href="https://github.com/Thatisshayan/ACC" target="_blank" class="fl-btn">⌥ View the code → GitHub</a>
-          <a href="https://acc-production-a26c.up.railway.app/api/health" target="_blank" class="fl-btn">💚 Live health → /api/health</a>
+          <a href="https://acccommand.center/api/health" target="_blank" class="fl-btn">💚 Live health → /api/health</a>
         </div>
       </div>
     </div>
@@ -958,29 +959,53 @@ footer{border-top:1px solid var(--border);padding:28px 48px;display:flex;align-i
   <div class="wl-glow"></div>
   <div style="position:relative;z-index:1">
     <div class="ey rev" style="justify-content:center;display:flex">// EARLY ACCESS</div>
-    <h2 class="wl-h rev d1">The founders who<br>move fastest<br><span class="g">don't do it manually.</span></h2>
-    <p class="wl-sub rev d2">We're personally onboarding 5 founders per week — not mass-inviting. Submit your email. We'll reach out within 48h with your access details.</p>
-    <form class="wl-form rev d2" id="wl-form" onsubmit="doWL(event)">
-      <input class="wl-in" type="email" name="email" placeholder="your@email.com" required autocomplete="email"/>
-      <button class="wl-btn" type="submit" id="wl-btn">Apply for Access</button>
+    <h2 class="wl-h rev d1">We onboard<br>5 founders per week.<br><span class="g">Apply below.</span></h2>
+    <p class="wl-sub rev d2">Not mass-inviting. We personally onboard each founder, configure their agent setup, and make sure it runs. Tell us what you need first.</p>
+    <form class="wl-form rev d2" id="wl-form" onsubmit="doWL(event)" style="flex-direction:column;max-width:520px">
+      <input class="wl-in" type="email" name="email" placeholder="your@email.com" required autocomplete="email" style="margin-bottom:8px"/>
+      <select class="wl-in" name="automate" required style="margin-bottom:8px;cursor:pointer;background:var(--s1);color:var(--t2)">
+        <option value="" disabled selected>What do you want ACC to automate first?</option>
+        <option value="outreach">Outreach &amp; lead generation</option>
+        <option value="jobs">Job applications &amp; hiring</option>
+        <option value="content">Content &amp; media pipeline</option>
+        <option value="admin">Admin, research &amp; ops</option>
+        <option value="multiple">Multiple workflows</option>
+      </select>
+      <select class="wl-in" name="role" required style="margin-bottom:8px;cursor:pointer;background:var(--s1);color:var(--t2)">
+        <option value="" disabled selected>What best describes you?</option>
+        <option value="founder">Solo founder</option>
+        <option value="agency">Agency or freelancer</option>
+        <option value="developer">Developer / builder</option>
+        <option value="operator">Operator / team lead</option>
+      </select>
+      <select class="wl-in" name="control" required style="margin-bottom:12px;cursor:pointer;background:var(--s1);color:var(--t2)">
+        <option value="" disabled selected>How do you want to control ACC?</option>
+        <option value="telegram">Telegram (phone approvals)</option>
+        <option value="dashboard">Dashboard (web UI)</option>
+        <option value="both">Both</option>
+      </select>
+      <button class="wl-btn" type="submit" id="wl-btn" style="width:100%">Apply for private onboarding →</button>
+      <p style="font-family:var(--fm);font-size:10px;color:var(--t4);margin-top:10px;line-height:1.6">By applying you agree to our <a href="/privacy" style="color:var(--t3);text-decoration:underline">Privacy Policy</a> and <a href="/terms" style="color:var(--t3);text-decoration:underline">Terms</a>. We'll email you access details — no spam, unsubscribe anytime.</p>
     </form>
-    <div class="wl-ok" id="wl-ok">// Application received. We'll reach out within 48h.</div>
-    <p class="wl-note rev d3"><span class="wl-cnt" id="wl-cnt">247</span> founders applied · 5 onboarded per week · Ships Q3 2026</p>
-    <div class="wl-exclusive rev d3"><span style="color:var(--green)">⚡</span>Not a newsletter — a personal onboarding</div>
+    <div class="wl-ok" id="wl-ok">// Application received. We'll reach out within 48h with your onboarding details.</div>
+    <p class="wl-note rev d3"><span class="wl-cnt" id="wl-cnt">247</span> founders applied · 5 onboarded per week</p>
+    <div class="wl-exclusive rev d3"><span style="color:var(--green)">⚡</span>Personal onboarding — not a newsletter</div>
   </div>
 </section>
 
 <!-- FOOTER -->
-<footer>
+<footer style="flex-wrap:wrap;gap:16px">
   <div class="f-l">
     <div class="nav-mark" style="pointer-events:none">AC</div>
-    <span class="f-copy">Agent Command Center &copy; 2026 — Built by Shayan</span>
+    <span class="f-copy">ACC — Agent Command Center &copy; 2026 · Built by Shayan in Canada</span>
   </div>
-  <span class="f-slash">Press / to command</span>
-  <div class="f-links">
+  <div class="f-links" style="flex-wrap:wrap;gap:16px">
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/terms">Terms of Use</a>
+    <a href="mailto:hello@acccommand.center">Contact</a>
+    <a href="mailto:support@acccommand.center?subject=Unsubscribe">Unsubscribe</a>
     <a href="https://t.me/OurAccbot" target="_blank">Telegram</a>
     <a href="https://github.com/Thatisshayan/ACC" target="_blank">GitHub</a>
-    <a href="mailto:hello@acccommand.center">Contact</a>
   </div>
 </footer>
 
@@ -1090,8 +1115,8 @@ const scrEl=document.getElementById('scramble-target');
 if(scrEl){
   setTimeout(()=>{
     const sc=new Scramble(scrEl);
-    sc.setText('Let agents do it.');
-    setInterval(()=>sc.setText('Let agents do it.'),8000);
+    sc.setText('You approve. It ships.');
+    setInterval(()=>sc.setText('You approve. It ships.'),8000);
   },1600);
 }
 /* Nav logo scramble on hover */
@@ -1107,7 +1132,7 @@ const PAL_ITEMS=[
   {icon:'📧',title:'acc outreach',desc:'--source hunter --count 20 --model deepseek',action:()=>runDemo('outreach'),key:'O'},
   {icon:'🎬',title:'acc media-pipeline',desc:'--topic "..." --publish youtube',action:()=>runDemo('media'),key:'M'},
   {icon:'💚',title:'acc status --all',desc:'Full system health check',action:()=>runDemo('status'),key:'S'},
-  {icon:'🎯',title:'Join Waitlist',desc:'Claim your early access spot',action:()=>{closePal();document.getElementById('waitlist').scrollIntoView({behavior:'smooth'});}},
+  {icon:'🎯',title:'Apply for private onboarding',desc:'5 founders onboarded per week',action:()=>{closePal();document.getElementById('waitlist').scrollIntoView({behavior:'smooth'});}},
   {icon:'📱',title:'Open Telegram Bot',desc:'@OurAccbot — message the agent live',action:()=>{closePal();window.open('https://t.me/OurAccbot','_blank');}},
   {icon:'⌥',title:'View on GitHub',desc:'Full source code — Thatisshayan/ACC',action:()=>{closePal();window.open('https://github.com/Thatisshayan/ACC','_blank');}},
   {icon:'💚',title:'Live Health Check',desc:'/api/health — production endpoint',action:()=>{closePal();window.open('/api/health','_blank');}},
@@ -1260,15 +1285,20 @@ setInterval(()=>{
 async function doWL(e){
   e.preventDefault();
   const btn=document.getElementById('wl-btn');
-  const email=document.querySelector('#wl-form input').value.trim();
-  btn.disabled=true;btn.textContent='Applying...';
+  const form=document.getElementById('wl-form');
+  const email=form.querySelector('input[name="email"]').value.trim();
+  const automate=form.querySelector('select[name="automate"]').value;
+  const role=form.querySelector('select[name="role"]').value;
+  const control=form.querySelector('select[name="control"]').value;
+  btn.disabled=true;btn.textContent='Submitting...';
   try{
-    const r=await fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    const r=await fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,automate,role,control})});
     if(r.ok||r.status===409||r.status===201)throw 0;throw 1;
   }catch(_){
-    document.getElementById('wl-form').style.display='none';
+    form.style.display='none';
     document.getElementById('wl-ok').style.display='block';
     const c=document.getElementById('wl-cnt');if(c)c.textContent=parseInt(c.textContent)+1;
+    const p=document.getElementById('wl-proof-cnt');if(p)p.textContent=parseInt(p.textContent)+1;
   }
 }
 </script>
