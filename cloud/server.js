@@ -14,10 +14,14 @@ const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const outreachRoutes           = require("./api/outreachRoutes.js");
 const synapseRoutes            = require("./api/synapseRoutes.js");
 const fscRoutes                = require("./api/fscRoutes.js");
-const cardRoutes               = require("./api/cardRoutes.js");
-const phoneRoutes              = require("./api/phoneRoutes.js");
-const billingRoutes            = require("./api/billingRoutes.js");
-const memoryRoutes             = require("./api/memoryRoutes.js");
+function safeRequire(mod) {
+  try { return require(mod); }
+  catch(e) { console.error(`[server] LOAD FAIL ${mod}: ${e.message}`); return null; }
+}
+const cardRoutes    = safeRequire("./api/cardRoutes.js");
+const phoneRoutes   = safeRequire("./api/phoneRoutes.js");
+const billingRoutes = safeRequire("./api/billingRoutes.js");
+const memoryRoutes  = safeRequire("./api/memoryRoutes.js");
 const statusSummary            = require("./api/statusSummary.js");
 const messagesRoutes           = require("./api/messages.js");
 const assistantRoutes          = require("./api/assistant.js");
@@ -212,10 +216,10 @@ app.use("/api/alphonso-bridge", alphonsoBridge);
 app.use("/api/outreach", outreachRoutes);
 app.use("/api/synapse", synapseRoutes);
 app.use("/api/fsc", fscRoutes);
-app.use("/api/card", cardRoutes);
-app.use("/api/phone", phoneRoutes);
-app.use("/api/billing", billingRoutes);
-app.use("/api/memory", memoryRoutes);
+if (cardRoutes)    app.use("/api/card",    cardRoutes);
+if (phoneRoutes)   app.use("/api/phone",   phoneRoutes);
+if (billingRoutes) app.use("/api/billing", billingRoutes);
+if (memoryRoutes)  app.use("/api/memory",  memoryRoutes);
 app.use("/api/status", statusSummary);
 
 // ---------- UI Routes ----------
