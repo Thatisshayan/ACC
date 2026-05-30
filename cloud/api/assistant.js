@@ -91,4 +91,42 @@ router.get('/status', function(req, res) {
   }
 });
 
+// POST /api/assistant/transcribe
+// Body: { audio: "<base64>", mimeType: "audio/m4a" }  (from mobile mic)
+// Returns: { success, text, intent, parsed }
+router.post('/transcribe', async function(req, res) {
+  try {
+    const { audio, mimeType = 'audio/m4a' } = req.body || {};
+    if (!audio) return res.status(400).json({ success: false, error: 'audio (base64) is required' });
+
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) return res.status(503).json({ success: false, error: 'Voice transcription not configured' });
+
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: key });
+
+    const buf = Buffer.from(audio, 'base64');
+    const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a'
+               : mimeType.includes('webm') ? 'webm'
+               : mimeType.includes('ogg')  ? 'ogg'
+               : 'wav';
+
+    const { toFile } = require('openai');
+    const file = await toFile(buf, `voice.${ext}`, { type: mimeType });
+
+    const transcription = await openai.audio.transcriptions.create({
+      file,
+      model: 'whisper-1',
+      language: 'en',
+    });
+
+    const text = transcription.text || '';
+    const parsed = messages.parseAssistantIntent(text);
+
+    res.json({ success: true, text, parsed, timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

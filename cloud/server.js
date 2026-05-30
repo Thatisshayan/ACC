@@ -121,8 +121,8 @@ app.get("/api/admin/setup", async (req, res) => {
   } catch(e) { results.waitlist = { error: e.message }; }
   // 2. Stripe products — use same lazy pattern as billingRoutes.js
   try {
-    const key = process.env.STRIPE_API_KEY;
-    if (!key) throw new Error("STRIPE_API_KEY not set in Railway env");
+    const key = process.env.STRIPE_API_KEY || process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error("Neither STRIPE_API_KEY nor STRIPE_SECRET_KEY found in Railway env");
     const stripe = require("stripe")(key);
     const existing = await stripe.products.list({ limit: 20, active: true });
     const has = name => existing.data.find(p => p.name === name);
@@ -306,6 +306,14 @@ app.post("/api/waitlist", async (req, res) => {
 // Landing page also accessible at /landing (legacy + direct link)
 app.get("/landing", (req, res) => {
   res.sendFile(path.join(__dirname, "../landing/index.html"));
+});
+
+// Legal pages
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/privacy.html"));
+});
+app.get("/terms", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/terms.html"));
 });
 
 // Non-API catch-all: redirect to landing
