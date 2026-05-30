@@ -13,8 +13,7 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --ignore-scripts
-RUN npm install @supabase/supabase-js --ignore-scripts
+RUN npm ci --ignore-scripts
 RUN npm rebuild better-sqlite3
 
 COPY . .

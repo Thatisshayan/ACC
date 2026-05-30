@@ -1,12 +1,21 @@
+process.on('uncaughtException', (e) => console.error('[start] UNCAUGHT:', e.message, e.stack));
+process.on('unhandledRejection', (e) => console.error('[start] UNHANDLED:', e));
+
+console.log('[start] process starting, NODE_ENV=' + process.env.NODE_ENV + ' PORT=' + process.env.PORT);
 require('dotenv').config({ path: require('path').join(__dirname, '../.env'), override: false });
 
 const port = process.env.PORT || 4000;
+console.log('[start] loading worker...');
 const { startWorker } = require("../cloud/worker.js");
+console.log('[start] loading lead poller...');
 const { startLeadCollectorPoller } = require("../cloud/workflows/leadCollectorPoller.js");
 
 // Start API server + worker
+console.log('[start] loading server...');
 require("../cloud/server.js");
+console.log('[start] starting worker...');
 startWorker({ intervalMs: 500 });
+console.log('[start] starting lead poller...');
 startLeadCollectorPoller();
 console.log("[start] ACC v2 server started on :" + port);
 
