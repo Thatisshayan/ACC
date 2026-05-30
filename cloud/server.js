@@ -97,7 +97,14 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "ACC Module 7", version: "2.1.0", routes: ["card","phone","billing","memory"], time: new Date().toISOString() });
+  res.json({ ok: true, service: "ACC Module 7", version: "2.2.0", routes: ["card","phone","billing","memory"], time: new Date().toISOString() });
+});
+
+// Inline billing test — bypasses sub-router to isolate 404 source
+app.get("/api/billing/plans", (req, res) => {
+  const { PLANS } = require("./api/billingRoutes.js");
+  const plans = Object.entries(PLANS).map(([id, p]) => ({ id, name: p.name, price: p.price, features: p.features }));
+  res.json({ success: true, source: "inline", plans });
 });
 
 // ---------- Execute (enqueue task) ----------
