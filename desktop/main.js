@@ -107,7 +107,7 @@ function buildMenu() {
         { label: 'API Health',   click: () => shell.openExternal(HEALTH_URL) },
         { label: 'Task Bus',     click: () => shell.openExternal(`${CLOUD_URL}/api/taskbus/stats`) },
         { label: 'Telegram Bot', click: () => shell.openExternal('https://t.me/OurAccbot') },
-        { label: 'Supabase',     click: () => shell.openExternal('https://supabase.com/dashboard/project/xacfnatsovuxqttnzdaw') },
+        { label: 'Supabase',     click: () => shell.openExternal('https://supabase.com/dashboard/project/wfgdewzrnrjthugpgeey') },
         { label: 'Railway',      click: () => shell.openExternal('https://railway.app') },
       ],
     },

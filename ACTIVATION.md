@@ -6,7 +6,7 @@ Everything below is ready to copy-paste. Do in order.
 ---
 
 ## STEP 1 — Supabase (5 min)
-Go to: https://supabase.com/dashboard/project/xacfnatsovuxqttnzdaw/sql/new
+Go to: https://supabase.com/dashboard/project/wfgdewzrnrjthugpgeey/sql/new
 Paste this entire block and click RUN:
 
 ```sql
