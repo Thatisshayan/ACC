@@ -5,19 +5,14 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Install root dependencies (including native module compilation)
-COPY package*.json ./
+# Copy all source first (.dockerignore excludes node_modules)
+COPY . .
+
+# Install root dependencies — compiles better-sqlite3 for Linux
 RUN npm ci --omit=dev
 
 # Build UI
-COPY ui/package*.json ./ui/
-RUN cd ui && npm ci
-
-COPY ui/ ./ui/
-RUN cd ui && npm run build
-
-# Copy rest of app
-COPY . .
+RUN cd ui && npm ci && npm run build
 
 EXPOSE 4000
 
