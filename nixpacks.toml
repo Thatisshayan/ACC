@@ -2,10 +2,10 @@
 nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake"]
 
 [phases.install]
-cmds = ["npm install --omit=dev --ignore-scripts", "npm rebuild better-sqlite3"]
+cmds = ["npm install"]
 
 [phases.build]
-cmds = ["cd ui && npm install && npm run build && cd .."]
+cmds = ["cd ui && npm install && npm run build"]
 
 [start]
 cmd = "node scripts/start.js"
