@@ -97,7 +97,7 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "ACC Module 7", time: new Date().toISOString() });
+  res.json({ ok: true, service: "ACC Module 7", version: "2.1.0", routes: ["card","phone","billing","memory"], time: new Date().toISOString() });
 });
 
 // ---------- Execute (enqueue task) ----------
@@ -248,10 +248,15 @@ app.get("/landing", (req, res) => {
   res.sendFile(path.join(__dirname, "../landing/index.html"));
 });
 
-// Catch-all: redirect unknown routes to landing
+// Non-API catch-all: redirect to landing
 app.use((req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/admin")) return next();
   res.redirect("/");
+});
+
+// API 404 handler
+app.use("/api", (req, res) => {
+  res.status(404).json({ success: false, error: `Route not found: ${req.method} ${req.path}` });
 });
 
 const httpServer = app.listen(PORT, () => {
