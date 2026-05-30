@@ -49,14 +49,20 @@
 // CREATE POLICY "service all" ON acc_subscriptions USING (true) WITH CHECK (true);
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { createClient } = require('@supabase/supabase-js');
 const { log } = require('../utils/logger.js');
 
+// Lazy + safe — Railway may not have @supabase/supabase-js in node_modules
+// even if it's in package.json (Docker layer cache issue). Treat as optional.
+let _createClient = null;
+try { _createClient = require('@supabase/supabase-js').createClient; }
+catch (_) { log('[supabaseMemory] @supabase/supabase-js not available — cloud sync disabled.'); }
+
 function db() {
+  if (!_createClient) return null;
   const url = (process.env.SUPABASE_URL || '').trim();
   const key  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
   if (!url || !key) return null;
-  return createClient(url, key);
+  return _createClient(url, key);
 }
 
 // ── Memory ────────────────────────────────────────────────────────────────────
