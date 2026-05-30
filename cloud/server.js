@@ -101,7 +101,15 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "ACC Module 7", version: "2.2.0", routes: ["card","phone","billing","memory"], time: new Date().toISOString() });
+  res.json({ ok: true, service: "ACC Module 7", version: "2.3.0", routes: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, time: new Date().toISOString() });
+});
+
+app.get("/api/debug", (req, res) => {
+  const tests = {};
+  ["./api/cardRoutes.js","./api/phoneRoutes.js","./api/billingRoutes.js","./api/memoryRoutes.js"].forEach(m => {
+    try { require(m); tests[m] = "ok"; } catch(e) { tests[m] = e.message; }
+  });
+  res.json({ version: "2.3.0", loaded: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, requires: tests, node: process.version, cwd: process.cwd() });
 });
 
 // Inline billing test — bypasses sub-router to isolate 404 source
