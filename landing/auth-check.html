@@ -19,59 +19,69 @@ html,body{height:100%;background:#000;display:flex;align-items:center;justify-co
 <body>
 <div class="logo">ACC<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
 <script>
-// Auth guard — runs before /app loads
+// Auth guard — runs before /app loads.
+// Supabase config is fetched from /api/config/public so the key is never
+// hardcoded in HTML and can be rotated without a redeploy.
 (function() {
-  const SUPABASE_URL  = 'https://wfgdewzrnrjthugpgeey.supabase.co';
-  const SUPABASE_ANON = 'sb_publishable_I4Lp-Ivla-Txrk0mh9RtFA_jOjGJrXE';
+  fetch('/api/config/public')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(cfg) {
+      var SUPABASE_URL  = (cfg && cfg.supabaseUrl)     || '';
+      var SUPABASE_ANON = (cfg && cfg.supabaseAnonKey) || '';
+      if (!SUPABASE_URL || !SUPABASE_ANON) { window.location.href = '/login'; return; }
+      startAuthCheck(SUPABASE_URL, SUPABASE_ANON);
+    })
+    .catch(function() { window.location.href = '/login'; });
 
-  // Handle magic link hash from Supabase
-  const hash = window.location.hash;
-  if (hash) {
-    const params = new URLSearchParams(hash.replace('#', '?'));
-    const token  = params.get('access_token');
-    const refresh = params.get('refresh_token');
-    if (token) {
-      localStorage.setItem('acc_token', token);
-      if (refresh) localStorage.setItem('acc_refresh', refresh);
-      window.history.replaceState({}, '', '/app');
-      loadApp();
-      return;
+  function startAuthCheck(SUPABASE_URL, SUPABASE_ANON) {
+    // Handle magic link hash from Supabase
+    var hash = window.location.hash;
+    if (hash) {
+      var params = new URLSearchParams(hash.replace('#', '?'));
+      var token  = params.get('access_token');
+      var refresh = params.get('refresh_token');
+      if (token) {
+        localStorage.setItem('acc_token', token);
+        if (refresh) localStorage.setItem('acc_refresh', refresh);
+        window.history.replaceState({}, '', '/app');
+        loadApp();
+        return;
+      }
     }
-  }
 
-  const token = localStorage.getItem('acc_token');
-  if (!token) { window.location.href = '/login'; return; }
+    var token = localStorage.getItem('acc_token');
+    if (!token) { window.location.href = '/login'; return; }
 
-  // Verify token is still valid
-  fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + token }
-  })
-  .then(r => {
-    if (r.ok) { loadApp(); }
-    else {
+    // Verify token is still valid
+    fetch(SUPABASE_URL + '/auth/v1/user', {
+      headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + token }
+    })
+    .then(function(r) {
+      if (r.ok) { loadApp(); return; }
       // Try refresh
-      const refresh = localStorage.getItem('acc_refresh');
+      var refresh = localStorage.getItem('acc_refresh');
       if (!refresh) { signOut(); return; }
-      return fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      return fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
         body: JSON.stringify({ refresh_token: refresh })
       })
-      .then(r2 => r2.json())
-      .then(d => {
+      .then(function(r2) { return r2.json(); })
+      .then(function(d) {
         if (d.access_token) {
           localStorage.setItem('acc_token', d.access_token);
           if (d.refresh_token) localStorage.setItem('acc_refresh', d.refresh_token);
           loadApp();
         } else { signOut(); }
       });
-    }
-  })
-  .catch(() => loadApp()); // network error — let app handle it
+    })
+    .catch(function() { loadApp(); }); // network error — let app handle it
+  }
 
   function loadApp() {
-    // Inject the React dashboard into this page
-    window.location.replace('/app/index.html');
+    // /app serves auth-check.html (the guard).
+    // /app/dashboard hits the splat catch-all which serves ui/dist/index.html (the SPA).
+    window.location.replace('/app/dashboard');
   }
 
   function signOut() {

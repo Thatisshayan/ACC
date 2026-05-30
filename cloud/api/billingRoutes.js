@@ -134,9 +134,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   try {
     if (secret && sig) {
       event = stripe().webhooks.constructEvent(req.body, sig, secret);
+    } else if (process.env.NODE_ENV === 'production') {
+      log('[billing] FATAL: STRIPE_WEBHOOK_SECRET not set in production — rejecting webhook');
+      return res.status(400).json({ error: 'Webhook secret not configured' });
     } else {
       event = JSON.parse(req.body);
-      log('[billing] Webhook secret not set — skipping signature verification.');
+      log('[billing] Webhook secret not set — skipping signature verification (dev mode).');
     }
   } catch (e) {
     return res.status(400).json({ error: `Webhook signature failed: ${e.message}` });

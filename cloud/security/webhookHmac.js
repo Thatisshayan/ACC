@@ -19,11 +19,20 @@ const crypto = require('crypto');
 function requireTelegramSecret() {
   var secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
   if (!secret) {
-    console.warn('[webhookHmac] TELEGRAM_WEBHOOK_SECRET not set — Telegram webhook is OPEN to anyone');
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[webhookHmac] FATAL: TELEGRAM_WEBHOOK_SECRET not set in production — Telegram webhook will reject all requests');
+    } else {
+      console.warn('[webhookHmac] TELEGRAM_WEBHOOK_SECRET not set — Telegram webhook is OPEN (dev mode)');
+    }
   }
 
   return function telegramSecretMiddleware(req, res, next) {
-    if (!secret) return next(); // not configured → passthrough (warn already logged above)
+    if (!secret) {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ success: false, error: 'Webhook not configured' });
+      }
+      return next(); // dev: passthrough
+    }
 
     var header = req.headers['x-telegram-bot-api-secret-token'] || '';
     // Timing-safe comparison: prevents timing attacks even for short secrets.

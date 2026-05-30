@@ -101,7 +101,10 @@ const MOBILE_NAV = [
 ];
 
 const PAGE_PATHS = new Set(['dashboard','mini','tasks','approvals','messages','assistant','agents','integrations','audit','admin','settings']);
-function pathToPage(p) { const n = String(p||'').replace(/^\/+/,'').trim().toLowerCase(); return PAGE_PATHS.has(n) ? n : 'dashboard'; }
+function pathToPage(p) {
+  const n = String(p||'').replace(/^\/app\b/, '').replace(/^\/+/,'').trim().toLowerCase();
+  return PAGE_PATHS.has(n) ? n : 'dashboard';
+}
 
 // ── Shared UI components ──────────────────────────────────────────────────────
 function Surface({ className = '', children, glow = false }) {
@@ -507,7 +510,7 @@ export default function App() {
   // Route sync — push history when page state changes
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.location.pathname !== `/${page}`) window.history.pushState({}, '', `/${page}`);
+    if (window.location.pathname !== `/app/${page}`) window.history.pushState({}, '', `/app/${page}`);
   }, [page]);
 
   // popstate — listen for browser back/forward
