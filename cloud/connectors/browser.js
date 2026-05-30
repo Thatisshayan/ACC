@@ -2,12 +2,19 @@
 // Replaces stub. Sandbox mode by default, live via BROWSER_SANDBOX=false
 'use strict';
 
-const { chromium } = require('playwright');
 const { log } = require('../utils/logger.js');
 
 var SANDBOX = process.env.BROWSER_SANDBOX !== 'false';
 
+// Lazy-load playwright — only imported when a real browser action runs.
+// This prevents playwright from blocking server startup or slow builds.
+function getChromium() {
+  try { return require('playwright').chromium; }
+  catch (e) { throw new Error('playwright not available — run: npm install playwright && npx playwright install chromium'); }
+}
+
 async function withPage(fn) {
+  const chromium = getChromium();
   const browser = await chromium.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
