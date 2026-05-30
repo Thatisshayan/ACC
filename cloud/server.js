@@ -130,18 +130,33 @@ app.get("/api/task/:id", (req, res) => {
   });
 });
 
-// ---------- Frontend static hosting (if ui/dist exists) ----------
-// Keeps API-only mode working while allowing Railway root domain to render the UI.
-app.use(express.static(UI_DIST_PATH));
+// ---------- Static assets for React app ----------
+app.use("/app", express.static(UI_DIST_PATH));
 
-// ---------- Orchestrate (Module 6) ----------
+// ---------- Public pages ----------
+// Root → landing page
 app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/index.html"));
+});
+
+// Login page
+app.get("/login", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/login.html"));
+});
+
+// App entry point — auth-check wrapper, then React dashboard
+app.get("/app", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/auth-check.html"));
+});
+
+// React app inner routes (SPA — serve index.html for any /app/* path)
+app.get("/app/*", (req, res) => {
   res.sendFile(path.join(UI_DIST_PATH, "index.html"), (err) => {
-    if (err) {
-      res.json({ status: "ACC Cloud Server OK", port: PORT });
-    }
+    if (err) res.redirect("/app");
   });
 });
+
+// ---------- Orchestrate (Module 6) ----------
 
 app.post("/orchestrate", (req, res) => {
   const { command, project } = req.body || {};
@@ -228,17 +243,15 @@ app.post("/api/waitlist", async (req, res) => {
   }
 });
 
-// Landing page route
+// Landing page also accessible at /landing (legacy + direct link)
 app.get("/landing", (req, res) => {
   res.sendFile(path.join(__dirname, "../landing/index.html"));
 });
 
-// SPA fallback for non-API routes.
+// Catch-all: redirect unknown routes to landing
 app.use((req, res, next) => {
-  if (req.path.startsWith("/api")) return next();
-  res.sendFile(path.join(UI_DIST_PATH, "index.html"), (err) => {
-    if (err) next();
-  });
+  if (req.path.startsWith("/api") || req.path.startsWith("/admin")) return next();
+  res.redirect("/");
 });
 
 const httpServer = app.listen(PORT, () => {

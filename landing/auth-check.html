@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ACC — Loading</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#000;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif}
+.logo{color:#00ff88;font-size:13px;font-family:'JetBrains Mono',monospace;letter-spacing:0.1em;opacity:0;animation:fade 0.6s ease forwards 0.2s}
+@keyframes fade{to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
+.dot{display:inline-block;animation:pulse 1.2s ease infinite}
+.dot:nth-child(2){animation-delay:.2s}
+.dot:nth-child(3){animation-delay:.4s}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="logo">ACC<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+<script>
+// Auth guard — runs before /app loads
+(function() {
+  const SUPABASE_URL  = 'https://xacfnatsovuxqttnzdaw.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhY2ZuYXRzb3Z1eHF0dG56ZGF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjA4MjAsImV4cCI6MjA5NDYzNjgyMH0.pAWDK2a5krfYOqsfb_Lb4VXuFGxKUvucrMfWJDV97YQ';
+
+  // Handle magic link hash from Supabase
+  const hash = window.location.hash;
+  if (hash) {
+    const params = new URLSearchParams(hash.replace('#', '?'));
+    const token  = params.get('access_token');
+    const refresh = params.get('refresh_token');
+    if (token) {
+      localStorage.setItem('acc_token', token);
+      if (refresh) localStorage.setItem('acc_refresh', refresh);
+      window.history.replaceState({}, '', '/app');
+      loadApp();
+      return;
+    }
+  }
+
+  const token = localStorage.getItem('acc_token');
+  if (!token) { window.location.href = '/login'; return; }
+
+  // Verify token is still valid
+  fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + token }
+  })
+  .then(r => {
+    if (r.ok) { loadApp(); }
+    else {
+      // Try refresh
+      const refresh = localStorage.getItem('acc_refresh');
+      if (!refresh) { signOut(); return; }
+      return fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
+        body: JSON.stringify({ refresh_token: refresh })
+      })
+      .then(r2 => r2.json())
+      .then(d => {
+        if (d.access_token) {
+          localStorage.setItem('acc_token', d.access_token);
+          if (d.refresh_token) localStorage.setItem('acc_refresh', d.refresh_token);
+          loadApp();
+        } else { signOut(); }
+      });
+    }
+  })
+  .catch(() => loadApp()); // network error — let app handle it
+
+  function loadApp() {
+    // Inject the React dashboard into this page
+    window.location.replace('/app/index.html');
+  }
+
+  function signOut() {
+    localStorage.removeItem('acc_token');
+    localStorage.removeItem('acc_refresh');
+    localStorage.removeItem('acc_user');
+    window.location.href = '/login';
+  }
+})();
+</script>
+</body>
+</html>

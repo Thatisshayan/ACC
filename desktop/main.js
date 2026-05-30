@@ -9,6 +9,7 @@ const fs     = require('fs');
 const { autoUpdater } = require('electron-updater');
 
 const CLOUD_URL   = 'https://acccommand.center';
+const APP_URL     = `${CLOUD_URL}/app`;
 const HEALTH_URL  = `${CLOUD_URL}/api/health`;
 
 let win  = null;
@@ -57,7 +58,7 @@ function createWindow() {
     },
   });
 
-  win.loadURL(CLOUD_URL);
+  win.loadURL(APP_URL);
   win.once('ready-to-show', () => { win.show(); win.focus(); });
   win.on('closed', () => { win = null; });
 
@@ -89,8 +90,9 @@ function buildMenu() {
     {
       label: 'Navigate',
       submenu: [
-        { label: 'Dashboard',    click: () => win?.loadURL(`${CLOUD_URL}/dashboard`) },
-        { label: 'Landing Page', click: () => win?.loadURL(`${CLOUD_URL}/landing`) },
+        { label: 'App',          click: () => win?.loadURL(APP_URL) },
+        { label: 'Landing Page', click: () => win?.loadURL(`${CLOUD_URL}/`) },
+        { label: 'Sign In',      click: () => win?.loadURL(`${CLOUD_URL}/login`) },
         { label: 'API Health',   click: () => win?.loadURL(HEALTH_URL) },
         { type: 'separator' },
         { label: 'Zoom In',    role: 'zoomIn' },

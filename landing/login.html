@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Sign In — ACC Agent Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --black:#000;--bg:#050505;--green:#00ff88;--cyan:#00d4ff;
+  --border:rgba(255,255,255,0.07);--border-g:rgba(0,255,136,0.2);
+  --g10:rgba(0,255,136,0.06);--t1:#fff;--t2:#888;
+  --fh:'Space Grotesk',sans-serif;--fm:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--fh);background:var(--black);color:var(--t1);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+/* Grid background */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,255,136,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.03) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0;
+}
+
+.wrap{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:24px;
+}
+
+/* Logo */
+.logo{
+  display:flex;align-items:center;gap:12px;margin-bottom:48px;
+  text-decoration:none;
+}
+.logo-mark{
+  width:44px;height:44px;border-radius:10px;
+  border:1px solid var(--border-g);
+  background:var(--g10);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--fm);font-size:13px;font-weight:500;color:var(--green);
+  letter-spacing:0.05em;
+}
+.logo-name{font-size:18px;font-weight:700;letter-spacing:-0.02em;color:var(--t1)}
+.logo-sub{font-family:var(--fm);font-size:10px;color:var(--t2);letter-spacing:0.08em;margin-top:2px}
+
+/* Card */
+.card{
+  width:100%;max-width:400px;
+  background:#0a0a0a;
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:40px 36px;
+  box-shadow:0 0 60px rgba(0,255,136,0.04);
+  position:relative;overflow:hidden;
+}
+.card::before{
+  content:'';position:absolute;top:-1px;left:20%;right:20%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--green),transparent);
+}
+
+.card-title{font-size:22px;font-weight:700;letter-spacing:-0.03em;margin-bottom:6px}
+.card-sub{font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:32px}
+
+/* Form */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--t2);margin-bottom:8px}
+.field input{
+  width:100%;padding:13px 16px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--border);
+  border-radius:10px;
+  color:var(--t1);font-family:var(--fh);font-size:14px;
+  outline:none;transition:border-color .2s,box-shadow .2s;
+}
+.field input:focus{border-color:rgba(0,255,136,0.4);box-shadow:0 0 0 3px rgba(0,255,136,0.06)}
+.field input::placeholder{color:#333}
+
+.btn{
+  width:100%;padding:14px;margin-top:8px;
+  background:var(--green);color:#000;
+  font-family:var(--fh);font-size:14px;font-weight:700;
+  border:none;border-radius:10px;cursor:pointer;
+  transition:opacity .2s,transform .15s;letter-spacing:0.01em;
+}
+.btn:hover{opacity:.9}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+.divider{
+  display:flex;align-items:center;gap:12px;margin:20px 0;
+  color:var(--t2);font-size:12px;
+}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* State messages */
+.msg{
+  display:none;margin-top:16px;padding:12px 14px;
+  border-radius:8px;font-size:13px;line-height:1.5;
+}
+.msg.success{background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.2);color:var(--green);display:block}
+.msg.error{background:rgba(255,59,59,0.08);border:1px solid rgba(255,59,59,0.2);color:#ff6b6b;display:block}
+.msg.loading{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--t2);display:block}
+
+.footer{margin-top:28px;text-align:center;font-size:12px;color:#333}
+.footer a{color:var(--t2);text-decoration:none;transition:color .2s}
+.footer a:hover{color:var(--green)}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,0.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <a href="/" class="logo">
+    <div class="logo-mark">ACC</div>
+    <div>
+      <div class="logo-name">Agent Command Center</div>
+      <div class="logo-sub">ACCCOMMAND.CENTER</div>
+    </div>
+  </a>
+
+  <div class="card">
+    <div class="card-title">Sign in to ACC</div>
+    <div class="card-sub">Enter your email — we'll send you a magic link. No password required.</div>
+
+    <form id="magicForm">
+      <div class="field">
+        <label>Email address</label>
+        <input type="email" id="email" placeholder="you@example.com" required autocomplete="email" autofocus/>
+      </div>
+      <button type="submit" class="btn" id="submitBtn">Send magic link</button>
+      <div class="msg" id="msg"></div>
+    </form>
+
+    <div class="divider">or</div>
+
+    <form id="passwordForm" style="display:none">
+      <div class="field">
+        <label>Email address</label>
+        <input type="email" id="pwEmail" placeholder="you@example.com" required autocomplete="email"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="pwPassword" placeholder="••••••••" required autocomplete="current-password"/>
+      </div>
+      <button type="submit" class="btn" id="pwBtn">Sign in with password</button>
+      <div class="msg" id="pwMsg"></div>
+    </form>
+
+    <div style="text-align:center">
+      <button onclick="toggleMode()" style="font-size:12px;color:var(--t2);cursor:pointer;background:none;border:none;font-family:var(--fh)" id="toggleBtn">
+        Sign in with password instead
+      </button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="/">← Back to home</a> &nbsp;·&nbsp;
+    <a href="mailto:shayanezraeil@gmail.com">Contact</a>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://xacfnatsovuxqttnzdaw.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhY2ZuYXRzb3Z1eHF0dG56ZGF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjA4MjAsImV4cCI6MjA5NDYzNjgyMH0.pAWDK2a5krfYOqsfb_Lb4VXuFGxKUvucrMfWJDV97YQ';
+
+let magicMode = true;
+
+function toggleMode() {
+  magicMode = !magicMode;
+  document.getElementById('magicForm').style.display    = magicMode ? 'block' : 'none';
+  document.getElementById('passwordForm').style.display = magicMode ? 'none'  : 'block';
+  document.getElementById('toggleBtn').textContent = magicMode
+    ? 'Sign in with password instead'
+    : 'Send magic link instead';
+}
+
+async function supabaseFetch(path, body) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON },
+    body: JSON.stringify(body),
+  });
+  return { ok: r.ok, data: await r.json() };
+}
+
+function showMsg(id, type, text) {
+  const el = document.getElementById(id);
+  el.className = 'msg ' + type;
+  el.innerHTML = text;
+}
+
+// Magic link form
+document.getElementById('magicForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Sending…';
+  showMsg('msg', 'loading', 'Sending magic link…');
+
+  const { ok, data } = await supabaseFetch('/magiclink', {
+    email,
+    options: { emailRedirectTo: window.location.origin + '/app' }
+  });
+
+  if (ok) {
+    showMsg('msg', 'success', '✅ Magic link sent! Check your inbox and click the link to sign in.');
+    btn.innerHTML = 'Link sent ✓';
+  } else {
+    showMsg('msg', 'error', '❌ ' + (data.msg || data.error_description || 'Could not send link. Try again.'));
+    btn.disabled = false;
+    btn.innerHTML = 'Send magic link';
+  }
+});
+
+// Password form
+document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email    = document.getElementById('pwEmail').value.trim();
+  const password = document.getElementById('pwPassword').value;
+  const btn = document.getElementById('pwBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Signing in…';
+  showMsg('pwMsg', 'loading', 'Signing in…');
+
+  const { ok, data } = await supabaseFetch('/token?grant_type=password', { email, password });
+
+  if (ok && data.access_token) {
+    localStorage.setItem('acc_token', data.access_token);
+    localStorage.setItem('acc_refresh', data.refresh_token);
+    localStorage.setItem('acc_user', JSON.stringify(data.user));
+    showMsg('pwMsg', 'success', '✅ Signed in! Redirecting…');
+    setTimeout(() => { window.location.href = '/app'; }, 800);
+  } else {
+    showMsg('pwMsg', 'error', '❌ ' + (data.error_description || data.msg || 'Invalid credentials.'));
+    btn.disabled = false;
+    btn.innerHTML = 'Sign in with password';
+  }
+});
+
+// Handle magic link redirect (Supabase puts token in URL hash on callback)
+(function handleCallback() {
+  const hash = window.location.hash;
+  if (!hash) return;
+  const params = new URLSearchParams(hash.replace('#', '?'));
+  const token = params.get('access_token');
+  const refresh = params.get('refresh_token');
+  if (token) {
+    localStorage.setItem('acc_token', token);
+    if (refresh) localStorage.setItem('acc_refresh', refresh);
+    window.location.href = '/app';
+  }
+})();
+
+// Already logged in?
+if (localStorage.getItem('acc_token')) {
+  window.location.href = '/app';
+}
+</script>
+</body>
+</html>
