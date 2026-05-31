@@ -7,6 +7,7 @@
 
 const fs      = require('fs');
 const path    = require('path');
+const crypto  = require('crypto');
 const uuid    = require('uuid').v4;
 const Database = require('better-sqlite3');
 const persistence = require('./persistence.js');
@@ -96,6 +97,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_approvals_task_id ON approvals(task_id);
   CREATE INDEX IF NOT EXISTS idx_approvals_status  ON approvals(status);
 `);
+
+// ── Schema migrations — safe on existing databases ────────────────────────────
+// ALTER TABLE ADD COLUMN is idempotent: catch-and-ignore if column already exists.
+(function migrateApprovalSchema() {
+  try { db.exec('ALTER TABLE approvals ADD COLUMN expires_at TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE approvals ADD COLUMN action_hash TEXT'); } catch (_) {}
+})();
 
 // ── Migration: import existing JSON files on first run ────────────────────────
 // Only runs once; skipped if the DB already has data.
@@ -238,6 +246,17 @@ db.exec(`
 // (provider call timed out but we never transitioned the status). Mark failed.
 var STALE_TASK_TIMEOUT_MS = parseInt(process.env.STALE_TASK_TIMEOUT_MS || String(10 * 60 * 1000));
 var WATCHDOG_INTERVAL_MS  = parseInt(process.env.WATCHDOG_INTERVAL_MS  || String(5  * 60 * 1000));
+
+// Approval TTL — approvals expire after this many ms (default 24h, env-configurable)
+var APPROVAL_TTL_MS = parseInt(process.env.APPROVAL_TTL_MS || String(24 * 60 * 60 * 1000));
+
+// HMAC of task payload — stored at approval creation, verified at resolution.
+// Ensures the action payload cannot be modified after approval is granted.
+function _computeActionHash(task) {
+  var key = process.env.ACC_OPERATOR_API_KEY || 'dev-insecure-key';
+  var payload = (task.title || '') + '|' + (task.instruction || '') + '|' + (task.assigned_agent || '');
+  return crypto.createHmac('sha256', key).update(payload).digest('hex');
+}
 
 var _staleStmt = db.prepare(
   "UPDATE tasks SET status = 'failed', error = 'watchdog_timeout', updated_at = ? " +
@@ -388,6 +407,8 @@ function rowToApproval(row) {
     notes:       row.notes,
     timestamp:   row.timestamp,
     resolved_at: row.resolved_at || null,
+    expires_at:  row.expires_at  || null,
+    action_hash: row.action_hash || null,
   };
 }
 
@@ -454,8 +475,8 @@ const stmts = {
   getAllResults: db.prepare('SELECT * FROM results ORDER BY timestamp DESC LIMIT ?'),
 
   insertApproval: db.prepare(`
-    INSERT INTO approvals (id, task_id, action, status, approved_by, notes, timestamp, resolved_at)
-    VALUES (@id, @task_id, @action, @status, @approved_by, @notes, @timestamp, @resolved_at)
+    INSERT INTO approvals (id, task_id, action, status, approved_by, notes, timestamp, resolved_at, expires_at, action_hash)
+    VALUES (@id, @task_id, @action, @status, @approved_by, @notes, @timestamp, @resolved_at, @expires_at, @action_hash)
   `),
 
   getApprovalById: db.prepare('SELECT * FROM approvals WHERE id = ?'),
@@ -639,6 +660,8 @@ function getLatestResult(taskId) {
 
 // ── APPROVALS ─────────────────────────────────────────────────────────────────
 function createApproval(taskId, action, _meta) {
+  var now  = new Date();
+  var task = getTask(taskId);
   var approval = {
     id:          uuid(),
     task_id:     taskId,
@@ -646,8 +669,10 @@ function createApproval(taskId, action, _meta) {
     status:      'pending',
     approved_by: null,
     notes:       '',
-    timestamp:   new Date().toISOString(),
+    timestamp:   now.toISOString(),
     resolved_at: null,
+    expires_at:  new Date(now.getTime() + APPROVAL_TTL_MS).toISOString(),
+    action_hash: task ? _computeActionHash(task) : null,
   };
   stmts.insertApproval.run(approval);
   return rowToApproval(stmts.getApprovalById.get(approval.id));
@@ -657,11 +682,26 @@ function resolveApproval(id, decision, approvedBy, notes) {
   var existing = stmts.getApprovalById.get(id);
   if (!existing) return null;
 
+  // Enforce TTL — expired approvals cannot be used
+  if (existing.expires_at && new Date(existing.expires_at) < new Date()) {
+    console.warn('[store] resolveApproval: approval', id.slice(0, 8), 'expired at', existing.expires_at);
+    throw new Error('approval_expired');
+  }
+
+  // Enforce action_hash — reject if task payload was modified after approval creation
+  if (existing.action_hash) {
+    var taskForHash = getTask(existing.task_id);
+    if (taskForHash && _computeActionHash(taskForHash) !== existing.action_hash) {
+      console.warn('[store] resolveApproval: action_hash mismatch for approval', id.slice(0, 8), '— task was modified after approval creation');
+      throw new Error('action_payload_modified');
+    }
+  }
+
   var resolvedAt = new Date().toISOString();
   stmts.updateApproval.run({
     id:          id,
     status:      decision,
-    approved_by: approvedBy || 'Shayan',
+    approved_by: approvedBy || 'unknown',
     notes:       notes || '',
     resolved_at: resolvedAt,
   });
@@ -672,10 +712,10 @@ function resolveApproval(id, decision, approvedBy, notes) {
 
   try {
     _mem().remember('global', 'approval:last_' + decision, {
-      approvalId: id, taskId: approval.task_id, decision, approvedBy: approvedBy || 'Shayan', at: resolvedAt,
+      approvalId: id, taskId: approval.task_id, decision, approvedBy: approvedBy || 'unknown', at: resolvedAt,
     }, { source: 'taskbus', importance: 8 });
     _mem().logEvent('global', 'approval_' + decision, {
-      approvalId: id, taskId: approval.task_id, decision, approvedBy: approvedBy || 'Shayan',
+      approvalId: id, taskId: approval.task_id, decision, approvedBy: approvedBy || 'unknown',
     }, 'taskbus');
   } catch (_) {}
 

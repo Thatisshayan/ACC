@@ -51,4 +51,53 @@ router.get('/webhook/telegram/info', requireOperatorOrAdmin, async (req, res) =>
   }).on('error', function(e){ res.json({error:e.message}); });
 });
 
+// Register (or re-register) webhook with Telegram
+// Body: { url? } — if omitted, derives from ACC_PUBLIC_URL / ACC_API_BASE_URL env vars
+router.post('/webhook/telegram/register', requireOperatorOrAdmin, async (req, res) => {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return res.status(400).json({ success: false, error: 'TELEGRAM_BOT_TOKEN not set' });
+
+  const baseUrl = (req.body && req.body.url)
+    || process.env.ACC_PUBLIC_URL
+    || process.env.ACC_API_BASE_URL
+    || '';
+
+  if (!baseUrl) {
+    return res.status(400).json({
+      success: false,
+      error: 'Provide url in request body or set ACC_PUBLIC_URL / ACC_API_BASE_URL',
+    });
+  }
+
+  const webhookUrl  = baseUrl.replace(/\/+$/, '') + '/api/webhook/telegram';
+  const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+
+  const payload = JSON.stringify(Object.assign(
+    { url: webhookUrl, allowed_updates: ['message', 'callback_query'] },
+    secretToken ? { secret_token: secretToken } : {}
+  ));
+
+  const https = require('https');
+  const request = https.request({
+    hostname: 'api.telegram.org',
+    path:     '/bot' + token + '/setWebhook',
+    method:   'POST',
+    headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+  }, function(r) {
+    var d = '';
+    r.on('data', function(c){ d += c; });
+    r.on('end', function() {
+      try {
+        var parsed = JSON.parse(d);
+        res.json({ success: !!parsed.ok, webhook_url: webhookUrl, telegram: parsed });
+      } catch(e) {
+        res.json({ success: false, raw: d });
+      }
+    });
+  });
+  request.on('error', function(e){ res.status(500).json({ success: false, error: e.message }); });
+  request.write(payload);
+  request.end();
+});
+
 module.exports = router;

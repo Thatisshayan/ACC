@@ -5,7 +5,8 @@
 
 const express = require('express');
 const store   = require('./store.js');
-const router  = require('./router.js');
+const taskRouter = require('./router.js');
+const { routeTask, notifyTelegramFailure } = taskRouter;
 const { getProvidersStatus } = require('./providerFallback.js');
 const { log } = require('../utils/logger.js');
 const workflowRegistry = require('../workflows/registry.js');
@@ -266,7 +267,7 @@ app.post('/task', async function(req, res) {
     // Auto-route if not manual
     if (task.automation_mode !== 'manual') {
       const routeOpts = { skipRateLimit: isInternalCaller(req) };
-      const result = await router.routeTask(task.id, routeOpts);
+      const result = await routeTask(task.id, routeOpts);
       return res.json({ success: true, task, routing: result });
     }
     res.json({ success: true, task, routing: { status: 'manual', note: 'Task created. No auto-routing for manual mode.' } });
@@ -303,7 +304,7 @@ app.patch('/task/:id', function(req, res) {
 // ── POST /api/taskbus/task/:id/route ─────────────────────────────────────────
 app.post('/task/:id/route', async function(req, res) {
   try {
-    const result = await router.routeTask(req.params.id);
+    const result = await routeTask(req.params.id);
     res.json({ success: true, result });
   } catch(e) {
     res.status(500).json({ success: false, error: e.message });
@@ -357,14 +358,43 @@ app.post('/approval/:id', function(req, res) {
     if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
 
     if (req.body.decision === 'approved') {
-      const routeResult = await router.routeTask(approval.task_id);
+      const routeResult = await routeTask(approval.task_id);
+      // Best-effort failure notification — operator must know when post-approval execution fails
+      if (routeResult && routeResult.status === 'failed') {
+        const failedTask = store.getTask(approval.task_id);
+        notifyTelegramFailure(approval.task_id, failedTask && failedTask.title, routeResult.error || routeResult.status);
+      }
       return res.json({ success: true, approval, routeResult });
     }
 
     return res.json({ success: true, approval });
   })().catch(function(e) {
+    if (e.message === 'approval_expired')
+      return res.status(410).json({ success: false, error: 'Approval has expired. Task must be re-submitted for a fresh approval.' });
+    if (e.message === 'action_payload_modified')
+      return res.status(409).json({ success: false, error: 'Task payload was modified after this approval was created. Re-submit the task.' });
     res.status(500).json({ success: false, error: e.message });
   });
+});
+
+// ── POST /api/taskbus/task/:id/retry ─────────────────────────────────────────
+// Re-routes a failed task. Resets status to pending then calls routeTask.
+// Only tasks in 'failed' or stale 'waiting_approval' status can be retried.
+app.post('/task/:id/retry', async function(req, res) {
+  try {
+    const task = store.getTask(req.params.id);
+    if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+    if (task.status !== 'failed' && task.status !== 'waiting_approval') {
+      return res.status(409).json({ success: false, error: 'Only failed or waiting_approval tasks can be retried. Current status: ' + task.status });
+    }
+    // Reset to pending + clear error so the safety gate re-evaluates cleanly
+    store.updateTask(task.id, { status: 'pending', error: '' });
+    log('[taskbus] Retrying task:', task.id.slice(0, 8), '| was:', task.status);
+    const result = await routeTask(task.id);
+    return res.json({ success: true, retried: task.id, previous_status: task.status, result });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // ── GET /api/taskbus/results ──────────────────────────────────────────────────

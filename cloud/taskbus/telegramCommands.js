@@ -250,7 +250,19 @@ async function handleApprovalAction(chatId, text, sendFn) {
     await safeSend(chatId, 'Approval not found: ' + shortId + '\n\nCheck /approvals for valid IDs.', sendFn);
     return;
   }
-  store.resolveApproval(approval.id, isApprove ? 'approved' : 'rejected', 'Shayan', '');
+  try {
+    store.resolveApproval(approval.id, isApprove ? 'approved' : 'rejected', 'telegram:' + String(chatId), '');
+  } catch (e) {
+    if (e.message === 'approval_expired') {
+      await safeSend(chatId, 'This approval has expired (TTL exceeded). The task needs to be re-submitted for a fresh approval.', sendFn);
+      return;
+    }
+    if (e.message === 'action_payload_modified') {
+      await safeSend(chatId, 'Task payload was modified after approval was created. Re-submit the task for a fresh approval.', sendFn);
+      return;
+    }
+    throw e;
+  }
   var task = store.getTask(approval.task_id);
   if (isApprove && task) {
     var routeResult = await router.routeTask(task.id);

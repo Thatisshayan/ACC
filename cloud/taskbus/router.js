@@ -75,15 +75,59 @@ function findPendingApproval(taskId, action) {
   }) || null;
 }
 
+// ── Best-effort Telegram failure notification ─────────────────────────────────
+// Called when execution fails after an operator approval. Non-blocking.
+function _notifyTelegramFailure(taskId, taskTitle, errorMsg) {
+  var token  = process.env.TELEGRAM_BOT_TOKEN;
+  var chatId = process.env.SHAYAN_TELEGRAM_CHAT_ID || process.env.SAYAN_TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    var https = require('https');
+    var body  = JSON.stringify({
+      chat_id: chatId,
+      text: [
+        '❌ Task failed after execution',
+        'ID:    ' + String(taskId).slice(0, 8),
+        'Task:  ' + String(taskTitle || '').slice(0, 60),
+        'Error: ' + String(errorMsg || 'unknown').slice(0, 200),
+        '',
+        'Retry: POST /api/taskbus/task/' + String(taskId) + '/retry',
+        'Check: /task_' + String(taskId).slice(0, 8),
+      ].join('\n'),
+    });
+    var req = https.request({
+      hostname: 'api.telegram.org',
+      path:     '/bot' + token + '/sendMessage',
+      method:   'POST',
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    });
+    req.on('error', function() {});
+    req.write(body);
+    req.end();
+  } catch (_) {}
+}
+
 // ── Main router ───────────────────────────────────────────────────────────────
 // opts.skipRateLimit — only set by the routes layer after verifying a server-side
 //   INTERNAL_SERVICE_TOKEN header. Never derived from user-supplied task fields.
 async function routeTask(taskId, opts) {
+  // ── Kill switch — blocks ALL task routing when ACC_KILL_SWITCH=true ──────────
+  if (process.env.ACC_KILL_SWITCH === 'true') {
+    log('[router] KILL SWITCH active — blocking task routing:', taskId);
+    return { status: 'kill_switch_active', taskId: taskId, message: 'Task routing disabled (ACC_KILL_SWITCH=true). Unset to resume.' };
+  }
+
   var skip = opts && opts.skipRateLimit === true;
   var task = store.getTask(taskId);
   if (!task) {
     log('[router] Task not found:', taskId);
     return { status: 'error', error: 'Task not found', taskId: taskId };
+  }
+
+  // ── Dry-run mode — inspects routing without executing ────────────────────────
+  if (process.env.ACC_DRY_RUN === 'true') {
+    log('[router] DRY RUN — task', taskId.slice(0, 8), '| agent:', task.assigned_agent, '| mode:', task.automation_mode, '| high_risk:', isHighRisk(task));
+    return { status: 'dry_run', taskId: taskId, agent: task.assigned_agent, automation_mode: task.automation_mode, would_be_high_risk: isHighRisk(task), note: 'Dry run: routing inspected, nothing executed. Set ACC_DRY_RUN=false to run.' };
   }
 
   log('[router] Routing:', task.id.slice(0, 8),
@@ -541,4 +585,4 @@ async function routeTask(taskId, opts) {
   };
 }
 
-module.exports = { routeTask, isHighRisk };
+module.exports = { routeTask, isHighRisk, notifyTelegramFailure: _notifyTelegramFailure };
