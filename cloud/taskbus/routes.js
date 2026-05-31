@@ -349,10 +349,10 @@ app.get('/approvals', function(req, res) {
 
 // ── POST /api/taskbus/approval/:id ───────────────────────────────────────────
 // Body: { decision: 'approved'|'rejected', notes }
-// Auth delegated to taskbusAuth middleware (TASKBUS_API_KEY bearer token).
+// Auth delegated to server-level auth middleware.
 app.post('/approval/:id', function(req, res) {
   (async function() {
-    const approver = 'Shayan';
+    const approver = req.auth?.subject || 'operator';
     const approval = store.resolveApproval(req.params.id, req.body.decision, approver, req.body.notes);
     if (!approval) return res.status(404).json({ success: false, error: 'Approval not found' });
 

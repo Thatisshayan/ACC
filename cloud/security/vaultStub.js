@@ -8,7 +8,11 @@ if (!fs.existsSync(VAULT_DIR)) fs.mkdirSync(VAULT_DIR, { recursive: true });
 
 const MASTER_KEY_ENV = process.env.ACC_VAULT_MASTER_KEY || null;
 if (!MASTER_KEY_ENV) {
-  console.warn("[vaultStub] WARNING: ACC_VAULT_MASTER_KEY not set. Vault will operate in unencrypted mode.");
+  if (process.env.NODE_ENV === 'production') {
+    // validateEnv.js should have already caught this and exited — this is a final hard stop.
+    throw new Error('[vault] ACC_VAULT_MASTER_KEY is required in production. Refusing to start without it.');
+  }
+  console.warn("[vaultStub] WARNING: ACC_VAULT_MASTER_KEY not set. Vault will operate in unencrypted mode (dev only).");
 }
 
 function deriveKey(masterKey) {
@@ -23,6 +27,7 @@ function writeSecret(name, value) {
   if (!name) throw new Error("secret name required");
   const file = _vaultFile(name);
   if (!MASTER_KEY_ENV) {
+    // Production is blocked at module load time above. This branch is dev-only.
     fs.writeFileSync(file, JSON.stringify({ value }), { encoding: "utf8" });
     return true;
   }
@@ -42,6 +47,7 @@ function readSecret(name, fallback = null) {
   if (!fs.existsSync(file)) return fallback;
   const raw = fs.readFileSync(file, "utf8");
   if (!MASTER_KEY_ENV) {
+    // Production is blocked at module load time above. This branch is dev-only.
     try { return JSON.parse(raw).value; } catch { return fallback; }
   }
   try {

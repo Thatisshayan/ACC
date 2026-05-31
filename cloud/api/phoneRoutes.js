@@ -15,6 +15,38 @@ const router  = express.Router();
 const twilio  = require('../connectors/twilio.js');
 const fetch   = require('node-fetch');
 const { log } = require('../utils/logger.js');
+const twilioSdk = require('twilio');
+const { requireOperatorOrAdmin } = require('../middleware/auth.js');
+
+function maskPhone(input) {
+  const value = String(input || '');
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 4) return '***';
+  return `***${digits.slice(-4)}`;
+}
+
+function requireTwilioWebhookSignature(req, res, next) {
+  const signature = req.headers['x-twilio-signature'];
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!signature || !authToken) {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    return next();
+  }
+
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  const url = `${protocol}://${host}${req.originalUrl}`;
+  const valid = twilioSdk.validateRequest(authToken, signature, url, req.body || {});
+  if (!valid) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  return next();
+}
+
+router.use((req, res, next) => {
+  if (req.path.startsWith('/webhook/')) return next();
+  return requireOperatorOrAdmin(req, res, next);
+});
 
 // GET /api/phone/status
 router.get('/status', async (req, res) => {
@@ -36,7 +68,7 @@ router.post('/sms', async (req, res) => {
   if (!to || !message) return res.status(400).json({ success: false, error: 'to and message are required.' });
   try {
     const result = await twilio.sendSMS(to, message);
-    log(`[phone] SMS sent by ${agent || 'manual'} to ${to}: ${message.slice(0, 50)}`);
+    log(`[phone] SMS sent by ${agent || 'manual'} to ${maskPhone(to)} (content redacted)`);
     return res.json({ success: true, sid: result.sid, status: result.status, to, from: result.from });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
@@ -50,7 +82,7 @@ router.post('/call', async (req, res) => {
   const twiml = `<Response><Say voice="Polly.Matthew">${message}</Say></Response>`;
   try {
     const result = await twilio.makeCall(to, twiml);
-    log(`[phone] Call initiated by ${agent || 'manual'} to ${to}`);
+    log(`[phone] Call initiated by ${agent || 'manual'} to ${maskPhone(to)}`);
     return res.json({ success: true, sid: result.sid, status: result.status, to });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
@@ -70,12 +102,12 @@ router.get('/messages', async (req, res) => {
 
 // POST /api/phone/webhook/sms — Twilio calls this on inbound SMS
 // Set in Twilio console: Messaging → Phone Number → "A Message Comes In" → Webhook
-router.post('/webhook/sms', async (req, res) => {
+router.post('/webhook/sms', requireTwilioWebhookSignature, async (req, res) => {
   const from = req.body?.From;
   const body = req.body?.Body;
   const to   = req.body?.To;
 
-  log(`[phone] Inbound SMS from ${from}: ${body}`);
+  log(`[phone] Inbound SMS from ${maskPhone(from)} (content redacted)`);
 
   // Forward to Shayan on Telegram
   await notifyTelegram(`📱 *Inbound SMS*\n\n*From:* \`${from}\`\n*To:* ${to}\n*Message:* ${body}`).catch(e =>
@@ -88,9 +120,9 @@ router.post('/webhook/sms', async (req, res) => {
 });
 
 // POST /api/phone/webhook/voice — Twilio calls this on inbound call
-router.post('/webhook/voice', async (req, res) => {
+router.post('/webhook/voice', requireTwilioWebhookSignature, async (req, res) => {
   const from = req.body?.From;
-  log(`[phone] Inbound call from ${from}`);
+  log(`[phone] Inbound call from ${maskPhone(from)}`);
 
   await notifyTelegram(`📞 *Inbound Call*\n\n*From:* \`${from}\`\nCall routed to voicemail.`).catch(e =>
     log('[phone] Telegram notify failed:', e.message)

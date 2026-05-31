@@ -15,6 +15,11 @@ const { sendCardApprovalRequest } = require('../telegram/cardApprovalBot.js');
 const { log } = require('../utils/logger.js');
 const { saveCardRequest, loadCardRequests } = require('../storage/supabaseMemory.js');
 
+function maskAgent(agent) {
+  const value = String(agent || 'unknown');
+  return value.length <= 2 ? value : `${value.slice(0, 2)}***`;
+}
+
 // In-memory store (survives restarts via Supabase in T8; fine for now)
 const pendingRequests = new Map(); // id → request object
 const completedCards  = new Map(); // id → card result
@@ -44,7 +49,7 @@ router.post('/request', async (req, res) => {
 
   pendingRequests.set(id, request);
   saveCardRequest(request).catch(() => {});
-  log(`[card] New request ${id} — ${agent}: $${amount} for "${purpose}"`);
+  log(`[card] New request ${id} — agent=${maskAgent(agent)} amount=$${amount}`);
 
   // Notify Shayan on Telegram
   try {
@@ -107,7 +112,7 @@ async function approveCardRequest(id) {
   const result = { ...request, status: 'approved', card, approvedAt: new Date().toISOString() };
   completedCards.set(id, result);
   saveCardRequest(result).catch(() => {});
-  log(`[card] Approved ${id} — card token: ${card.token}`);
+  log(`[card] Approved ${id} — token redacted`);
   return result;
 }
 

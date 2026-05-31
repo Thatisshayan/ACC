@@ -4,11 +4,12 @@ const { getSnapshot, approveSnapshot, deleteSnapshot, listPendingSnapshots } = r
 const { saveToNotion }  = require("../memory/notionStorage.js");
 const { signApproval }  = require("../security/signedApprovals.js");
 const { log }           = require("../utils/logger.js");
+const { requireApprovalFreshness, requireOperatorOrAdmin } = require("../middleware/auth.js");
 
 const router = express.Router();
 
 // ── List pending snapshots ────────────────────────────────────────────────────
-router.get("/snapshots/pending", (req, res) => {
+router.get("/snapshots/pending", requireOperatorOrAdmin, (req, res) => {
   const pending = listPendingSnapshots().map(s => ({
     id:          s.id,
     meta:        s.meta,
@@ -20,16 +21,17 @@ router.get("/snapshots/pending", (req, res) => {
 });
 
 // ── Approve or reject a snapshot ─────────────────────────────────────────────
-router.post("/snapshot/approve", async (req, res) => {
-  const { snapshotId, approve, approver } = req.body || {};
+router.post("/snapshot/approve", requireOperatorOrAdmin, requireApprovalFreshness, async (req, res) => {
+  const { snapshotId, approve } = req.body || {};
+  const approver = req.auth?.subject || "unknown";
+  const role = req.auth?.role;
 
   if (!snapshotId || typeof approve !== "boolean") {
     return res.status(400).json({ success: false, error: "snapshotId (string) and approve (boolean) are required." });
   }
 
-  // Only Shayan can approve
-  if (approver !== "Shayan") {
-    return res.status(403).json({ success: false, error: "Only Shayan can approve snapshots." });
+  if (role !== "operator" && role !== "admin") {
+    return res.status(403).json({ success: false, error: "Forbidden" });
   }
 
   const snap = getSnapshot(snapshotId);

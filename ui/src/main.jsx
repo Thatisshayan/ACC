@@ -12,19 +12,52 @@ if (SENTRY_DSN) {
 }
 
 class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(err) { return { error: err }; }
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[ErrorBoundary]', error, info?.componentStack);
+  }
+
   render() {
-    if (!this.state.error) return this.props.children;
-    return (
-      <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', color: '#00ff88', padding: 32 }}>
-        <div style={{ maxWidth: 540, textAlign: 'center' }}>
-          <div style={{ fontSize: 13, letterSpacing: '0.2em', opacity: 0.5, marginBottom: 12 }}>ACC — RUNTIME ERROR</div>
-          <div style={{ color: '#ff4444', fontSize: 14, marginBottom: 16, wordBreak: 'break-word' }}>{String(this.state.error?.message || this.state.error)}</div>
-          <button onClick={() => window.location.reload()} style={{ border: '1px solid #00ff8840', background: '#00ff8810', color: '#00ff88', padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>Reload</button>
+    if (this.state.error) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', height: '100vh',
+          background: '#050508', color: '#e2e8f0',
+          fontFamily: 'Inter, system-ui, sans-serif', padding: 24,
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.6 }}>⚠</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#f87171', marginBottom: 8 }}>
+            ACC encountered an error
+          </div>
+          <div style={{
+            fontSize: 12, color: '#71717a', maxWidth: 420,
+            textAlign: 'center', lineHeight: 1.6, marginBottom: 24,
+          }}>
+            {this.state.error.message || 'An unexpected error occurred.'}
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '8px 20px', cursor: 'pointer', fontSize: 13,
+              background: 'rgba(26,255,140,0.10)', color: '#1aff8c',
+              border: '1px solid rgba(26,255,140,0.25)', borderRadius: 10,
+            }}
+          >
+            Reload
+          </button>
         </div>
-      </div>
-    );
+      );
+    }
+    return this.props.children;
   }
 }
 

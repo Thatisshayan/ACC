@@ -21,16 +21,73 @@ function resolveApiBase() {
 const API_BASE = resolveApiBase();
 const api = axios.create({ baseURL: API_BASE ? `${API_BASE}/api` : '/api' });
 
-if (TASKBUS_KEY) {
-  api.defaults.headers.common['Authorization'] = `Bearer ${TASKBUS_KEY}`;
+function getAdminToken() {
+  if (typeof window !== 'undefined') {
+    const sessionToken = String(window.sessionStorage?.getItem('acc_admin_token') || '').trim();
+    if (sessionToken) return sessionToken;
+    const local = String(window.localStorage?.getItem('acc_admin_token') || '').trim();
+    if (local) return local;
+  }
+  return TASKBUS_KEY;
+}
+
+function getAdminRole() {
+  if (typeof window !== 'undefined') {
+    const role = String(window.sessionStorage?.getItem('acc_admin_role') || window.localStorage?.getItem('acc_admin_role') || '').trim();
+    if (role) return role;
+  }
+  return '';
+}
+
+api.interceptors.request.use((config) => {
+  const token = getAdminToken();
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+    const role = getAdminRole();
+    if (role) config.headers['x-acc-admin-role'] = role;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    if (status === 401 && typeof window !== 'undefined' && window.location?.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+function buildApprovalFreshness() {
+  const ts = Date.now();
+  const nonce = `ui-${ts}-${Math.random().toString(16).slice(2, 10)}`;
+  return {
+    headers: {
+      'x-approval-timestamp': String(ts),
+      'x-approval-nonce': nonce,
+    },
+    body: {
+      timestamp: ts,
+      nonce,
+    },
+  };
 }
 
 // ── UI / admin ────────────────────────────────────────────────────────────────
 export const getDashboard    = () => api.get("/ui/dashboard").then(r => r.data);
 export const listSnapshots   = () => api.get("/ui/snapshots").then(r => r.data);
 export const getSnapshot     = (id) => api.get(`/ui/snapshot/${id}`).then(r => r.data);
-export const approveSnapshot = (id) => api.post(`/ui/snapshot/${id}/approve`, { approver: "Shayan" }).then(r => r.data);
-export const rejectSnapshot  = (id) => api.post(`/ui/snapshot/${id}/reject`,  { approver: "Shayan" }).then(r => r.data);
+export const approveSnapshot = (id) => {
+  const freshness = buildApprovalFreshness();
+  return api.post(`/ui/snapshot/${id}/approve`, freshness.body, { headers: freshness.headers }).then(r => r.data);
+};
+export const rejectSnapshot  = (id) => {
+  const freshness = buildApprovalFreshness();
+  return api.post(`/ui/snapshot/${id}/reject`, freshness.body, { headers: freshness.headers }).then(r => r.data);
+};
 export const listApprovals   = () => api.get("/ui/approvals").then(r => r.data);
 export const listSecrets     = () => api.get("/ui/secrets").then(r => r.data);
 export const getAdminSystem     = () => api.get("/admin/system").then(r => r.data);

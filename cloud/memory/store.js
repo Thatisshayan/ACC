@@ -151,4 +151,22 @@ function stats() {
   return { total_memories: total, scopes, total_events: events };
 }
 
-module.exports = { remember, recall, recallAll, search, logEvent, getEvents, forget, forgetScope, stats };
+function exportScope(scope) {
+  var rows = db.prepare(`
+    SELECT * FROM memories
+    WHERE scope = ?
+    ORDER BY updated_at DESC
+  `).all(scope || 'global');
+  return rows.map(function(r) {
+    var val;
+    try { val = JSON.parse(r.value); } catch (_) { val = r.value; }
+    return Object.assign({}, r, { value: val });
+  });
+}
+
+function pruneExpired() {
+  var mem = db.prepare(`DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')`).run().changes;
+  return { deleted_memories: mem };
+}
+
+module.exports = { remember, recall, recallAll, search, logEvent, getEvents, forget, forgetScope, stats, exportScope, pruneExpired };

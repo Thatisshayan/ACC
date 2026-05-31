@@ -3,8 +3,10 @@
 // Receives Telegram webhook updates and routes to real bot handlers
 const express = require('express');
 const router  = express.Router();
+const { requireTelegramSecret } = require('../security/webhookHmac.js');
+const { requireOperatorOrAdmin } = require('../middleware/auth.js');
 
-router.post('/webhook/telegram', async (req, res) => {
+router.post('/webhook/telegram', requireTelegramSecret(), async (req, res) => {
   // Always return 200 immediately — Telegram requires this
   res.status(200).json({ ok: true });
 
@@ -38,7 +40,7 @@ router.post('/webhook/telegram', async (req, res) => {
 });
 
 // Info endpoint — check webhook status
-router.get('/webhook/telegram/info', async (req, res) => {
+router.get('/webhook/telegram/info', requireOperatorOrAdmin, async (req, res) => {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return res.json({ error: 'TELEGRAM_BOT_TOKEN not set' });
   const https = require('https');

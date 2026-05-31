@@ -29,9 +29,9 @@ function requireTelegramSecret() {
   return function telegramSecretMiddleware(req, res, next) {
     if (!secret) {
       if (process.env.NODE_ENV === 'production') {
-        return res.status(503).json({ success: false, error: 'Webhook not configured' });
+        return res.status(503).json({ success: false, error: 'Telegram webhook secret not configured.' });
       }
-      return next(); // dev: passthrough
+      return next(); // non-production passthrough
     }
 
     var header = req.headers['x-telegram-bot-api-secret-token'] || '';
@@ -70,7 +70,10 @@ function requireHmacSignature(opts) {
     var secret = process.env[envVar] || '';
     if (!secret) {
       console.warn('[webhookHmac] ' + envVar + ' not set — HMAC validation disabled for this route');
-      return next();
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ success: false, error: 'Webhook HMAC secret not configured.' });
+      }
+      return next(); // non-production passthrough
     }
 
     // express.raw() puts the body in req.body as a Buffer.
