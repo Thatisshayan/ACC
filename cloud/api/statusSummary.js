@@ -6,6 +6,15 @@ const botLock = require('../telegram/botLock.js');
 const { getBridgeStatus } = require('../services/alphonsoBridgeService.js');
 const messages = require('../messages/service.js');
 
+function providerHealth() {
+  return {
+    deepseek: { configured: !!process.env.DEEPSEEK_API_KEY,  note: process.env.DEEPSEEK_API_KEY  ? 'key set' : 'DEEPSEEK_API_KEY missing'  },
+    openai:   { configured: !!process.env.OPENAI_API_KEY,    note: process.env.OPENAI_API_KEY    ? 'key set' : 'OPENAI_API_KEY missing'    },
+    gemini:   { configured: !!process.env.GEMINI_API_KEY,    note: process.env.GEMINI_API_KEY    ? 'key set' : 'GEMINI_API_KEY missing'    },
+    claude:   { configured: !!process.env.CLAUDE_API_KEY,    note: 'disabled — credits depleted' },
+  };
+}
+
 const router = express.Router();
 
 function safeStats() {
@@ -58,6 +67,7 @@ function buildSummary() {
       byStatus: stats.by_status || {},
       byAgent: stats.by_agent || {},
     },
+    providers: providerHealth(),
     notes: [
       'Backend truth comes from the live route itself.',
       'Bot truth comes from the file-backed lock.',
@@ -74,6 +84,10 @@ router.get('/', function(req, res) {
 
 router.get('/summary', function(req, res) {
   res.json(buildSummary());
+});
+
+router.get('/providers', function(req, res) {
+  res.json({ success: true, providers: providerHealth() });
 });
 
 module.exports = router;

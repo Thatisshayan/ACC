@@ -54,7 +54,7 @@ router.post('/request', async (req, res) => {
     // Don't fail the request — it's still pending
   }
 
-  return res.json({ success: true, requestId: id, status: 'pending', message: 'Approval request sent to Shayan via Telegram.' });
+  return res.json({ success: true, requestId: id, status: 'pending', message: 'Card approval request sent via Telegram.' });
 });
 
 // GET /api/card/pending — list all pending requests
@@ -116,7 +116,7 @@ function rejectCardRequest(id, reason) {
   const request = pendingRequests.get(id);
   if (!request) throw new Error(`Card request ${id} not found.`);
   pendingRequests.delete(id);
-  const result = { ...request, status: 'rejected', reason: reason || 'Rejected by Shayan', rejectedAt: new Date().toISOString() };
+  const result = { ...request, status: 'rejected', reason: reason || 'Rejected by owner', rejectedAt: new Date().toISOString() };
   completedCards.set(id, result);
   log(`[card] Rejected ${id}`);
   return result;

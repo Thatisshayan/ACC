@@ -26,7 +26,7 @@ var workflowRegistry = require('../workflows/registry.js');
 var replicateVideo = require('../integrations/replicate.js');
 
 var TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
-var CHAT_ID  = process.env.SHAYAN_TELEGRAM_CHAT_ID || 'REDACTED';
+var CHAT_ID  = process.env.ACC_OWNER_TELEGRAM_CHAT_ID || process.env.SHAYAN_TELEGRAM_CHAT_ID || 'REDACTED';
 var ACC_PORT = process.env.PORT || '4000';
 var BASE     = 'https://api.telegram.org/bot' + TOKEN;
 function resolveMiniWebappUrl() {

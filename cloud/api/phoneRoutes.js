@@ -102,7 +102,7 @@ router.post('/webhook/voice', async (req, res) => {
 
 async function notifyTelegram(text) {
   const token  = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.SHAYAN_TELEGRAM_CHAT_ID || process.env.SAYAN_TELEGRAM_CHAT_ID;
+  const chatId = process.env.ACC_OWNER_TELEGRAM_CHAT_ID || process.env.SHAYAN_TELEGRAM_CHAT_ID || process.env.SAYAN_TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method:  'POST',

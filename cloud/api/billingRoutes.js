@@ -116,12 +116,21 @@ router.post('/checkout', async (req, res) => {
   }
 });
 
-// GET /api/billing/subscription/:email — check subscription status
-router.get('/subscription/:email', (req, res) => {
+// GET /api/billing/subscription/:email — check subscription status (requires Bearer token)
+router.get('/subscription/:email', requireBillingAuth, (req, res) => {
   const sub = subscriptions.get(req.params.email.toLowerCase());
   if (!sub) return res.json({ success: true, active: false, tier: null });
   return res.json({ success: true, active: sub.status === 'active', tier: sub.tier, status: sub.status, updatedAt: sub.updatedAt });
 });
+
+function requireBillingAuth(req, res, next) {
+  const key = process.env.TASKBUS_API_KEY;
+  if (!key) return next(); // open in dev
+  const auth  = req.headers['authorization'] || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token || token !== key) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  return next();
+}
 
 // POST /api/billing/webhook — Stripe sends events here
 // Set in Stripe dashboard: Developers → Webhooks → Add endpoint → /api/billing/webhook
