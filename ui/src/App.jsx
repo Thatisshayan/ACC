@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import OnboardingChecklist from './components/OnboardingChecklist.jsx';
 import {
   getTaskbusStats, getTaskbusTasks, getTaskbusIntegrations,
   listAgents, createTask, listWorkflows, runWorkflow, runWorkflowParallel,
@@ -576,6 +577,9 @@ export default function App() {
 
     return (
       <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+
+        {/* ── Onboarding checklist — shown until dismissed ─────────────────── */}
+        <OnboardingChecklist />
 
         {/* ── Banner hero ────────────────────────────────────────────────────── */}
         <div className="relative overflow-hidden rounded-3xl border border-acc-green/20 bg-black shadow-[0_0_60px_rgba(26,255,140,0.07)]">
