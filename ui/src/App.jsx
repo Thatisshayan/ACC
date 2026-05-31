@@ -1,30 +1,37 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
+  LayoutDashboard, CheckSquare, ShieldCheck, MessageSquare, Mic,
+  Bot, Plug, Search, Shield, Settings, ChevronLeft, ChevronRight,
+  Zap, Clock, CheckCircle2, XCircle, AlertTriangle, Activity,
+  Terminal, Send, ArrowRight, RefreshCw, Wifi, WifiOff,
+  TrendingUp, Users, Layers, Bell, Circle, Play, MoreHorizontal,
+  GitMerge, Repeat, Mail,
+} from 'lucide-react';
+import {
   getTaskbusStats, getTaskbusTasks, getTaskbusIntegrations,
-  listAgents, createTask, listWorkflows, runWorkflow, runWorkflowParallel,
+  listAgents, createTask, listWorkflows, runWorkflow,
   getAlphonsoBridgeStatus, listAlphonsoBridgePackets,
-  getSocialclawAccounts, getSocialclawUsage,
-  previewSocialclawCampaign, validateSocialclawCampaign,
-  publishSocialclawCampaign, deleteSocialclawPost,
 } from './api.js';
 import api from './api.js';
 import { getRuntimeApiBaseUrl } from './lib/api.js';
-import MessengerPage from './pages/Messenger.jsx';
-import AssistantPage from './pages/Assistant.jsx';
-import AdminPage     from './pages/Admin.jsx';
-import AuditPage     from './pages/Audit.jsx';
+import MessengerPage  from './pages/Messenger.jsx';
+import AssistantPage  from './pages/Assistant.jsx';
+import AdminPage      from './pages/Admin.jsx';
+import AuditPage      from './pages/Audit.jsx';
+import SynapsePage    from './pages/Synapse.jsx';
+import WorkflowsPage  from './pages/Workflows.jsx';
+import AutonomyPage   from './pages/Autonomy.jsx';
 
 const IS_ELECTRON_FILE = typeof window !== 'undefined' && window.location?.protocol === 'file:';
 const API = getRuntimeApiBaseUrl();
 
-// ── Live pulse hook ───────────────────────────────────────────────────────────
+// ── Hooks ─────────────────────────────────────────────────────────────────────
 function useLivePulse(ms = 1800) {
   const [on, setOn] = useState(true);
   useEffect(() => { const id = setInterval(() => setOn(v => !v), ms); return () => clearInterval(id); }, [ms]);
   return on;
 }
 
-// ── Count-up hook ─────────────────────────────────────────────────────────────
 function useCountUp(target, duration = 900) {
   const [val, setVal] = useState(0);
   const prevRef = useRef(0);
@@ -46,7 +53,6 @@ function useCountUp(target, duration = 900) {
   return val;
 }
 
-// ── Elapsed timer ─────────────────────────────────────────────────────────────
 function useElapsed() {
   const [s, setS] = useState(0);
   useEffect(() => { const id = setInterval(() => setS(v => v + 1), 1000); return () => clearInterval(id); }, []);
@@ -56,377 +62,302 @@ function useElapsed() {
   return `${h}:${m}:${sec}`;
 }
 
-// ── Backend status ────────────────────────────────────────────────────────────
-const DEFAULT_BACKEND_STATUS = { status: 'Offline', detail: 'Checking…', lastCheckedAt: null };
-function normalizeBackendStatus(next) {
-  if (!next) return DEFAULT_BACKEND_STATUS;
-  if (typeof next === 'string') return { ...DEFAULT_BACKEND_STATUS, status: next };
-  return { status: next.status || 'Offline', detail: next.detail || '…', lastCheckedAt: next.lastCheckedAt || null };
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const DEFAULT_BACKEND = { status: 'Offline', detail: 'Checking…', lastCheckedAt: null };
 
-// ── Misc helpers ──────────────────────────────────────────────────────────────
 function taskTime(value) {
   if (!value) return 'just now';
-  try { return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
-  catch { return 'just now'; }
+  try {
+    const d = new Date(value);
+    const now = Date.now();
+    const diff = Math.floor((now - d.getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch { return 'just now'; }
 }
 
-const AGENT_ICONS = {
-  chatgpt: '🧠', claude: '✳️', gemini: '💎', notebooklm: '📓',
-  clickup: '📋', crewai: '👥', replicate_video: '🎬',
-  openhands: '🤝', aider: '⚡', devika: '🤖', alphonso: '🦙',
-  composio: '🔌', perplexity: '🔍', deepseek: '🧬',
+const STATUS_STYLE = {
+  done:             { color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', label: 'Done' },
+  completed:        { color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', label: 'Done' },
+  failed:           { color: 'text-red-400',     bg: 'bg-red-500/10 border-red-500/20',         label: 'Failed' },
+  pending:          { color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',     label: 'Pending' },
+  in_progress:      { color: 'text-sky-400',     bg: 'bg-sky-500/10 border-sky-500/20',         label: 'Running' },
+  waiting_approval: { color: 'text-purple-400',  bg: 'bg-purple-500/10 border-purple-500/20',   label: 'Review' },
 };
 
-// ── Navigation ────────────────────────────────────────────────────────────────
+function StatusPill({ status }) {
+  const s = STATUS_STYLE[status] || { color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', label: status };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-medium ${s.bg} ${s.color}`}>
+      {s.label}
+    </span>
+  );
+}
+
 const NAV = [
-  { id: 'dashboard',    label: 'Dashboard',    icon: '📊' },
-  { id: 'tasks',        label: 'Tasks',         icon: '📋' },
-  { id: 'approvals',    label: 'Approvals',     icon: '✅' },
-  { id: 'messages',     label: 'Messages',     icon: '💬' },
-  { id: 'assistant',    label: 'Assistant',    icon: '🎙️' },
-  { id: 'agents',       label: 'Agents',        icon: '🤖' },
-  { id: 'integrations', label: 'Integrations',  icon: '🔗' },
-  { id: 'audit',        label: 'Audit',         icon: '🔍' },
-  { id: 'admin',        label: 'Admin',         icon: '🛡️' },
-  { id: 'settings',     label: 'Settings',      icon: '⚙️' },
+  { id: 'dashboard',    label: 'Dashboard',    Icon: LayoutDashboard },
+  { id: 'tasks',        label: 'Tasks',         Icon: CheckSquare },
+  { id: 'approvals',    label: 'Approvals',     Icon: ShieldCheck },
+  { id: 'messages',     label: 'Messages',      Icon: MessageSquare },
+  { id: 'assistant',    label: 'Assistant',     Icon: Mic },
+  { id: 'synapse',      label: 'Synapse',        Icon: Zap },
+  { id: 'workflows',    label: 'Workflows',      Icon: GitMerge },
+  { id: 'autonomy',     label: 'Autonomy',       Icon: Repeat },
+  { id: 'agents',       label: 'Agents',        Icon: Bot },
+  { id: 'integrations', label: 'Integrations',  Icon: Plug },
+  { id: 'audit',        label: 'Audit',         Icon: Search },
+  { id: 'admin',        label: 'Admin',         Icon: Shield },
+  { id: 'settings',     label: 'Settings',      Icon: Settings },
 ];
 
 const MOBILE_NAV = [
-  { id: 'dashboard',  label: 'Home',    icon: '🏠' },
-  { id: 'messages',   label: 'Chat',    icon: '💬' },
-  { id: 'assistant',  label: 'Talk',    icon: '🎙️' },
-  { id: 'approvals',  label: 'Approve', icon: '✅' },
-  { id: 'settings',   label: 'More',    icon: '⚙️' },
+  { id: 'dashboard',  label: 'Home',    Icon: LayoutDashboard },
+  { id: 'messages',   label: 'Chat',    Icon: MessageSquare },
+  { id: 'assistant',  label: 'Assist',  Icon: Mic },
+  { id: 'approvals',  label: 'Review',  Icon: ShieldCheck },
+  { id: 'settings',   label: 'More',    Icon: Settings },
 ];
 
-const PAGE_PATHS = new Set(['dashboard','mini','tasks','approvals','messages','assistant','agents','integrations','audit','admin','settings']);
+const PAGE_PATHS = new Set(['dashboard','tasks','approvals','messages','assistant','synapse','workflows','autonomy','agents','integrations','audit','admin','settings']);
 function pathToPage(p) { const n = String(p||'').replace(/^\/+/,'').trim().toLowerCase(); return PAGE_PATHS.has(n) ? n : 'dashboard'; }
 
-// ── Shared UI components ──────────────────────────────────────────────────────
-function Surface({ className = '', children, glow = false }) {
+// ── Shared UI ─────────────────────────────────────────────────────────────────
+function Card({ className = '', children, glow = false }) {
   return (
-    <div className={`rounded-3xl border border-white/[0.07] bg-[#0d0d14] shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur ${glow ? 'border-glow-green' : ''} ${className}`}>
+    <div className={`rounded-2xl border border-white/[0.07] bg-[#0c0c18] ${glow ? 'border-[#1aff8c]/30 shadow-[0_0_24px_rgba(26,255,140,0.06)]' : ''} ${className}`}>
       {children}
     </div>
   );
 }
 
-function Badge({ status }) {
-  const map = {
-    done:             'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-    completed:        'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-    failed:           'bg-red-500/15 text-red-400 border-red-500/25',
-    pending:          'bg-amber-500/15 text-amber-400 border-amber-500/25',
-    in_progress:      'bg-blue-500/15 text-blue-400 border-blue-500/25',
-    waiting_approval: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-  };
-  return <span className={`px-2 py-0.5 rounded-md text-xs border ${map[status] || 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20'}`}>{status}</span>;
-}
-
-function SectionHeader({ eyebrow, title, description, action }) {
+function StatCard({ label, value, sub, icon: Icon, color = '#1aff8c', trend }) {
+  const animated = useCountUp(value);
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div className="space-y-1">
-        {eyebrow && <div className="text-[10px] uppercase tracking-[0.28em] text-acc-green/60">{eyebrow}</div>}
-        <h3 className="text-xl font-semibold text-white">{title}</h3>
-        {description && <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">{description}</p>}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  );
-}
-
-function MetricCard({ label, value, detail, icon, tone = '' }) {
-  return (
-    <div className={`rounded-2xl border border-white/[0.07] bg-black/30 p-5 ${tone}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="text-3xl font-bold stat-number text-white">{value}</div>
-          <div className="text-sm text-zinc-400">{label}</div>
+    <Card className="p-5 group hover:border-white/[0.12] transition-colors duration-200">
+      <div className="flex items-start justify-between mb-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: color + '12', border: `1px solid ${color}22` }}>
+          <Icon size={16} style={{ color }} />
         </div>
-        {icon && <div className="rounded-2xl border border-white/[0.08] bg-black/30 px-3 py-2 text-lg leading-none text-zinc-200">{icon}</div>}
+        {trend !== undefined && (
+          <span className={`text-[11px] font-medium ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {trend >= 0 ? '+' : ''}{trend}%
+          </span>
+        )}
       </div>
-      {detail && <div className="mt-4 text-xs leading-relaxed text-zinc-500">{detail}</div>}
-    </div>
+      <div className="text-2xl font-bold text-white stat-number">{animated}</div>
+      <div className="text-xs text-zinc-500 mt-0.5 font-medium">{label}</div>
+      {sub && <div className="text-[11px] text-zinc-600 mt-1">{sub}</div>}
+    </Card>
   );
 }
 
-// ── Live status bar ───────────────────────────────────────────────────────────
-function StatusBar({ backend }) {
-  const pulse = useLivePulse(1200);
-  const uptime = useElapsed();
-  const isOnline = backend.status === 'Online';
+function LiveDot({ size = 6 }) {
+  const pulse = useLivePulse(1400);
   return (
-    <div className="flex items-center gap-3 text-[11px] font-mono">
-      <div className="flex items-center gap-1.5">
-        <span className={`w-1.5 h-1.5 rounded-full transition-opacity duration-300 ${isOnline ? 'bg-acc-green' : 'bg-zinc-600'} ${isOnline && pulse ? 'opacity-100' : 'opacity-40'}`} />
-        <span className={isOnline ? 'text-acc-green' : 'text-zinc-500'}>{backend.status.toUpperCase()}</span>
-      </div>
-      {isOnline && (
-        <>
-          <span className="text-zinc-700">|</span>
-          <span className="text-zinc-500">UP {uptime}</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ── ACC Logo component ────────────────────────────────────────────────────────
-function ACCLogo({ size = 36, collapsed = false }) {
-  return (
-    <div className="flex items-center gap-2.5 min-w-0">
-      <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
-        <img
-          src="/acc-logo.png"
-          alt="ACC"
-          className="w-full h-full object-contain rounded-full float"
-          onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-          style={{ display: 'block' }}
-        />
-        <div style={{ display: 'none' }} className="w-full h-full items-center justify-center rounded-full border border-acc-green/40 bg-acc-green/5 glow-green">
-          <img src="/acc-logo.svg" alt="ACC" className="w-full h-full" />
-        </div>
-        {/* live ripple ring */}
-        <span className="absolute inset-0 rounded-full border border-acc-green/20 animate-[ripple_2.5s_ease-out_infinite]" />
-      </div>
-      {!collapsed && (
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-white tracking-wider">ACC</div>
-          <div className="text-[9px] text-acc-green/60 tracking-[0.2em] uppercase">Command Center</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Live dot ─────────────────────────────────────────────────────────────────
-function LiveDot() {
-  return (
-    <span className="relative inline-flex items-center gap-1.5">
-      <span className="live-dot" />
-      <span className="text-[10px] font-bold text-acc-green tracking-widest uppercase">Live</span>
+    <span className="relative flex items-center justify-center" style={{ width: size + 4, height: size + 4 }}>
+      <span className="absolute rounded-full animate-ping" style={{ width: size + 4, height: size + 4, background: '#1aff8c22' }} />
+      <span className="rounded-full" style={{ width: size, height: size, background: '#1aff8c', opacity: pulse ? 1 : 0.5, transition: 'opacity 0.3s' }} />
     </span>
   );
 }
 
-// ── Animated stat card ────────────────────────────────────────────────────────
-function AnimatedStatCard({ label, value, color = 'text-white', sub, icon }) {
-  const animated = useCountUp(value);
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function Sidebar({ page, setPage, collapsed, setCollapsed, pending, backend }) {
+  const isOnline = backend.status === 'Online';
+  const uptime = useElapsed();
+
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-black/40 p-5 hover:border-acc-green/20 transition-all duration-300 group">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        {icon && <span className="text-xl opacity-70">{icon}</span>}
-        <LiveDot />
+    <aside className={`hidden md:flex flex-col flex-shrink-0 border-r border-white/[0.06] bg-[#07071a] transition-all duration-200 ${collapsed ? 'w-[60px]' : 'w-[220px]'}`}>
+      {/* Logo */}
+      <div className={`flex items-center border-b border-white/[0.06] ${collapsed ? 'justify-center px-3 py-4' : 'gap-3 px-4 py-4'}`}>
+        <div className="relative flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-[#1aff8c]/10 border border-[#1aff8c]/25 flex items-center justify-center">
+            <Terminal size={15} className="text-[#1aff8c]" />
+          </div>
+          {isOnline && <LiveDot size={5} />}
+        </div>
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-white tracking-wider leading-none">ACC</div>
+            <div className="text-[9px] text-[#1aff8c]/50 tracking-[0.25em] uppercase mt-0.5">Command Center</div>
+          </div>
+        )}
+        {!collapsed && (
+          <button onClick={() => setCollapsed(true)} className="text-zinc-600 hover:text-zinc-300 transition-colors ml-auto">
+            <ChevronLeft size={14} />
+          </button>
+        )}
       </div>
-      <div className={`text-3xl font-bold stat-number count-in ${color}`}>{animated}</div>
-      <div className="text-zinc-500 text-xs mt-1 uppercase tracking-[0.18em]">{label}</div>
-      {sub && <div className="text-zinc-600 text-[10px] mt-0.5">{sub}</div>}
-    </div>
+
+      {/* Nav */}
+      <nav className="flex-1 py-3 overflow-y-auto scrollbar-hide">
+        {NAV.map(({ id, label, Icon }) => {
+          const active = page === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setPage(id)}
+              className={`w-full flex items-center transition-all duration-150 relative
+                ${collapsed ? 'justify-center px-2 py-2.5 mx-1 rounded-xl' : 'gap-3 px-3 py-2.5 mx-2 rounded-xl'}
+                ${active
+                  ? 'bg-[#1aff8c]/10 text-[#1aff8c]'
+                  : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
+                }`}
+              style={{ width: collapsed ? 44 : 'calc(100% - 16px)' }}
+              title={collapsed ? label : undefined}
+            >
+              <Icon size={16} className="flex-shrink-0" />
+              {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
+              {!collapsed && id === 'approvals' && pending.length > 0 && (
+                <span className="ml-auto bg-amber-500 text-black text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center blink">
+                  {pending.length}
+                </span>
+              )}
+              {collapsed && id === 'approvals' && pending.length > 0 && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-amber-500 rounded-full blink" />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Status footer */}
+      <div className="p-3 border-t border-white/[0.06]">
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-2">
+            <button onClick={() => setCollapsed(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+              <ChevronRight size={14} />
+            </button>
+            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#1aff8c]' : 'bg-zinc-600'}`} />
+          </div>
+        ) : (
+          <div className="rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2.5">
+            <div className="flex items-center gap-2 mb-1">
+              {isOnline ? <Wifi size={11} className="text-[#1aff8c]" /> : <WifiOff size={11} className="text-zinc-500" />}
+              <span className={`text-[11px] font-mono font-medium ${isOnline ? 'text-[#1aff8c]' : 'text-zinc-500'}`}>
+                {backend.status.toUpperCase()}
+              </span>
+            </div>
+            {isOnline && <div className="text-[10px] text-zinc-600 font-mono">UP {uptime}</div>}
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
 
-// ── Mini launcher (self-contained so launch state doesn't live in App) ────────
-function MiniLauncher({
-  miniWorkflow, runtimeOverall, bridgeStatus, bridgeConfigured,
-  quickCards, launcherWorkflows, backend, integrations, stats, pending,
-  setPage, setMiniWorkflowContext,
-}) {
-  const [launching, setLaunching] = React.useState(null);   // workflowId being launched
-  const [launchResult, setLaunchResult] = React.useState(null); // { ok, name, taskId, error }
+// ── Gmail Connect Panel (Settings 5.1.2) ──────────────────────────────────────
+function GmailConnectPanel() {
+  const [creds, setCreds]     = useState([]);
+  const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [msg, setMsg]         = useState(null);
 
-  async function handleLaunch(workflow) {
-    if (launching) return;
-    setLaunching(workflow.id);
-    setLaunchResult(null);
+  useEffect(() => {
+    fetch(API + '/api/email/credentials?userId=default')
+      .then(r => r.json())
+      .then(d => setCreds(d.credentials || []))
+      .catch(() => {});
+  }, []);
+
+  async function testAndSave() {
+    if (!email || !password) { setMsg({ ok: false, text: 'Email and App Password required.' }); return; }
+    setTesting(true);
+    setMsg(null);
     try {
-      const res = await runWorkflow(workflow.id, { created_by: 'ui:mini' });
-      setLaunchResult({ ok: true, name: workflow.name, taskId: res.task?.id });
-      // Navigate to tasks after short delay so user sees the success toast
-      setTimeout(() => { setPage('tasks'); }, 1400);
-    } catch (err) {
-      const msg = err?.response?.data?.error || err?.message || 'Launch failed';
-      setLaunchResult({ ok: false, name: workflow.name, error: msg });
-    } finally {
-      setLaunching(null);
-    }
+      const r = await fetch(API + '/api/email/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const d = await r.json();
+      if (!d.success) { setMsg({ ok: false, text: d.error || 'Connection failed' }); return; }
+      setSaving(true);
+      const r2 = await fetch(API + '/api/email/credentials', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'default', email, password, provider: 'gmail' }),
+      });
+      const d2 = await r2.json();
+      if (!d2.success) throw new Error(d2.error);
+      setMsg({ ok: true, text: 'Gmail connected!' });
+      setEmail(''); setPassword('');
+      const r3 = await fetch(API + '/api/email/credentials?userId=default');
+      const d3 = await r3.json();
+      setCreds(d3.credentials || []);
+    } catch(e) {
+      setMsg({ ok: false, text: e.message });
+    } finally { setTesting(false); setSaving(false); }
+  }
+
+  async function remove(id) {
+    await fetch(API + `/api/email/credentials/${id}`, { method: 'DELETE' });
+    setCreds(c => c.filter(x => x.id !== id));
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
-
-      {/* Launch result toast */}
-      {launchResult && (
-        <div className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-mono
-          ${launchResult.ok
-            ? 'border-acc-green/25 bg-acc-green/10 text-acc-green'
-            : 'border-red-500/25 bg-red-500/10 text-red-400'}`}>
-          <span>
-            {launchResult.ok
-              ? `Queued: ${launchResult.name} — task ${launchResult.taskId ? launchResult.taskId.slice(0, 8) : '…'}`
-              : `Failed: ${launchResult.name} — ${launchResult.error}`}
-          </span>
-          <button onClick={() => setLaunchResult(null)} className="opacity-50 hover:opacity-100">✕</button>
+    <Card className="p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Mail size={14} className="text-zinc-400" />
+        <div className="text-sm font-semibold text-white">Email Monitoring</div>
+        <span className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-600 ml-auto">Gmail / IMAP</span>
+      </div>
+      <p className="text-xs text-zinc-500 mb-4">
+        Connect Gmail to monitor your inbox. ACC polls for new emails and sends a Telegram summary.
+        Use a <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noreferrer" className="text-[#1aff8c]/70 underline">Google App Password</a> — not your regular password.
+      </p>
+      {creds.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {creds.map(c => (
+            <div key={c.id} className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${c.enabled ? 'bg-[#1aff8c]' : 'bg-zinc-600'}`} />
+                <span className="text-xs text-zinc-300">{c.email}</span>
+                <span className="text-[10px] text-zinc-600">{c.provider}</span>
+              </div>
+              <button onClick={() => remove(c.id)} className="text-[11px] text-zinc-600 hover:text-red-400 transition-colors">remove</button>
+            </div>
+          ))}
         </div>
       )}
-
-      <div className={`${shell} overflow-hidden`}>
-        <div className="relative p-5 md:p-7">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_28%)]" />
-          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <Badge tone="emerald">ACC mini web app</Badge>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                Shared launch surface for mobile and Telegram.
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400 md:text-base">
-                This is the compact, public, workflow-first surface that both mobile and Telegram can open. It stays on the same ACC backend source of truth.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge tone={runtimeOverall === 'healthy' ? 'emerald' : 'amber'}>{runtimeOverall}</Badge>
-              <Badge tone={bridgeConfigured ? 'emerald' : 'amber'}>{bridgeConfigured ? 'bridge ready' : 'bridge setup'}</Badge>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {quickCards.map((card) => (
-              <Metric key={card.label} label={card.label} value={card.value} detail={card.detail} />
-            ))}
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button onClick={() => setPage('tasks')} className="rounded-xl border border-acc-green/20 bg-acc-green/10 px-4 py-2 text-sm font-semibold text-acc-green">Open tasks</button>
-            <button onClick={() => setPage('approvals')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open approvals</button>
-            <button onClick={() => setPage('assistant')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open assistant</button>
-            <button onClick={() => setPage('dashboard')} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-200">Open dashboard</button>
-          </div>
-          {miniWorkflow && (
-            <div className="mt-4 rounded-2xl border border-acc-green/15 bg-acc-green/[0.06] px-4 py-3 text-sm text-zinc-200">
-              Workflow context: <span className="font-semibold text-white">{miniWorkflow}</span>
-            </div>
-          )}
-        </div>
+      <div className="grid sm:grid-cols-2 gap-2 mb-3">
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="you@gmail.com"
+          className="rounded-xl border border-white/[0.10] bg-black/40 px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none" />
+        <input value={password} onChange={e => setPassword(e.target.value)} placeholder="App password (16 chars)" type="password"
+          className="rounded-xl border border-white/[0.10] bg-black/40 px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none" />
       </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-        <div className={`${shell} p-5 md:p-6`}>
-          <SectionHeader
-            eyebrow="Launch lanes"
-            title="Quick actions"
-            description="Use this surface to jump straight into ACC's live workflows without the full dashboard overhead."
-          />
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {[
-              ['Assistant', 'Parse an instruction or open a workflow.'],
-              ['Tasks', 'Review the live Task Bus queue.'],
-              ['Approvals', 'Approve or reject queued actions.'],
-              ['Messages', 'Open private chat and handoffs.'],
-              ['Workflows', 'Browse and launch the catalog.'],
-              ['Bridge', 'Inspect Alphonso packets and status.'],
-            ].map(([title, detail]) => (
-              <button
-                key={title}
-                onClick={() => {
-                  if (title === 'Assistant') setPage('assistant');
-                  else if (title === 'Tasks') setPage('tasks');
-                  else if (title === 'Approvals') setPage('approvals');
-                  else if (title === 'Messages') setPage('messages');
-                  else if (title === 'Workflows') setPage('mini');
-                  else setPage('dashboard');
-                }}
-                className="rounded-2xl border border-white/[0.06] bg-black/20 p-4 text-left transition hover:border-acc-green/20 hover:bg-acc-green/[0.05]"
-              >
-                <div className="text-sm font-semibold text-white">{title}</div>
-                <div className="mt-1 text-xs leading-relaxed text-zinc-500">{detail}</div>
-              </button>
-            ))}
-          </div>
-          <div className="mt-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Workflow launcher</div>
-                <div className="mt-1 text-sm font-semibold text-white">Top workflows from the live catalog</div>
-              </div>
-              <Badge tone="emerald">{launcherWorkflows.length} shown</Badge>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {launcherWorkflows.length === 0 ? (
-                <div className="col-span-full rounded-2xl border border-dashed border-white/[0.08] bg-black/20 px-4 py-8 text-center text-sm text-zinc-500">
-                  No workflows found yet.
-                </div>
-              ) : launcherWorkflows.map((workflow) => {
-                const isThis = launching === workflow.id;
-                return (
-                  <button
-                    key={workflow.id}
-                    disabled={!!launching}
-                    onClick={() => handleLaunch(workflow)}
-                    className={`rounded-2xl border p-4 text-left transition
-                      ${isThis
-                        ? 'border-acc-green/30 bg-acc-green/10 opacity-80'
-                        : 'border-white/[0.06] bg-black/20 hover:border-acc-green/20 hover:bg-acc-green/[0.05]'}
-                      ${launching && !isThis ? 'opacity-40 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white">{workflow.name}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">{workflow.category}</div>
-                      </div>
-                      <Badge tone={workflow.approval ? 'amber' : 'emerald'}>{workflow.approval ? 'approval' : 'open'}</Badge>
-                    </div>
-                    <div className="mt-2 text-xs leading-relaxed text-zinc-400">{workflow.description}</div>
-                    <div className="mt-3 text-xs font-semibold text-acc-green">
-                      {isThis ? 'Queuing...' : 'Launch workflow'}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      {msg && (
+        <div className={`mb-3 text-xs px-3 py-2 rounded-xl border ${msg.ok ? 'border-[#1aff8c]/20 text-[#1aff8c] bg-[#1aff8c]/5' : 'border-red-500/20 text-red-400 bg-red-500/5'}`}>
+          {msg.text}
         </div>
-
-        <div className={`${shell} p-5 md:p-6`}>
-          <SectionHeader
-            eyebrow="Live truth"
-            title="Current runtime state"
-            description="The mini app mirrors the same runtime truth as the rest of ACC, so mobile and Telegram never drift from the source of truth."
-          />
-          <div className="mt-4 space-y-3">
-            <StateRow label="Backend" value={backend.status || 'ok'} detail={backend.detail || 'Backend reachable'} />
-            <StateRow label="Bot" value={integrations.telegram?.status || 'fallback'} detail={integrations.telegram?.note || 'Telegram fallback is available'} />
-            <StateRow label="Messenger" value="ready" detail={`${stats.total_tasks || 0} task records visible in ACC`} />
-            <StateRow label="Bridge" value={bridgeStatus} detail={bridgeConfigured ? 'Public mini app and bridge paths are wired' : 'Bridge needs setup'} />
-          </div>
-        </div>
-      </div>
-    </div>
+      )}
+      <button onClick={testAndSave} disabled={testing || saving}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#1aff8c]/25 bg-[#1aff8c]/8 text-xs font-semibold text-[#1aff8c] disabled:opacity-40 transition-all hover:bg-[#1aff8c]/15">
+        {(testing || saving) ? 'Connecting…' : 'Test & Connect Gmail'}
+      </button>
+    </Card>
   );
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [page, setPage]           = useState(() => typeof window !== 'undefined' ? pathToPage(window.location.pathname) : 'dashboard');
-  const [sidebar, setSidebar]     = useState(true);
-  const [stats, setStats]         = useState({});
-  const [tasks, setTasks]         = useState([]);
-  const [integrations, setInt]    = useState({});
-  const [backend, setBackend]     = useState(DEFAULT_BACKEND_STATUS);
-  const [agents, setAgents]       = useState([]);
+  const [page, setPage]       = useState(() => typeof window !== 'undefined' ? pathToPage(window.location.pathname) : 'dashboard');
+  const [collapsed, setCollapsed] = useState(false);
+  const [stats, setStats]     = useState({});
+  const [tasks, setTasks]     = useState([]);
+  const [integrations, setInt]= useState({});
+  const [backend, setBackend] = useState(DEFAULT_BACKEND);
+  const [agents, setAgents]   = useState([]);
   const [workflowCatalog, setWorkflowCatalog] = useState([]);
   const [approvalBusy, setApprovalBusy] = useState(new Set());
   const [approvalMsg, setApprovalMsg]   = useState({});
-  const [socialclawDraft, setSocialclawDraft] = useState('ACC + SocialClaw publish lane: preview a polished social post about the latest workflow and bridge updates.');
-  const [socialclawAction, setSocialclawAction] = useState('');
-  const [socialclawResult, setSocialclawResult] = useState(null);
-  const [socialclawError, setSocialclawError]   = useState('');
-  const [pipelineAction, setPipelineAction]     = useState('');
-  const [activityLog, setActivityLog]           = useState([]);
-  const [updateInfo, setUpdateInfo]             = useState(null); // { status, version, percent }
-  const [miniWorkflowContext, setMiniWorkflowContext] = useState(() =>
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('workflow') : ''
-  );
+  const [activityLog, setActivityLog]   = useState([]);
+  const [updateInfo, setUpdateInfo]     = useState(null);
+  const [command, setCommand]           = useState('');
+  const [cmdHistory, setCmdHistory]     = useState([]);
+
   async function fetchAll() {
     const [s, t, i, a, w] = await Promise.all([
       getTaskbusStats().catch(() => ({})),
@@ -438,13 +369,12 @@ export default function App() {
     setStats(s.stats || s || {});
     const newTasks = Array.isArray(t.tasks) ? t.tasks : Array.isArray(t) ? t : [];
     setTasks(prev => {
-      // detect new tasks for activity log
       if (prev.length > 0 && newTasks.length > prev.length) {
         const added = newTasks.slice(0, newTasks.length - prev.length);
         setActivityLog(log => [
-          ...added.map(task => ({ id: task.id, text: `New task: ${task.title || task.id?.slice(0,10)}`, agent: task.assigned_agent, at: new Date().toLocaleTimeString() })),
+          ...added.map(task => ({ id: task.id, text: task.title || task.id?.slice(0,16), agent: task.assigned_agent, at: new Date().toLocaleTimeString(), status: task.status })),
           ...log,
-        ].slice(0, 20));
+        ].slice(0, 30));
       }
       return newTasks;
     });
@@ -466,516 +396,478 @@ export default function App() {
     }
   }
 
-  // Data polling — runs once on mount, never re-runs on page change
   useEffect(() => {
-    let active = true;
     fetchAll();
     const id = setInterval(fetchAll, 8000);
-    return () => { active = false; clearInterval(id); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => clearInterval(id);
+  }, []);
 
-  // Backend health — runs once on mount
   useEffect(() => {
     let active = true;
-    let cleanup = () => {};
-    if (IS_ELECTRON_FILE && window.electronAPI?.backendStatus) {
-      window.electronAPI.backendStatus().then(cur => { if (active) setBackend(normalizeBackendStatus(cur)); }).catch(() => {});
-      if (window.electronAPI?.onBackendStatus) cleanup = window.electronAPI.onBackendStatus(n => { if (active) setBackend(normalizeBackendStatus(n)); });
-    } else {
-      const refresh = async () => {
-        try {
-          const ok = await fetch(API + '/api/health').then(r => r.ok).catch(() => false);
-          if (active) setBackend(ok
-            ? { status: 'Online', detail: 'Backend reachable', lastCheckedAt: new Date().toISOString() }
-            : { status: 'Offline', detail: 'Backend not reachable', lastCheckedAt: new Date().toISOString() }
-          );
-        } catch { if (active) setBackend({ status: 'Failed', detail: 'Health check failed', lastCheckedAt: null }); }
-      };
-      refresh();
-      const id = setInterval(refresh, 5000);
-      cleanup = () => clearInterval(id);
-    }
-    return () => { active = false; cleanup(); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const refresh = async () => {
+      try {
+        const ok = await fetch(API + '/api/health').then(r => r.ok).catch(() => false);
+        if (active) setBackend(ok
+          ? { status: 'Online',  detail: 'Backend reachable', lastCheckedAt: new Date().toISOString() }
+          : { status: 'Offline', detail: 'Backend not reachable', lastCheckedAt: new Date().toISOString() }
+        );
+      } catch { if (active) setBackend({ status: 'Failed', detail: 'Health check failed', lastCheckedAt: null }); }
+    };
+    refresh();
+    const id = setInterval(refresh, 5000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
 
-  // Auto-updater — runs once on mount
   useEffect(() => {
     if (!IS_ELECTRON_FILE || !window.electronAPI?.onUpdaterStatus) return;
     return window.electronAPI.onUpdaterStatus(info => setUpdateInfo(info));
   }, []);
 
-  // Route sync — push history when page state changes
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.location.pathname !== `/${page}`) window.history.pushState({}, '', `/${page}`);
   }, [page]);
 
-  // popstate — listen for browser back/forward
   useEffect(() => {
     const syncRoute = () => setPage(pathToPage(window.location.pathname));
     window.addEventListener('popstate', syncRoute);
     return () => window.removeEventListener('popstate', syncRoute);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const syncMiniContext = () => {
-      setMiniWorkflowContext(new URLSearchParams(window.location.search).get('workflow') || '');
-    };
-    syncMiniContext();
-    window.addEventListener('popstate', syncMiniContext);
-    return () => window.removeEventListener('popstate', syncMiniContext);
-  }, []);
+  const pending = tasks.filter(t => t.status === 'waiting_approval');
 
-  const pending      = tasks.filter(t => t.status === 'waiting_approval');
-  const socialclaw   = integrations.socialclaw || {};
-  const socialclawIsReady = socialclaw.status === 'connected';
-  const publisherInbox = tasks.filter(t => {
-    const m = t.meta || {};
-    return t.assigned_agent === 'socialclaw' || m.workflow_key === 'acc:social_publish_pipeline' || m.workflow_stage === 'publish' || m.workflow_stage === 'generate';
-  }).slice(0, 4);
-
-  async function handleSocialClaw(action) {
-    setSocialclawAction(action); setSocialclawError('');
+  async function handleCommand(e) {
+    e.preventDefault();
+    if (!command.trim()) return;
+    const text = command.trim();
+    setCmdHistory(h => [{ text, at: new Date().toLocaleTimeString(), id: Math.random().toString(36).slice(2) }, ...h].slice(0, 6));
+    setCommand('');
     try {
-      const payload = { source: 'acc-ui', title: 'ACC social publish lane', content: socialclawDraft, caption: socialclawDraft, platform: 'social', lane: 'publish' };
-      let result;
-      if      (action === 'accounts') result = await getSocialclawAccounts();
-      else if (action === 'usage')    result = await getSocialclawUsage();
-      else if (action === 'validate') result = await validateSocialclawCampaign(payload);
-      else if (action === 'publish')  result = await publishSocialclawCampaign(payload);
-      else if (action === 'delete')   result = await deleteSocialclawPost(payload);
-      else                            result = await previewSocialclawCampaign(payload);
-      setSocialclawResult(result);
-    } catch (err) {
-      setSocialclawError(err?.response?.data?.error || err?.message || 'Action failed');
-      setSocialclawResult(null);
-    } finally { setSocialclawAction(''); }
-  }
-
-  async function launchSocialPublishPipeline() {
-    setPipelineAction('launching'); setSocialclawError('');
-    try {
-      const result = await createTask({ title: 'ACC Social Draft Pipeline', instruction: 'Draft a professional social post about ACC workflow orchestration and the SocialClaw handoff.', assigned_agent: 'alphonso', priority: 'high', required_output: 'Social-ready draft and handoff', approval_required: false, automation_mode: 'semi_auto', feature_ref: 'workflow:acc:social_publish_pipeline', created_by: 'chatgpt', meta: { workflow_key: 'acc:social_publish_pipeline', workflow_kind: 'publishing_pipeline', workflow_stage: 'generate', workflow_target_connector: 'socialclaw', workflow_input: socialclawDraft } });
-      setSocialclawResult(result);
-    } catch (err) { setSocialclawError(err?.response?.data?.error || err?.message || 'Failed'); setSocialclawResult(null); }
-    finally { setPipelineAction(''); }
+      await api.post('/taskbus/tasks', {
+        title: text, instruction: text, assigned_agent: 'alphonso',
+        approval_required: true, automation_mode: 'semi_auto', created_by: 'ui:command',
+      });
+      await fetchAll();
+    } catch(e) { console.error('[command]', e.message); }
   }
 
   // ── Page renders ─────────────────────────────────────────────────────────────
-
   function renderDashboard() {
-    const byStatus  = stats.by_status || {};
+    const byStatus   = stats.by_status || {};
     const totalTasks = stats.total_tasks || 0;
     const completed  = byStatus.done || 0;
     const failed     = byStatus.failed || 0;
     const pendingCnt = stats.pending_approvals || 0;
+    const isOnline   = backend.status === 'Online';
 
     return (
-      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+      <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
 
-        {/* ── Banner hero ────────────────────────────────────────────────────── */}
-        <div className="relative overflow-hidden rounded-3xl border border-acc-green/20 bg-black shadow-[0_0_60px_rgba(26,255,140,0.07)]">
-          {/* Banner image */}
-          <div className="relative w-full" style={{ minHeight: 140 }}>
-            <img
-              src="/acc-banner.png"
-              alt="ACC v2"
-              className="w-full object-cover"
-              style={{ maxHeight: 220, objectPosition: 'center top' }}
-              onError={e => { e.target.style.display = 'none'; }}
-            />
-            {/* Fallback gradient header shown always as overlay / when image missing */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent" />
-            {/* Scan line animation */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="scanline absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-acc-green/50 to-transparent" />
-            </div>
-            {/* Content overlay */}
-            <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-8 py-5">
-              <div className="flex items-center gap-2 mb-2">
+        {/* ── Hero command bar ─────────────────────────────────────────────── */}
+        <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#0c0c1e] via-[#09091a] to-[#0c0c18]">
+          {/* Ambient glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(26,255,140,0.07) 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
+          <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 70%)', transform: 'translate(-30%, 30%)' }} />
+
+          <div className="relative p-5 sm:p-6">
+            {/* Top row */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
                 <LiveDot />
-                <span className="text-[10px] uppercase tracking-[0.3em] text-zinc-400">AI Operating System for Execution</span>
+                <span className="text-[11px] font-mono text-[#1aff8c]/70 uppercase tracking-[0.2em]">
+                  {isOnline ? 'System operational' : 'System offline'}
+                </span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
-                Agent <span className="text-acc-green">Command</span> Center
-                <span className="ml-2 text-sm font-mono text-acc-green/60 border border-acc-green/30 px-1.5 py-0.5 rounded align-middle">v2</span>
-              </h1>
-              <p className="text-xs text-zinc-400 mt-1 max-w-sm">Define the goal. <span className="text-acc-green font-semibold">We execute the rest.</span></p>
+              <div className="flex items-center gap-3 text-[11px] font-mono text-zinc-500">
+                <span>{totalTasks} tasks</span>
+                <span className="text-zinc-700">·</span>
+                <span>{agents.length} agents</span>
+                {pending.length > 0 && (
+                  <>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-amber-400 font-semibold blink">{pending.length} need review</span>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* System status ticker */}
-          <div className="border-t border-white/[0.06] bg-black/80 px-5 py-2.5 flex flex-wrap items-center gap-4 text-[11px] font-mono">
-            <StatusBar backend={backend} />
-            <span className="text-zinc-700 hidden sm:inline">│</span>
-            <span className="text-zinc-500 hidden sm:inline">{totalTasks} tasks total</span>
-            <span className="text-zinc-700 hidden sm:inline">│</span>
-            <span className="text-zinc-500 hidden sm:inline">{agents.length} agents registered</span>
-            <span className="text-zinc-700 hidden sm:inline">│</span>
-            <span className="text-zinc-500 hidden sm:inline">@OurAccbot</span>
-            {pending.length > 0 && (
-              <>
-                <span className="text-zinc-700">│</span>
-                <span className="text-amber-400 font-bold blink">{pending.length} PENDING APPROVAL{pending.length > 1 ? 'S' : ''}</span>
-              </>
+            {/* Headline */}
+            <div className="mb-5">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight tracking-tight">
+                Agent <span style={{ color: '#1aff8c' }}>Command</span> Center
+              </h1>
+              <p className="text-sm text-zinc-500 mt-1">Type a command. ACC coordinates the agents. You approve before it ships.</p>
+            </div>
+
+            {/* Command input */}
+            <form onSubmit={handleCommand} className="relative">
+              <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-black/40 px-4 py-3 focus-within:border-[#1aff8c]/40 focus-within:shadow-[0_0_0_1px_rgba(26,255,140,0.12)] transition-all">
+                <Terminal size={15} className="text-zinc-500 flex-shrink-0" />
+                <input
+                  value={command}
+                  onChange={e => setCommand(e.target.value)}
+                  placeholder="Ask ACC to do anything — send an email, research a company, post to Telegram..."
+                  className="flex-1 bg-transparent text-sm text-white placeholder-zinc-600 outline-none font-mono"
+                />
+                <button
+                  type="submit"
+                  disabled={!command.trim()}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-30"
+                  style={{ background: command.trim() ? 'rgba(26,255,140,0.15)' : 'transparent', color: '#1aff8c', border: '1px solid rgba(26,255,140,0.25)' }}
+                >
+                  <Send size={12} />
+                  Send
+                </button>
+              </div>
+            </form>
+
+            {/* Recent commands */}
+            {cmdHistory.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {cmdHistory.slice(0, 4).map(cmd => (
+                  <button key={cmd.id} onClick={() => setCommand(cmd.text)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] text-zinc-500 border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] hover:text-zinc-300 transition-all truncate max-w-[200px]">
+                    <Clock size={9} className="flex-shrink-0" />
+                    <span className="truncate">{cmd.text}</span>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        {/* ── Stat cards ─────────────────────────────────────────────────────── */}
+        {/* ── Stat cards ───────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <AnimatedStatCard label="Total Tasks"  value={totalTasks} color="text-white"          icon="📋" />
-          <AnimatedStatCard label="Completed"    value={completed}  color="text-acc-green"       icon="✅" />
-          <AnimatedStatCard label="Failed"       value={failed}     color="text-red-400"          icon="❌" />
-          <AnimatedStatCard label="Awaiting"     value={pendingCnt} color="text-amber-400"        icon="⏳" />
+          <StatCard label="Total Tasks"     value={totalTasks} icon={Layers}       color="#1aff8c" />
+          <StatCard label="Completed"       value={completed}  icon={CheckCircle2} color="#1aff8c" />
+          <StatCard label="Needs Review"    value={pendingCnt} icon={AlertTriangle} color="#f59e0b" />
+          <StatCard label="Failed"          value={failed}     icon={XCircle}      color="#f87171" />
         </div>
 
-        {/* ── Main grid ──────────────────────────────────────────────────────── */}
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        {/* ── Main grid ────────────────────────────────────────────────────── */}
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
 
-          {/* SocialClaw publish lane */}
-          <Surface className="p-5 sm:p-6">
-            <SectionHeader
-              eyebrow="Publishing lane"
-              title="SocialClaw handoff"
-              description="Plan in ACC, generate with Alphonso, review, then publish."
-              action={<span className={`rounded-full border px-3 py-1 text-xs ${socialclawIsReady ? 'border-acc-green/30 bg-acc-green/12 text-acc-green' : 'border-amber-500/20 bg-amber-500/12 text-amber-300'}`}>{socialclaw.status || 'setup_required'}</span>}
-            />
-            <div className="mt-5 rounded-2xl border border-white/[0.06] bg-black/30 p-4">
-              <div className="grid gap-2 text-[11px] sm:grid-cols-4 text-center">
-                {['1. ACC intake','2. Alphonso generate','3. ACC approval','4. SocialClaw publish'].map((s,i) => (
-                  <div key={i} className={`rounded-xl border px-3 py-2 ${i === 0 ? 'border-acc-green/30 text-acc-green' : 'border-white/[0.08] text-zinc-400'}`}>{s}</div>
-                ))}
+          {/* Recent tasks */}
+          <Card>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-0.5">Live queue</div>
+                <h3 className="text-sm font-semibold text-white">Recent Tasks</h3>
               </div>
-              <textarea value={socialclawDraft} onChange={e => setSocialclawDraft(e.target.value)} rows={3}
-                className="mt-4 w-full rounded-xl border border-white/[0.08] bg-black/40 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-acc-green/40 resize-none" placeholder="Draft the social post…" />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={launchSocialPublishPipeline} disabled={!!pipelineAction}
-                  className="rounded-xl border border-acc-green/30 bg-acc-green/12 px-4 py-2 text-xs font-medium text-acc-green hover:bg-acc-green/20 disabled:opacity-50 transition-all">
-                  {pipelineAction ? 'Launching…' : 'Launch pipeline'}
-                </button>
-                <button onClick={() => handleSocialClaw('preview')} disabled={!!socialclawAction}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-50 transition-all">
-                  {socialclawAction === 'preview' ? 'Previewing…' : 'Preview'}
-                </button>
-                <button onClick={() => handleSocialClaw('validate')} disabled={!!socialclawAction}
-                  className="rounded-xl border border-sky-500/25 bg-sky-500/12 px-4 py-2 text-xs text-sky-300 hover:bg-sky-500/18 disabled:opacity-50 transition-all">
-                  {socialclawAction === 'validate' ? 'Validating…' : 'Validate'}
+              <div className="flex items-center gap-3">
+                <LiveDot />
+                <button onClick={() => setPage('tasks')} className="text-[11px] text-[#1aff8c]/70 hover:text-[#1aff8c] flex items-center gap-1 transition-colors">
+                  View all <ArrowRight size={11} />
                 </button>
               </div>
             </div>
-          </Surface>
+            <div className="divide-y divide-white/[0.04]">
+              {tasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-14 text-zinc-600">
+                  <Activity size={28} className="mb-3 opacity-40" />
+                  <div className="text-sm">No tasks yet</div>
+                  <div className="text-xs mt-1 text-zinc-700">Use the command bar above or send a message via Telegram</div>
+                </div>
+              ) : tasks.slice(0, 8).map((t, i) => (
+                <div key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors fade-in" style={{ animationDelay: `${i * 30}ms` }}>
+                  <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.07] flex items-center justify-center flex-shrink-0">
+                    <Bot size={13} className="text-zinc-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-zinc-200 truncate font-medium">{t.title || t.id?.slice(0,18)}</div>
+                    <div className="text-[11px] text-zinc-600 mt-0.5">{t.assigned_agent} · {taskTime(t.created_at)}</div>
+                  </div>
+                  <StatusPill status={t.status} />
+                </div>
+              ))}
+            </div>
+          </Card>
 
-          {/* Live activity feed */}
-          <Surface className="p-5 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.28em] text-acc-green/60 mb-0.5">Activity</div>
-                <h3 className="text-base font-semibold text-white">Live feed</h3>
+          {/* Right column */}
+          <div className="space-y-4">
+
+            {/* Pending approvals call-out */}
+            {pending.length > 0 && (
+              <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={14} className="text-amber-400" />
+                    <span className="text-sm font-semibold text-white">{pending.length} Pending {pending.length === 1 ? 'Approval' : 'Approvals'}</span>
+                  </div>
+                  <button onClick={() => setPage('approvals')} className="text-[11px] text-amber-400/80 hover:text-amber-400 flex items-center gap-1">
+                    Review <ArrowRight size={11} />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {pending.slice(0, 3).map(t => (
+                    <div key={t.id} className="flex items-center gap-2 rounded-xl bg-black/20 px-3 py-2.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 blink" />
+                      <span className="text-xs text-zinc-300 truncate flex-1">{t.title || t.id?.slice(0,20)}</span>
+                      <span className="text-[10px] text-zinc-600 flex-shrink-0">{t.assigned_agent}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Agent roster */}
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-0.5">Roster</div>
+                  <h3 className="text-sm font-semibold text-white">Active Agents</h3>
+                </div>
+                <button onClick={() => setPage('agents')} className="text-[11px] text-zinc-600 hover:text-zinc-300 flex items-center gap-1 transition-colors">
+                  All <ArrowRight size={11} />
+                </button>
+              </div>
+              {agents.length === 0 ? (
+                <div className="text-xs text-zinc-600 py-4 text-center">Loading agents…</div>
+              ) : (
+                <div className="space-y-2">
+                  {agents.slice(0, 5).map(a => (
+                    <div key={a.id} className="flex items-center gap-2.5 rounded-xl border border-white/[0.05] bg-black/20 px-3 py-2">
+                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${a.provider_status === 'connected' ? 'bg-emerald-400' : a.provider_status === 'error' ? 'bg-red-400' : 'bg-zinc-600'}`} />
+                      <span className="text-xs font-medium text-zinc-200 flex-1 truncate">{a.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${a.enabled ? 'border-[#1aff8c]/20 text-[#1aff8c]/70' : 'border-zinc-700 text-zinc-600'}`}>
+                        {a.enabled ? 'on' : 'off'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Quick actions */}
+            <Card className="p-4">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-3">Quick actions</div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'New Task',    action: () => setPage('assistant'), icon: Play, color: '#1aff8c' },
+                  { label: 'Approvals',  action: () => setPage('approvals'),  icon: ShieldCheck, color: '#f59e0b' },
+                  { label: 'Messages',   action: () => setPage('messages'),   icon: MessageSquare, color: '#00d4ff' },
+                  { label: 'Integrations', action: () => setPage('integrations'), icon: Plug, color: '#a78bfa' },
+                ].map(({ label, action, icon: Icon, color }) => (
+                  <button key={label} onClick={action}
+                    className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2.5 text-left hover:border-white/[0.14] hover:bg-white/[0.04] transition-all group">
+                    <Icon size={13} style={{ color }} className="flex-shrink-0" />
+                    <span className="text-xs font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+          </div>
+        </div>
+
+        {/* ── Activity log ─────────────────────────────────────────────────── */}
+        {activityLog.length > 0 && (
+          <Card>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <Activity size={14} className="text-[#1aff8c]" />
+                <h3 className="text-sm font-semibold text-white">Live Activity</h3>
               </div>
               <LiveDot />
             </div>
-            <div className="flex-1 space-y-2 overflow-y-auto max-h-64 scrollbar-hide">
-              {activityLog.length === 0 && tasks.slice(0, 8).map((t, i) => (
-                <div key={t.id} className="row-in flex items-center gap-3 rounded-xl border border-white/[0.05] bg-black/30 px-3 py-2.5"
-                  style={{ animationDelay: `${i * 60}ms` }}>
-                  <span className="text-base">{AGENT_ICONS[t.assigned_agent] || '🤖'}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs text-white truncate">{t.title || t.id?.slice(0,14)}</div>
-                    <div className="text-[10px] text-zinc-600">{t.assigned_agent} · {taskTime(t.created_at)}</div>
-                  </div>
-                  <Badge status={t.status} />
+            <div className="divide-y divide-white/[0.04]">
+              {activityLog.slice(0, 5).map((e, i) => (
+                <div key={e.id + i} className="flex items-center gap-3 px-5 py-3 row-in" style={{ animationDelay: `${i * 40}ms` }}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#1aff8c] flex-shrink-0" />
+                  <span className="text-xs text-zinc-300 flex-1 truncate">{e.text}</span>
+                  <span className="text-[11px] text-zinc-600 flex-shrink-0 font-mono">{e.at}</span>
+                  <StatusPill status={e.status} />
                 </div>
               ))}
-              {activityLog.map((e, i) => (
-                <div key={e.id + i} className="row-in flex items-center gap-3 rounded-xl border border-acc-green/10 bg-acc-green/5 px-3 py-2.5">
-                  <span className="text-base">{AGENT_ICONS[e.agent] || '🤖'}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs text-white truncate">{e.text}</div>
-                    <div className="text-[10px] text-zinc-600">{e.at}</div>
-                  </div>
-                  <span className="text-[10px] text-acc-green font-bold">NEW</span>
-                </div>
-              ))}
-              {tasks.length === 0 && activityLog.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-10 text-zinc-600 text-sm">
-                  <span className="text-2xl mb-2">📡</span>
-                  Waiting for tasks…
-                </div>
-              )}
             </div>
-          </Surface>
-        </div>
-
-        {/* ── Recent tasks grid ─────────────────────────────────────────────── */}
-        <Surface>
-          <div className="border-b border-white/[0.06] px-5 py-4 flex items-center justify-between">
-            <SectionHeader eyebrow="Live feed" title="Recent tasks" />
-            <LiveDot />
-          </div>
-          <div className="grid gap-3 p-4 sm:p-5 lg:grid-cols-2 xl:grid-cols-3">
-            {tasks.slice(0, 9).map((t, i) => (
-              <div key={t.id} className="fade-in rounded-2xl border border-white/[0.06] bg-black/30 p-4 hover:border-acc-green/20 transition-all duration-300"
-                style={{ animationDelay: `${i * 40}ms` }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-white">{t.title || t.id?.slice(0, 12)}</div>
-                    <div className="mt-1 text-xs text-zinc-500">{t.assigned_agent} · {t.created_by}</div>
-                  </div>
-                  <Badge status={t.status} />
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-500">
-                  <div className="rounded-xl border border-white/[0.05] bg-black/30 px-3 py-2">
-                    <div className="uppercase tracking-[0.18em] text-[9px] text-zinc-700">Created</div>
-                    <div className="mt-1 text-zinc-400">{taskTime(t.created_at)}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/[0.05] bg-black/30 px-3 py-2">
-                    <div className="uppercase tracking-[0.18em] text-[9px] text-zinc-700">State</div>
-                    <div className="mt-1 text-zinc-400">{t.status}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {tasks.length === 0 && (
-              <div className="col-span-full rounded-2xl border border-dashed border-acc-green/10 bg-acc-green/[0.02] px-5 py-12 text-center text-sm text-zinc-600">
-                <div className="text-3xl mb-3">📡</div>
-                No tasks yet. Send a task to <span className="text-acc-green font-mono">@OurAccbot</span>
-              </div>
-            )}
-          </div>
-        </Surface>
+          </Card>
+        )}
       </div>
     );
   }
 
-  function renderMini() {
-    const miniWorkflow = miniWorkflowContext;
-    const workflowCount = workflowCatalog.length || (Array.isArray(stats.workflows) ? stats.workflows.length : (stats.total_workflows || 0));
-    const runtimeOverall = backend.status === 'Online' ? 'healthy' : 'partial';
-    const bridgeStatus = integrations.socialclaw?.status || 'configured';
-    const bridgeConfigured = bridgeStatus !== 'setup_required' && bridgeStatus !== 'blocked';
-    const launcherWorkflows = workflowCatalog.slice(0, 8).map((workflow) => ({
-      id: workflow.key || workflow.id || workflow.name,
-      name: workflow.name || workflow.title || 'Unnamed workflow',
-      description: workflow.description || workflow.summary || 'No description available.',
-      category: workflow.category || 'General',
-      approval: Boolean(workflow.approval_required_for?.length),
-    }));
-    const quickCards = [
-      { label: 'Open tasks', value: stats.total_tasks || 0, detail: 'Live Task Bus queue' },
-      { label: 'Pending approvals', value: pending.length, detail: 'Human review needed' },
-      { label: 'Workflows', value: workflowCount, detail: 'Launch catalog' },
-      { label: 'Bridge packets', value: stats.total_results || 0, detail: 'Alphonso traffic' },
-    ];
-
-    return (
-      <MiniLauncher
-        miniWorkflow={miniWorkflow}
-        runtimeOverall={runtimeOverall}
-        bridgeStatus={bridgeStatus}
-        bridgeConfigured={bridgeConfigured}
-        quickCards={quickCards}
-        launcherWorkflows={launcherWorkflows}
-        backend={backend}
-        integrations={integrations}
-        stats={stats}
-        pending={pending}
-        setPage={setPage}
-        setMiniWorkflowContext={setMiniWorkflowContext}
-      />
-    );
-  }
-
   function renderTasks() {
-    const statusGroups = [
-      { key: 'waiting_approval', label: 'Waiting approval', tone: 'text-amber-300', bg: 'bg-amber-500/8 border-amber-500/15' },
-      { key: 'in_progress',      label: 'In progress',      tone: 'text-sky-300',   bg: 'bg-sky-500/8 border-sky-500/15' },
-      { key: 'done',             label: 'Done',             tone: 'text-acc-green', bg: 'bg-acc-green/8 border-acc-green/15' },
-      { key: 'failed',           label: 'Failed',           tone: 'text-red-300',   bg: 'bg-red-500/8 border-red-500/15' },
-    ];
+    const waiting  = tasks.filter(t => t.status === 'waiting_approval').length;
+    const running  = tasks.filter(t => t.status === 'in_progress').length;
+    const done     = tasks.filter(t => t.status === 'done' || t.status === 'completed').length;
+    const failed   = tasks.filter(t => t.status === 'failed').length;
     return (
-      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
-        <Surface className="p-5 sm:p-6">
-          <SectionHeader eyebrow="Work inventory" title="All tasks" description="A calm board for scanning work in flight." />
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {statusGroups.map(g => {
-              const count = tasks.filter(t => t.status === g.key).length;
-              return (
-                <div key={g.key} className={`rounded-2xl border p-4 ${g.bg}`}>
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">{g.label}</div>
-                  <AnimatedStatCard label="" value={count} color={g.tone} />
-                </div>
-              );
-            })}
-          </div>
-        </Surface>
-        <Surface className="overflow-hidden">
-          <div className="border-b border-white/[0.06] px-5 py-4">
-            <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 text-[10px] uppercase tracking-[0.18em] text-zinc-600">
-              <span>Title</span><span>Agent</span><span>Status</span><span>Created</span>
+      <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-1">Work inventory</div>
+          <h2 className="text-xl font-bold text-white">Tasks</h2>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard label="Needs Review" value={waiting} icon={AlertTriangle} color="#f59e0b" />
+          <StatCard label="Running"      value={running} icon={Activity}      color="#38bdf8" />
+          <StatCard label="Completed"    value={done}    icon={CheckCircle2}  color="#1aff8c" />
+          <StatCard label="Failed"       value={failed}  icon={XCircle}       color="#f87171" />
+        </div>
+
+        <Card className="overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-white/[0.06]">
+            <div className="grid grid-cols-[2fr_1fr_1fr_0.7fr] gap-4 text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+              <span>Task</span><span>Agent</span><span>Status</span><span>Time</span>
             </div>
           </div>
-          <div className="divide-y divide-white/[0.03]">
+          <div className="divide-y divide-white/[0.04]">
             {tasks.length === 0
-              ? <div className="px-5 py-10 text-center text-sm text-zinc-600">No tasks yet.</div>
+              ? <div className="py-14 text-center text-sm text-zinc-600">No tasks yet. Use the command bar on the dashboard.</div>
               : tasks.map((t, i) => (
-                <div key={i} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 px-5 py-3.5 hover:bg-acc-green/[0.02] transition-colors">
+                <div key={i} className="grid grid-cols-[2fr_1fr_1fr_0.7fr] gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors fade-in" style={{ animationDelay: `${i * 20}ms` }}>
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-white">{t.title}</div>
-                    <div className="mt-0.5 text-xs text-zinc-600 font-mono">#{String(t.id || '').slice(0,8)}</div>
+                    <div className="truncate text-sm font-medium text-zinc-200">{t.title}</div>
+                    <div className="mt-0.5 text-[11px] text-zinc-600 font-mono">#{String(t.id || '').slice(0,8)}</div>
                   </div>
-                  <div className="text-sm text-zinc-400 self-center">{t.assigned_agent}</div>
-                  <div className="self-center"><Badge status={t.status} /></div>
+                  <div className="text-sm text-zinc-500 self-center truncate">{t.assigned_agent}</div>
+                  <div className="self-center"><StatusPill status={t.status} /></div>
                   <div className="text-xs text-zinc-600 self-center">{taskTime(t.created_at)}</div>
                 </div>
               ))
             }
           </div>
-        </Surface>
+        </Card>
       </div>
     );
   }
 
   function renderApprovals() {
     return (
-      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
-        <Surface className="p-5 sm:p-6">
-          <SectionHeader eyebrow="Decision queue" title={`Pending approvals (${pending.length})`} description="Every risky action stays obvious, calm, and fast to review." />
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <MetricCard label="Pending"  value={pending.length} icon="🛂" detail="Waiting for human decision." />
-            <MetricCard label="Urgent"   value={pending.filter(t => t.priority === 'P0').length} icon="⚡" detail="P0 items." />
-            <MetricCard label="In queue" value={pending.filter(t => t.status === 'waiting_approval').length} icon="🕒" detail="Blocked by approval." />
+      <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-1">Human in the loop</div>
+            <h2 className="text-xl font-bold text-white">Approvals</h2>
           </div>
-        </Surface>
-        {pending.length === 0
-          ? <Surface className="p-12 text-center text-zinc-500 text-sm">No pending approvals. All clear.</Surface>
-          : <div className="grid gap-4">
-              {pending.map(t => {
-                const busy = approvalBusy.has(t.id);
-                const msg  = approvalMsg[t.id];
-                const meta = t.meta || {};
-                return (
-                  <Surface key={t.id} className="p-5 sm:p-6 border-glow-green">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="text-lg font-medium text-white">{t.title}</div>
-                        <div className="mt-1 text-xs text-zinc-500">Agent: {t.assigned_agent} · Task: {t.id?.slice(0,8)} · Node: {meta.nodeId || '—'}</div>
+          <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2 text-sm text-zinc-400">
+            <ShieldCheck size={14} className="text-[#1aff8c]" />
+            {pending.length} pending
+          </div>
+        </div>
+
+        {pending.length === 0 ? (
+          <Card className="flex flex-col items-center justify-center py-16 text-zinc-600">
+            <CheckCircle2 size={32} className="mb-3 text-[#1aff8c]/30" />
+            <div className="text-sm font-medium text-zinc-500">All clear</div>
+            <div className="text-xs mt-1 text-zinc-700">No pending approvals right now.</div>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {pending.map(t => {
+              const busy = approvalBusy.has(t.id);
+              const msg  = approvalMsg[t.id];
+              return (
+                <Card key={t.id} className="p-5 border-[#1aff8c]/15" glow>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-4">
+                    <div>
+                      <div className="text-base font-semibold text-white">{t.title}</div>
+                      <div className="mt-1 text-xs text-zinc-500 font-mono">
+                        {t.assigned_agent} · #{t.id?.slice(0,8)} · {taskTime(t.created_at)}
                       </div>
-                      <Badge status={t.status} />
                     </div>
-                    {msg && (
-                      <div className={`mt-4 rounded-xl px-3 py-2 text-xs ${msg.ok ? 'text-acc-green bg-acc-green/10 border border-acc-green/20' : 'text-red-300 bg-red-500/10 border border-red-500/20'}`}>{msg.text}</div>
-                    )}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button disabled={busy} onClick={() => handleApproval(t.id, 'approved')}
-                        className="rounded-xl border border-acc-green/30 bg-acc-green/12 px-4 py-2 text-xs font-medium text-acc-green hover:bg-acc-green/22 disabled:opacity-50 transition-all">
-                        {busy ? '…' : 'Approve'}
-                      </button>
-                      <button disabled={busy} onClick={() => handleApproval(t.id, 'rejected')}
-                        className="rounded-xl border border-red-500/30 bg-red-500/12 px-4 py-2 text-xs font-medium text-red-300 hover:bg-red-500/22 disabled:opacity-50 transition-all">
-                        {busy ? '…' : 'Reject'}
-                      </button>
+                    <StatusPill status={t.status} />
+                  </div>
+                  {t.instruction && (
+                    <div className="mb-4 rounded-xl border border-white/[0.06] bg-black/30 px-4 py-3 text-xs text-zinc-400 leading-relaxed">
+                      {t.instruction}
                     </div>
-                  </Surface>
-                );
-              })}
-            </div>
-        }
+                  )}
+                  {msg && (
+                    <div className={`mb-3 rounded-xl px-3 py-2 text-xs ${msg.ok ? 'text-[#1aff8c] bg-[#1aff8c]/8 border border-[#1aff8c]/20' : 'text-red-300 bg-red-500/8 border border-red-500/20'}`}>
+                      {msg.text}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button disabled={busy} onClick={() => handleApproval(t.id, 'approved')}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#1aff8c]/25 bg-[#1aff8c]/8 text-xs font-semibold text-[#1aff8c] hover:bg-[#1aff8c]/15 disabled:opacity-40 transition-all">
+                      <CheckCircle2 size={13} />{busy ? 'Processing…' : 'Approve'}
+                    </button>
+                    <button disabled={busy} onClick={() => handleApproval(t.id, 'rejected')}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500/25 bg-red-500/8 text-xs font-semibold text-red-300 hover:bg-red-500/15 disabled:opacity-40 transition-all">
+                      <XCircle size={13} />{busy ? '…' : 'Reject'}
+                    </button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
 
   function renderAgents() {
-    const dot = s => s === 'connected' ? 'bg-acc-green' : s === 'error' ? 'bg-red-400' : s === 'disabled' ? 'bg-zinc-600' : 'bg-amber-400';
+    const dotColor = s => s === 'connected' ? '#1aff8c' : s === 'error' ? '#f87171' : '#52525b';
     return (
-      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+      <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.28em] text-acc-green/60 mb-1">Roster</div>
-            <h2 className="text-xl font-semibold text-white">Registered Agents</h2>
+            <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-1">Roster</div>
+            <h2 className="text-xl font-bold text-white">Agents</h2>
           </div>
-          <span className="text-xs text-zinc-500 border border-white/[0.08] rounded-full px-3 py-1">{agents.length} agents</span>
+          <span className="text-xs text-zinc-500 border border-white/[0.08] rounded-xl px-3 py-1.5">{agents.length} registered</span>
         </div>
-        {agents.length === 0
-          ? <div className="rounded-2xl border border-white/[0.06] p-12 text-center text-zinc-600">Loading agents…</div>
-          : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {agents.map((a, i) => (
-                <div key={a.id} className="fade-in rounded-2xl border border-white/[0.07] bg-[#0d0d14] p-5 hover:border-acc-green/25 transition-all duration-300"
-                  style={{ animationDelay: `${i * 40}ms` }}>
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <span className="text-2xl float">{AGENT_ICONS[a.id] || '🤖'}</span>
-                    <span className={`w-2 h-2 rounded-full mt-1.5 ${dot(a.provider_status)}`} />
+        {agents.length === 0 ? (
+          <Card className="py-14 text-center text-zinc-600 text-sm">Loading agents…</Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {agents.map((a, i) => (
+              <Card key={a.id} className="p-5 hover:border-white/[0.12] transition-colors fade-in" style={{ animationDelay: `${i * 40}ms` }}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl border border-white/[0.08] bg-black/30 flex items-center justify-center">
+                    <Bot size={18} className="text-zinc-400" />
                   </div>
-                  <div className="font-semibold text-white">{a.name}</div>
-                  <div className="text-xs text-zinc-500 mt-1">{a.role}</div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${a.enabled ? 'border-acc-green/30 bg-acc-green/10 text-acc-green' : 'border-zinc-700 bg-zinc-800 text-zinc-500'}`}>
-                      {a.enabled ? 'enabled' : 'disabled'}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/[0.08] bg-black/20 text-zinc-400">{a.automation_mode}</span>
-                    {a.provider_note && <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-400 truncate max-w-full">{a.provider_note}</span>}
-                  </div>
+                  <div className="w-2 h-2 rounded-full mt-1.5" style={{ background: dotColor(a.provider_status) }} />
                 </div>
-              ))}
-            </div>
-        }
+                <div className="font-semibold text-white text-sm">{a.name}</div>
+                <div className="text-xs text-zinc-500 mt-0.5">{a.role}</div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <span className={`text-[10px] px-2 py-0.5 rounded border ${a.enabled ? 'border-[#1aff8c]/20 bg-[#1aff8c]/8 text-[#1aff8c]' : 'border-zinc-700/50 bg-zinc-800/50 text-zinc-500'}`}>
+                    {a.enabled ? 'enabled' : 'disabled'}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded border border-white/[0.08] bg-black/20 text-zinc-500">{a.automation_mode}</span>
+                </div>
+                {a.provider_note && <div className="mt-2 text-[11px] text-zinc-600 truncate">{a.provider_note}</div>}
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
   function renderIntegrations() {
     const keys = Object.keys(integrations);
-    const statusColor = s => s === 'connected' ? 'border-acc-green/25 bg-acc-green/10 text-acc-green' : s === 'error' ? 'border-red-500/25 bg-red-500/10 text-red-400' : 'border-zinc-600/25 bg-zinc-600/10 text-zinc-400';
+    const statusDot = s => s === 'connected' ? 'bg-emerald-400' : s === 'error' ? 'bg-red-400' : s === 'disabled' ? 'bg-zinc-600' : 'bg-amber-400';
+    const statusText = s => s === 'connected' ? 'text-emerald-400' : s === 'error' ? 'text-red-400' : s === 'disabled' ? 'text-zinc-500' : 'text-amber-400';
     return (
-      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.28em] text-acc-green/60 mb-1">Connected systems</div>
-            <h2 className="text-xl font-semibold text-white">Integrations</h2>
-          </div>
-          <span className={`text-xs px-3 py-1 rounded-full border ${socialclawIsReady ? 'border-acc-green/25 bg-acc-green/10 text-acc-green' : 'border-amber-500/20 bg-amber-500/10 text-amber-300'}`}>
-            SocialClaw: {socialclaw.status || 'unknown'}
-          </span>
+      <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-1">Connected systems</div>
+          <h2 className="text-xl font-bold text-white">Integrations</h2>
         </div>
-
-        <Surface className="p-5 space-y-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-base font-semibold text-white">SocialClaw Publisher</h3>
-            <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColor(socialclaw.status)}`}>{socialclaw.status || 'unknown'}</span>
-          </div>
-          {socialclaw.note && <p className="text-xs text-zinc-500">{socialclaw.note}</p>}
-          <textarea value={socialclawDraft} onChange={e => setSocialclawDraft(e.target.value)} rows={3}
-            className="w-full rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-acc-green/40 resize-none" placeholder="Draft content…" />
-          <div className="flex flex-wrap gap-2">
-            {['preview','validate','accounts','usage','publish','delete'].map(act => (
-              <button key={act} onClick={() => handleSocialClaw(act)} disabled={!!socialclawAction}
-                className={`px-3 py-2 rounded-xl border text-xs transition-all disabled:opacity-50 ${
-                  act === 'publish' ? 'border-acc-green/25 bg-acc-green/12 text-acc-green hover:bg-acc-green/20' :
-                  act === 'delete'  ? 'border-red-500/25 bg-red-500/12 text-red-300 hover:bg-red-500/20' :
-                  'border-white/10 bg-white/5 text-white hover:bg-white/10'
-                }`}>
-                {socialclawAction === act ? `${act}…` : act.charAt(0).toUpperCase() + act.slice(1)}
-              </button>
-            ))}
-          </div>
-          {socialclawError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{socialclawError}</div>}
-          {socialclawResult && <pre className="max-h-60 overflow-auto rounded-xl border border-white/[0.08] bg-black/40 p-4 text-xs text-zinc-300 whitespace-pre-wrap">{JSON.stringify(socialclawResult, null, 2)}</pre>}
-        </Surface>
-
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {keys.length === 0
-            ? <div className="col-span-3 rounded-xl border border-white/[0.06] p-12 text-center text-zinc-600">Loading integrations…</div>
+            ? <div className="col-span-3 py-12 text-center text-zinc-600 text-sm">Loading integrations…</div>
             : keys.map(k => {
                 const v = integrations[k] || {};
                 return (
-                  <div key={k} className="rounded-2xl border border-white/[0.07] bg-[#0d0d14] p-4 hover:border-acc-green/20 transition-all">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-white capitalize">{k}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded border ${statusColor(v.status)}`}>{v.status || 'unknown'}</span>
+                  <Card key={k} className="p-4 hover:border-white/[0.12] transition-colors">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-lg border border-white/[0.08] bg-black/20 flex items-center justify-center">
+                        <Plug size={13} className="text-zinc-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-white capitalize">{k}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${statusDot(v.status)}`} />
+                          <span className={`text-[11px] font-medium ${statusText(v.status)}`}>{v.status || 'unknown'}</span>
+                        </div>
+                      </div>
                     </div>
-                    {v.note && <div className="text-xs text-zinc-600">{v.note}</div>}
-                  </div>
+                    {v.note && <div className="text-[11px] text-zinc-600 mt-1">{v.note}</div>}
+                  </Card>
                 );
               })
           }
@@ -986,65 +878,66 @@ export default function App() {
 
   function renderSettings() {
     const intKeys = Object.keys(integrations);
-    const sc = s => {
-      if (s === 'connected') return 'text-acc-green bg-acc-green/10 border-acc-green/20';
-      if (s === 'disabled')  return 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20';
-      if (s === 'error')     return 'text-red-400 bg-red-500/10 border-red-500/20';
-      return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-    };
+    const statusDot = s => s === 'connected' ? 'bg-emerald-400' : s === 'error' ? 'bg-red-400' : s === 'disabled' ? 'bg-zinc-600' : 'bg-amber-400';
+    const statusText = s => s === 'connected' ? 'text-emerald-400' : s === 'error' ? 'text-red-400' : s === 'disabled' ? 'text-zinc-500' : 'text-amber-400';
     return (
-      <div className="p-4 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+      <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.28em] text-acc-green/60 mb-1">Configuration</div>
-          <h2 className="text-xl font-semibold text-white">Settings</h2>
-          <p className="text-xs text-zinc-500 mt-1">Live integration health from the backend. Keys are never sent to the browser.</p>
+          <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-600 mb-1">Configuration</div>
+          <h2 className="text-xl font-bold text-white">Settings</h2>
+          <p className="text-xs text-zinc-600 mt-1">Live integration health. API keys are never exposed to the browser.</p>
         </div>
-        <Surface className="overflow-hidden">
-          <div className="px-5 py-3 border-b border-white/[0.06]">
-            <span className="text-sm font-medium text-white">Integration Health</span>
+        <Card className="overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-white/[0.06]">
+            <span className="text-sm font-semibold text-white">Integration Health</span>
           </div>
-          {intKeys.length === 0
-            ? <div className="px-5 py-8 text-center text-zinc-600 text-sm">Loading…</div>
-            : <div className="divide-y divide-white/[0.03]">
-                {intKeys.map(k => {
+          <div className="divide-y divide-white/[0.04]">
+            {intKeys.length === 0
+              ? <div className="py-8 text-center text-zinc-600 text-sm">Loading…</div>
+              : intKeys.map(k => {
                   const v = integrations[k] || {};
                   return (
-                    <div key={k} className="flex items-center justify-between px-5 py-3 gap-4 hover:bg-acc-green/[0.015] transition-colors">
+                    <div key={k} className="flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
                       <div className="min-w-0">
-                        <span className="text-sm text-zinc-200 capitalize">{k}</span>
-                        {v.note && <span className="ml-2 text-xs text-zinc-600">{v.note}</span>}
-                        {v.error && <span className="ml-2 text-xs text-red-500 truncate">{v.error}</span>}
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDot(v.status)}`} />
+                          <span className="text-sm text-zinc-200 capitalize font-medium">{k}</span>
+                        </div>
+                        {v.note && <div className="ml-3.5 mt-0.5 text-xs text-zinc-600">{v.note}</div>}
+                        {v.error && <div className="ml-3.5 mt-0.5 text-xs text-red-500 truncate">{v.error}</div>}
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded border flex-shrink-0 ${sc(v.status)}`}>{v.status || 'unknown'}</span>
+                      <span className={`text-xs font-medium flex-shrink-0 ${statusText(v.status)}`}>{v.status || 'unknown'}</span>
                     </div>
                   );
-                })}
-              </div>
-          }
-        </Surface>
-        <Surface className="p-5">
-          <div className="text-sm font-medium text-white mb-3">Startup</div>
-          <p className="text-xs text-zinc-500 mb-3">The desktop app starts the backend automatically. The Telegram bot runs 24/7 on Railway in webhook mode — no local process needed.</p>
-          <div className="rounded-xl border border-acc-green/20 bg-acc-green/8 px-4 py-3 text-xs text-acc-green flex items-center gap-2">
-            <span className="live-dot scale-75" />
-            Bot is live on Railway. Set <code className="font-mono bg-black/30 px-1 rounded">TELEGRAM_BOT_MODE=local</code> only to run locally instead.
+                })
+            }
           </div>
-          <div className="mt-4 text-xs text-zinc-600">
-            <div className="mb-1 text-zinc-500 font-medium">Quick launch:</div>
-            <code className="block bg-black/40 border border-white/[0.06] rounded px-3 py-2 text-acc-green font-mono">START_DASHBOARD.bat</code>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-[#1aff8c] blink" />
+            <div className="text-sm font-semibold text-white">Telegram Bot</div>
           </div>
-        </Surface>
+          <p className="text-xs text-zinc-500">Running 24/7 on Railway in webhook mode. No local process needed.</p>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#1aff8c]/15 bg-[#1aff8c]/5 px-3 py-2">
+            <span className="text-xs font-mono text-[#1aff8c]">@OurAccbot</span>
+            <span className="text-xs text-zinc-600">· Telegram webhook active</span>
+          </div>
+        </Card>
+        <GmailConnectPanel />
       </div>
     );
   }
 
   const pages = {
     dashboard:    renderDashboard,
-    mini:         renderMini,
     tasks:        renderTasks,
     approvals:    renderApprovals,
     messages:     () => <MessengerPage />,
     assistant:    () => <AssistantPage />,
+    synapse:      () => <SynapsePage />,
+    workflows:    () => <WorkflowsPage />,
+    autonomy:     () => <AutonomyPage />,
     agents:       renderAgents,
     integrations: renderIntegrations,
     audit:        () => <AuditPage />,
@@ -1052,131 +945,95 @@ export default function App() {
     settings:     renderSettings,
   };
 
-  return (
-    <div className="flex flex-col h-screen bg-acc-bg text-white overflow-hidden">
+  const currentNav = NAV.find(n => n.id === page);
 
-      {/* ── Update banner ──────────────────────────────────────────────────── */}
+  return (
+    <div className="flex flex-col h-screen bg-[#050508] text-white overflow-hidden">
+
+      {/* ── Update banners ──────────────────────────────────────────────────── */}
       {updateInfo?.status === 'available' && (
-        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-acc-green/10 border-b border-acc-green/20 text-xs font-mono shrink-0">
-          <span className="text-acc-green">↓ Update v{updateInfo.version} is downloading in background...</span>
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-[#1aff8c]/8 border-b border-[#1aff8c]/15 text-xs font-mono shrink-0">
+          <span className="text-[#1aff8c]">↓ Update v{updateInfo.version} is downloading…</span>
           <button onClick={() => setUpdateInfo(null)} className="text-zinc-500 hover:text-white">✕</button>
         </div>
       )}
-      {updateInfo?.status === 'downloading' && (
-        <div className="flex items-center gap-3 px-4 py-2 bg-acc-green/10 border-b border-acc-green/20 text-xs font-mono shrink-0">
-          <span className="text-acc-green">↓ Downloading update... {updateInfo.percent}%</span>
-          <div className="flex-1 max-w-xs h-1 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-acc-green rounded-full transition-all duration-300" style={{ width: `${updateInfo.percent}%` }} />
-          </div>
-        </div>
-      )}
       {updateInfo?.status === 'ready' && (
-        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-acc-green/15 border-b border-acc-green/30 text-xs font-mono shrink-0">
-          <span className="text-acc-green font-bold">✓ ACC v{updateInfo.version} ready to install</span>
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-[#1aff8c]/12 border-b border-[#1aff8c]/25 text-xs shrink-0">
+          <span className="text-[#1aff8c] font-bold">✓ ACC v{updateInfo.version} ready to install</span>
           <div className="flex items-center gap-2">
             <button onClick={() => IS_ELECTRON_FILE && window.electronAPI?.updaterInstall()}
-              className="px-3 py-1 rounded bg-acc-green text-black font-bold hover:bg-acc-green/80 transition-colors">
+              className="px-3 py-1 rounded-lg bg-[#1aff8c] text-black font-bold text-xs hover:bg-[#1aff8c]/80 transition-colors">
               Restart &amp; Update
             </button>
-            <button onClick={() => setUpdateInfo(null)} className="text-zinc-500 hover:text-white">Later</button>
+            <button onClick={() => setUpdateInfo(null)} className="text-zinc-500 hover:text-white text-xs">Later</button>
           </div>
         </div>
       )}
 
       <div className="flex flex-1 overflow-hidden">
-      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
-      <div className={`hidden md:flex flex-shrink-0 flex-col transition-all duration-200 border-r border-white/[0.06] bg-[#070710] ${sidebar ? 'w-56' : 'w-16'}`}>
-        {/* Logo */}
-        <div className="flex items-center gap-2 px-3 py-4 border-b border-white/[0.06]">
-          <ACCLogo size={sidebar ? 34 : 30} collapsed={!sidebar} />
-          {sidebar && (
-            <button onClick={() => setSidebar(false)} className="ml-auto text-zinc-600 hover:text-zinc-300 text-sm transition-colors">◀</button>
-          )}
-          {!sidebar && (
-            <button onClick={() => setSidebar(true)} className="ml-auto text-zinc-600 hover:text-zinc-300 text-sm">▶</button>
-          )}
-        </div>
+        {/* Sidebar */}
+        <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} pending={pending} backend={backend} />
 
-        {/* Nav */}
-        <nav className="flex-1 py-3 space-y-0.5 px-2 overflow-y-auto scrollbar-hide">
-          {NAV.map(n => (
-            <button key={n.id} onClick={() => setPage(n.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150 ${
-                page === n.id
-                  ? 'bg-acc-green/12 text-acc-green border border-acc-green/20'
-                  : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] border border-transparent'
-              }`}>
-              <span className="text-base leading-none">{n.icon}</span>
-              {sidebar && <span className="font-medium">{n.label}</span>}
-              {sidebar && n.id === 'approvals' && pending.length > 0 && (
-                <span className="ml-auto bg-amber-500 text-black text-[10px] px-1.5 py-0.5 rounded-full font-bold blink">{pending.length}</span>
+        {/* Main */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Top bar */}
+          <header className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-white/[0.06] bg-[#07071a]/95 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setCollapsed(v => !v)} className="hidden md:flex w-7 h-7 rounded-lg border border-white/[0.08] bg-white/[0.03] items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.07] transition-all">
+                {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+              </button>
+              {currentNav && (
+                <div className="flex items-center gap-2">
+                  <currentNav.Icon size={14} className="text-zinc-500" />
+                  <span className="text-sm font-semibold text-zinc-200">{currentNav.label}</span>
+                </div>
               )}
-            </button>
-          ))}
-        </nav>
-
-        {/* Status */}
-        <div className="px-3 py-3 border-t border-white/[0.06]">
-          {sidebar ? (
-            <div className="rounded-xl border border-white/[0.07] bg-black/30 px-3 py-2.5 space-y-1.5">
-              <StatusBar backend={backend} />
-              {(backend.status === 'Failed' || backend.status === 'Offline') && IS_ELECTRON_FILE && window.electronAPI?.retryBackendStart && (
-                <button onClick={() => window.electronAPI.retryBackendStart()}
-                  className="w-full rounded-lg border border-acc-green/20 bg-acc-green/8 px-3 py-1.5 text-xs text-acc-green hover:bg-acc-green/14">
-                  Retry backend
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="hidden sm:flex items-center gap-3 text-[11px] font-mono text-zinc-600">
+                <span>{stats.total_tasks || 0} tasks</span>
+                <span className="text-zinc-700">·</span>
+                <span>{agents.length} agents</span>
+              </div>
+              {pending.length > 0 && (
+                <button onClick={() => setPage('approvals')}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-1.5 text-[11px] font-semibold text-amber-400 hover:bg-amber-500/14 transition-all blink">
+                  <AlertTriangle size={11} />
+                  {pending.length}
                 </button>
               )}
+              <div className="flex items-center gap-1.5">
+                {backend.status === 'Online' ? <Wifi size={13} className="text-[#1aff8c]" /> : <WifiOff size={13} className="text-zinc-600" />}
+                <span className={`text-[11px] font-mono font-medium ${backend.status === 'Online' ? 'text-[#1aff8c]' : 'text-zinc-600'}`}>
+                  {backend.status}
+                </span>
+              </div>
+              <button onClick={fetchAll} className="w-7 h-7 rounded-lg border border-white/[0.08] bg-white/[0.03] flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.07] transition-all">
+                <RefreshCw size={12} />
+              </button>
             </div>
-          ) : (
-            <div className="flex justify-center">
-              <span className={`w-2 h-2 rounded-full ${backend.status === 'Online' ? 'bg-acc-green glow-green' : 'bg-zinc-600'}`} />
-            </div>
-          )}
+          </header>
+
+          {/* Page content */}
+          <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+            {(pages[page] || renderDashboard)()}
+          </main>
         </div>
       </div>
 
-      {/* ── Main content ───────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
-        {/* Top bar */}
-        <div className="sticky top-0 z-10 bg-[#070710]/95 backdrop-blur border-b border-white/[0.06] px-4 md:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => setSidebar(v => !v)}
-              className="hidden md:inline-flex rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-white/[0.07] hover:text-white transition-all">
-              {sidebar ? '◀' : '▶'}
-            </button>
-            <div className="min-w-0">
-              <div className="text-[10px] text-acc-green/50 uppercase tracking-[0.2em]">{page}</div>
-              <div className="text-sm text-zinc-200 truncate font-medium">Agent Command Center</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-3 text-[11px] font-mono text-zinc-600">
-              <span>{stats.total_tasks || 0} tasks</span>
-              <span>·</span>
-              <span>{stats.total_results || 0} results</span>
-            </div>
-            <StatusBar backend={backend} />
-          </div>
-        </div>
-
-        {/* Page */}
-        {(pages[page] || renderDashboard)()}
-      </div>
-
-      {/* ── Mobile bottom nav ──────────────────────────────────────────────── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-white/[0.08] bg-[#070710]/97 backdrop-blur px-2 py-2">
-        <div className="grid grid-cols-5 gap-1">
-          {MOBILE_NAV.map(item => (
-            <button key={item.id} onClick={() => setPage(item.id)}
-              className={`flex flex-col items-center justify-center rounded-2xl px-2 py-2 text-[11px] transition-all ${
-                page === item.id ? 'bg-acc-green/12 text-acc-green border border-acc-green/20' : 'text-zinc-500'
+      {/* ── Mobile bottom nav ────────────────────────────────────────────────── */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-white/[0.08] bg-[#07071a]/97 backdrop-blur px-2 pb-safe">
+        <div className="grid grid-cols-5 gap-1 py-2">
+          {MOBILE_NAV.map(({ id, label, Icon }) => (
+            <button key={id} onClick={() => setPage(id)}
+              className={`flex flex-col items-center justify-center rounded-2xl px-1 py-2 text-[10px] transition-all ${
+                page === id ? 'text-[#1aff8c] bg-[#1aff8c]/10' : 'text-zinc-600 hover:text-zinc-400'
               }`}>
-              <span className="text-base leading-none">{item.icon}</span>
-              <span className="mt-1">{item.label}</span>
+              <Icon size={18} className="mb-1" />
+              {label}
             </button>
           ))}
         </div>
-      </div>
       </div>
     </div>
   );

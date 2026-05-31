@@ -14,6 +14,8 @@ const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const outreachRoutes           = require("./api/outreachRoutes.js");
 const synapseRoutes            = require("./api/synapseRoutes.js");
 const fscRoutes                = require("./api/fscRoutes.js");
+const emailRoutes              = safeRequire("./api/emailRoutes.js");
+const loopsRoutes              = safeRequire("./api/loopsRoutes.js");
 function safeRequire(mod) {
   try { return require(mod); }
   catch(e) { console.error(`[server] LOAD FAIL ${mod}: ${e.message}`); return null; }
@@ -263,8 +265,10 @@ app.use("/api/messages", messagesRoutes);
 app.use("/api/assistant", assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
 app.use("/api/outreach", outreachRoutes);
-app.use("/api/synapse", synapseRoutes);
-app.use("/api/fsc", fscRoutes);
+app.use("/api/synapse",  synapseRoutes);
+app.use("/api/fsc",      fscRoutes);
+if (emailRoutes) app.use("/api/email", emailRoutes);
+if (loopsRoutes) app.use("/api/loops", loopsRoutes);
 if (cardRoutes)    app.use("/api/card",    cardRoutes);
 if (phoneRoutes)   app.use("/api/phone",   phoneRoutes);
 if (billingRoutes) app.use("/api/billing", billingRoutes);

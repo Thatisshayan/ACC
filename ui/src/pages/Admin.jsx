@@ -1,6 +1,9 @@
 // ui/src/pages/Admin.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { getAdminSystem, getAdminUsers, getAdminLogs, getAdminConnectors, getAdminTasks, getAuditTrail } from '../api.js';
+import { getRuntimeApiBaseUrl } from '../lib/api.js';
+
+const API = getRuntimeApiBaseUrl();
 
 const TABS = [
   { id: 'health',     label: 'System Health', icon: '🖥️' },
@@ -9,6 +12,7 @@ const TABS = [
   { id: 'tasks',      label: 'Task Queue',    icon: '📋' },
   { id: 'connectors', label: 'Connectors',    icon: '🔌' },
   { id: 'audit',      label: 'Audit Trail',   icon: '🔍' },
+  { id: 'dlq',        label: 'Dead Letter',   icon: '🗑️' },
 ];
 
 function Pill({ ok, label }) {
@@ -372,6 +376,91 @@ function AuditTab() {
   );
 }
 
+// ── DLQ tab ───────────────────────────────────────────────────────────────────
+
+function DlqTab() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState({});
+  const [msgs, setMsgs] = useState({});
+
+  async function load() {
+    setLoading(true);
+    try {
+      const r = await fetch(API + '/api/admin/dlq');
+      const d = await r.json();
+      setItems(d.items || []);
+    } catch { setItems([]); }
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function retry(id) {
+    setBusy(b => ({ ...b, [id]: true }));
+    try {
+      const r = await fetch(API + `/api/admin/dlq/${id}/retry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const d = await r.json();
+      setMsgs(m => ({ ...m, [id]: d.message || (d.success ? 'Requeued' : d.error) }));
+      await load();
+    } catch(e) {
+      setMsgs(m => ({ ...m, [id]: e.message }));
+    }
+    setBusy(b => ({ ...b, [id]: false }));
+  }
+
+  return (
+    <div className="p-4 sm:p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-white">Dead Letter Queue <span className="text-zinc-600 text-xs ml-1">{items.length} items</span></div>
+        <button onClick={load} className="text-xs text-zinc-500 hover:text-zinc-300">Refresh</button>
+      </div>
+      {loading ? (
+        <div className="py-8 text-center text-zinc-600 text-sm">Loading…</div>
+      ) : items.length === 0 ? (
+        <div className="py-12 text-center text-zinc-600 text-sm">DLQ is empty — no permanently failed nodes.</div>
+      ) : (
+        <Card>
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.8fr] gap-3 px-5 py-2.5 border-b border-white/[0.06] text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+            <span>Node</span><span>Graph</span><span>Failed</span><span>Status</span><span>Action</span>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {items.map(item => (
+              <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_0.8fr] gap-3 px-5 py-3 hover:bg-white/[0.02]">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-zinc-200 truncate">{item.nodeId}</div>
+                  <div className="text-[11px] text-zinc-600 truncate">{item.lastError}</div>
+                  {msgs[item.id] && <div className="text-[11px] text-[#1aff8c] mt-0.5">{msgs[item.id]}</div>}
+                </div>
+                <div className="text-xs text-zinc-500 self-center truncate">{item.graphId?.slice(0, 12) || '—'}</div>
+                <div className="text-[11px] text-zinc-600 self-center">
+                  {item.failedAt ? new Date(item.failedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                </div>
+                <div className="self-center">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${item.status === 'requeued' ? 'border-[#1aff8c]/20 text-[#1aff8c]' : 'border-red-500/20 text-red-400'}`}>
+                    {item.status}
+                  </span>
+                </div>
+                <div className="self-center">
+                  {item.status !== 'requeued' && (
+                    <button
+                      disabled={busy[item.id]}
+                      onClick={() => retry(item.id)}
+                      className="text-xs px-2 py-1 rounded-lg border border-[#1aff8c]/20 bg-[#1aff8c]/5 text-[#1aff8c] disabled:opacity-40 hover:bg-[#1aff8c]/15 transition-all"
+                    >
+                      {busy[item.id] ? '…' : 'Retry'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ── Main Admin page ───────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -384,6 +473,7 @@ export default function AdminPage() {
     tasks:      <TasksTab />,
     connectors: <ConnectorsTab />,
     audit:      <AuditTab />,
+    dlq:        <DlqTab />,
   };
 
   return (
