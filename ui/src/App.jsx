@@ -467,7 +467,6 @@ export default function App() {
     return (
       <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
 
-<<<<<<< HEAD
         {/* ── Onboarding checklist — shown until dismissed ─────────────────── */}
         <OnboardingChecklist />
 
