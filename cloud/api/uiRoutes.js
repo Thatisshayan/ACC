@@ -9,6 +9,7 @@ const { listSecrets }           = require("../security/vaultStub.js");
 const { saveToNotion }          = require("../memory/notionStorage.js");
 const { log }                   = require("../utils/logger.js");
 const { getAuditTrail }         = require("../utils/auditLog.js");
+const { requireApprovalFreshness } = require("../middleware/auth.js");
 
 const router = express.Router();
 
@@ -57,9 +58,10 @@ router.get("/snapshot/:id", (req, res) => {
   });
 });
 
-router.post("/snapshot/:id/approve", async (req, res) => {
-  const approver = req.body?.approver || req.headers["x-approver"];
-  if (approver !== "Shayan") return res.status(403).json({ success: false, error: "Only Shayan can approve." });
+router.post("/snapshot/:id/approve", requireApprovalFreshness, async (req, res) => {
+  const approver = req.auth?.subject || "unknown";
+  const role = req.auth?.role;
+  if (role !== "operator" && role !== "admin") return res.status(403).json({ success: false, error: "Forbidden" });
   try {
     const snap = getSnapshot(req.params.id);
     if (!snap) return res.status(404).json({ success: false, error: "Snapshot not found." });
@@ -73,12 +75,13 @@ router.post("/snapshot/:id/approve", async (req, res) => {
   }
 });
 
-router.post("/snapshot/:id/reject", (req, res) => {
-  const approver = req.body?.approver || req.headers["x-approver"];
-  if (approver !== "Shayan") return res.status(403).json({ success: false, error: "Only Shayan can reject." });
+router.post("/snapshot/:id/reject", requireApprovalFreshness, (req, res) => {
+  const approver = req.auth?.subject || "unknown";
+  const role = req.auth?.role;
+  if (role !== "operator" && role !== "admin") return res.status(403).json({ success: false, error: "Forbidden" });
   try {
     deleteSnapshot(req.params.id);
-    return res.json({ success: true, message: "Snapshot rejected and deleted." });
+    return res.json({ success: true, approver, message: "Snapshot rejected and deleted." });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
   }

@@ -14,13 +14,16 @@ import {
 } from './api.js';
 import api from './api.js';
 import { getRuntimeApiBaseUrl } from './lib/api.js';
+import { useSocket } from './hooks/useSocket.js';
 import MessengerPage  from './pages/Messenger.jsx';
 import AssistantPage  from './pages/Assistant.jsx';
 import AdminPage      from './pages/Admin.jsx';
 import AuditPage      from './pages/Audit.jsx';
+import BillingPage    from './pages/Billing.jsx';
 import SynapsePage    from './pages/Synapse.jsx';
 import WorkflowsPage  from './pages/Workflows.jsx';
 import AutonomyPage   from './pages/Autonomy.jsx';
+import OnboardingPage from './pages/Onboarding.jsx';
 
 const IS_ELECTRON_FILE = typeof window !== 'undefined' && window.location?.protocol === 'file:';
 const API = getRuntimeApiBaseUrl();
@@ -107,8 +110,10 @@ const NAV = [
   { id: 'autonomy',     label: 'Autonomy',       Icon: Repeat },
   { id: 'agents',       label: 'Agents',        Icon: Bot },
   { id: 'integrations', label: 'Integrations',  Icon: Plug },
+  { id: 'billing',      label: 'Billing',        Icon: TrendingUp },
   { id: 'audit',        label: 'Audit',         Icon: Search },
   { id: 'admin',        label: 'Admin',         Icon: Shield },
+  { id: 'onboarding',   label: 'Onboarding',    Icon: Users },
   { id: 'settings',     label: 'Settings',      Icon: Settings },
 ];
 
@@ -120,7 +125,7 @@ const MOBILE_NAV = [
   { id: 'settings',   label: 'More',    Icon: Settings },
 ];
 
-const PAGE_PATHS = new Set(['dashboard','tasks','approvals','messages','assistant','synapse','workflows','autonomy','agents','integrations','audit','admin','settings']);
+const PAGE_PATHS = new Set(['dashboard','tasks','approvals','messages','assistant','synapse','workflows','autonomy','agents','integrations','billing','audit','admin','onboarding','settings']);
 function pathToPage(p) { const n = String(p||'').replace(/^\/+/,'').trim().toLowerCase(); return PAGE_PATHS.has(n) ? n : 'dashboard'; }
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
@@ -357,6 +362,11 @@ export default function App() {
   const [updateInfo, setUpdateInfo]     = useState(null);
   const [command, setCommand]           = useState('');
   const [cmdHistory, setCmdHistory]     = useState([]);
+  // true until the first fetchAll completes — lets us distinguish loading vs empty
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  // WebSocket — real-time task updates; falls back to polling if disconnected
+  const { lastMsg, connected: wsConnected } = useSocket();
 
   async function fetchAll() {
     const [s, t, i, a, w] = await Promise.all([
@@ -381,6 +391,7 @@ export default function App() {
     setInt(i.integrations || {});
     setAgents(Array.isArray(a.agents) ? a.agents : []);
     setWorkflowCatalog(Array.isArray(w.workflows) ? w.workflows : []);
+    setInitialLoading(false);
   }
 
   async function handleApproval(taskId, decision) {
@@ -433,6 +444,27 @@ export default function App() {
     window.addEventListener('popstate', syncRoute);
     return () => window.removeEventListener('popstate', syncRoute);
   }, []);
+
+  // WebSocket real-time task updates — patch state without re-fetching everything
+  useEffect(() => {
+    if (!lastMsg || lastMsg.event !== 'task_updated') return;
+    const u = lastMsg.data;
+    if (!u || !u.taskId) return;
+    setTasks(prev => {
+      const idx = prev.findIndex(t => t.id === u.taskId);
+      if (idx === -1) return prev; // unknown task — let next poll pick it up
+      const next = [...prev];
+      next[idx] = {
+        ...next[idx],
+        status:         u.status         ?? next[idx].status,
+        title:          u.title          ?? next[idx].title,
+        assigned_agent: u.assigned_agent ?? next[idx].assigned_agent,
+        provider_used:  u.provider_used  ?? next[idx].provider_used,
+        updated_at:     u.updated_at     ?? next[idx].updated_at,
+      };
+      return next;
+    });
+  }, [lastMsg]);
 
   const pending = tasks.filter(t => t.status === 'waiting_approval');
 
@@ -621,8 +653,10 @@ export default function App() {
                   All <ArrowRight size={11} />
                 </button>
               </div>
-              {agents.length === 0 ? (
+              {initialLoading ? (
                 <div className="text-xs text-zinc-600 py-4 text-center">Loading agents…</div>
+              ) : agents.length === 0 ? (
+                <div className="text-xs text-zinc-600 py-4 text-center">No agents registered.</div>
               ) : (
                 <div className="space-y-2">
                   {agents.slice(0, 5).map(a => (
@@ -808,8 +842,10 @@ export default function App() {
           </div>
           <span className="text-xs text-zinc-500 border border-white/[0.08] rounded-xl px-3 py-1.5">{agents.length} registered</span>
         </div>
-        {agents.length === 0 ? (
+        {initialLoading ? (
           <Card className="py-14 text-center text-zinc-600 text-sm">Loading agents…</Card>
+        ) : agents.length === 0 ? (
+          <Card className="py-14 text-center text-zinc-600 text-sm">No agents registered. Check server config.</Card>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {agents.map((a, i) => (
@@ -848,8 +884,10 @@ export default function App() {
           <h2 className="text-xl font-bold text-white">Integrations</h2>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {keys.length === 0
+          {initialLoading && keys.length === 0
             ? <div className="col-span-3 py-12 text-center text-zinc-600 text-sm">Loading integrations…</div>
+            : !initialLoading && keys.length === 0
+            ? <div className="col-span-3 py-12 text-center text-zinc-600 text-sm">No integrations returned. Backend may be offline.</div>
             : keys.map(k => {
                 const v = integrations[k] || {};
                 return (
@@ -938,10 +976,12 @@ export default function App() {
     synapse:      () => <SynapsePage />,
     workflows:    () => <WorkflowsPage />,
     autonomy:     () => <AutonomyPage />,
+    billing:      () => <BillingPage />,
     agents:       renderAgents,
     integrations: renderIntegrations,
     audit:        () => <AuditPage />,
     admin:        () => <AdminPage />,
+    onboarding:   () => <OnboardingPage />,
     settings:     renderSettings,
   };
 
@@ -1007,6 +1047,9 @@ export default function App() {
                 <span className={`text-[11px] font-mono font-medium ${backend.status === 'Online' ? 'text-[#1aff8c]' : 'text-zinc-600'}`}>
                   {backend.status}
                 </span>
+                {wsConnected && (
+                  <span className="text-[10px] font-mono text-[#1aff8c]/50 hidden sm:inline" title="WebSocket connected">WS</span>
+                )}
               </div>
               <button onClick={fetchAll} className="w-7 h-7 rounded-lg border border-white/[0.08] bg-white/[0.03] flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.07] transition-all">
                 <RefreshCw size={12} />

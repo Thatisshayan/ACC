@@ -7,7 +7,7 @@
     "acc": "./acc.js"
   },
   "scripts": {
-    "test": "node cloud/taskbus/router.test.js && node --test cloud/security/webhookHmac.test.js cloud/taskbus/store.test.js cloud/messages/store.test.js",
+    "test": "node cloud/taskbus/router.test.js && node --test cloud/security/webhookHmac.test.js cloud/taskbus/store.test.js cloud/messages/store.test.js cloud/middleware/auth.test.js cloud/memory/store.test.js cloud/utils/logger.test.js",
     "telegram": "node telegram.js",
     "bridge": "node server.js",
     "cloud:api": "node cloud/server.js",
@@ -21,6 +21,7 @@
     "mobile:build:android": "cd mobile && npx eas build --platform android --profile preview",
     "mobile:build:ios": "cd mobile && npx eas build --platform ios --profile preview",
     "smoke": "node scripts/smokeTest_sandbox.js",
+    "verify:launch": "node scripts/verify-launch-criteria.js",
     "canary:enable": "node scripts/toggleCanary.js enable",
     "canary:disable": "node scripts/toggleCanary.js disable",
     "ui": "cd ui && npm run dev"

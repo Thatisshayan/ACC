@@ -10,6 +10,7 @@ const { getGraphView }   = require("./graphView.js");
 const { listConnectors } = require("../connectors/registry.js");
 const { getPendingApprovals, approveNode, rejectNode, getAllApprovals } = require("../utils/approvalQueue.js");
 const { getAuditTrail }  = require("../utils/auditLog.js");
+const { createClient } = require("@supabase/supabase-js");
 
 const adminRouter = express.Router();
 
@@ -68,6 +69,50 @@ adminRouter.get("/system", (req, res) => {
   });
 });
 
+// ── Module diagnostics (admin-only by mount policy) ──────────────────────────
+adminRouter.get("/modules", (req, res) => {
+  const moduleStatus = req.app?.locals?.moduleLoadStatus || {};
+  res.json({
+    success: true,
+    modules: moduleStatus,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ── Retention controls (admin-only by mount policy) ───────────────────────────
+adminRouter.post("/retention/waitlist-prune", async (req, res) => {
+  try {
+    const olderThanDays = Math.max(parseInt(req.body?.olderThanDays || "90", 10) || 90, 1);
+    const dryRun = req.body?.dryRun !== false;
+    const url = (process.env.SUPABASE_URL || "").trim();
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
+    if (!url || !key) {
+      return res.status(503).json({ success: false, error: "Supabase not configured." });
+    }
+
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
+    const sb = createClient(url, key);
+
+    const countQuery = sb.from("acc_waitlist").select("email", { count: "exact", head: true }).lt("created_at", cutoff);
+    const countResult = await countQuery;
+    if (countResult.error) {
+      return res.status(500).json({ success: false, error: countResult.error.message });
+    }
+    const count = countResult.count || 0;
+    if (dryRun) {
+      return res.json({ success: true, dryRun: true, olderThanDays, cutoff, wouldDelete: count });
+    }
+
+    const del = await sb.from("acc_waitlist").delete().lt("created_at", cutoff);
+    if (del.error) {
+      return res.status(500).json({ success: false, error: del.error.message });
+    }
+    return res.json({ success: true, dryRun: false, olderThanDays, cutoff, deleted: count });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ── Logs ──────────────────────────────────────────────────────────────────────
 adminRouter.get("/logs", (req, res) => {
   const limit = parseInt(req.query.limit) || 200;
@@ -93,14 +138,14 @@ adminRouter.get("/approvals", (req, res) => {
 });
 
 adminRouter.post("/approvals/:id/approve", (req, res) => {
-  const resolvedBy = req.body?.resolvedBy || "Operator";
+  const resolvedBy = req.auth?.subject || "Operator";
   const record     = approveNode(req.params.id, resolvedBy);
   if (!record) return res.status(404).json({ error: "Approval not found." });
   res.json({ success: true, record });
 });
 
 adminRouter.post("/approvals/:id/reject", (req, res) => {
-  const resolvedBy = req.body?.resolvedBy || "Operator";
+  const resolvedBy = req.auth?.subject || "Operator";
   const record     = rejectNode(req.params.id, resolvedBy);
   if (!record) return res.status(404).json({ error: "Approval not found." });
   res.json({ success: true, record });

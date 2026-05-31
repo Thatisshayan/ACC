@@ -50,7 +50,7 @@ function resolveMiniWebappUrl() {
 var MINI_WEBAPP_URL = resolveMiniWebappUrl();
 
 if (!TOKEN) { console.error('[bot] TELEGRAM_BOT_TOKEN not set'); process.exit(1); }
-log('[bot] Token: ' + TOKEN.slice(0,15) + '... | ChatID: ' + CHAT_ID);
+log('[bot] Telegram credentials loaded (values redacted)');
 
 var BOT_NAME = 'cloud';
 if (!botLock.claimBot(BOT_NAME)) { log('[bot] Another instance active'); process.exit(0); }

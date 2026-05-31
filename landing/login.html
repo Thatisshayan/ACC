@@ -138,6 +138,21 @@ body::before{
 
     <div class="divider">or</div>
 
+    <form id="adminTokenForm">
+      <div class="field">
+        <label>Admin API token</label>
+        <input type="password" id="adminToken" placeholder="Paste operator/admin token" autocomplete="off"/>
+      </div>
+      <div class="field">
+        <label>Role</label>
+        <input type="text" id="adminRole" placeholder="operator" value="operator" autocomplete="off"/>
+      </div>
+      <button type="submit" class="btn" id="adminBtn">Continue as admin</button>
+      <div class="msg" id="adminMsg"></div>
+    </form>
+
+    <div class="divider">or</div>
+
     <form id="passwordForm" style="display:none">
       <div class="field">
         <label>Email address</label>
@@ -165,10 +180,21 @@ body::before{
 </div>
 
 <script>
-const SUPABASE_URL = 'https://wfgdewzrnrjthugpgeey.supabase.co';
-const SUPABASE_ANON = 'sb_publishable_I4Lp-Ivla-Txrk0mh9RtFA_jOjGJrXE';
+let SUPABASE_URL = null;
+let SUPABASE_ANON = null;
 
 let magicMode = true;
+
+async function loadPublicConfig() {
+  if (SUPABASE_URL && SUPABASE_ANON) return;
+  const r = await fetch('/api/config/public');
+  const json = await r.json();
+  SUPABASE_URL = json?.config?.supabaseUrl || null;
+  SUPABASE_ANON = json?.config?.supabaseAnonKey || null;
+  if (!SUPABASE_URL || !SUPABASE_ANON) {
+    throw new Error('Public auth config unavailable.');
+  }
+}
 
 function toggleMode() {
   magicMode = !magicMode;
@@ -180,6 +206,7 @@ function toggleMode() {
 }
 
 async function supabaseFetch(path, body) {
+  await loadPublicConfig();
   const r = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON },
@@ -203,10 +230,19 @@ document.getElementById('magicForm').addEventListener('submit', async (e) => {
   btn.innerHTML = '<span class="spinner"></span>Sending…';
   showMsg('msg', 'loading', 'Sending magic link…');
 
-  const { ok, data } = await supabaseFetch('/magiclink', {
-    email,
-    options: { emailRedirectTo: window.location.origin + '/app' }
-  });
+  let ok = false;
+  let data = {};
+  try {
+    ({ ok, data } = await supabaseFetch('/magiclink', {
+      email,
+      options: { emailRedirectTo: window.location.origin + '/app' }
+    }));
+  } catch (err) {
+    showMsg('msg', 'error', '❌ ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = 'Send magic link';
+    return;
+  }
 
   if (ok) {
     showMsg('msg', 'success', '✅ Magic link sent! Check your inbox and click the link to sign in.');
@@ -228,7 +264,16 @@ document.getElementById('passwordForm').addEventListener('submit', async (e) => 
   btn.innerHTML = '<span class="spinner"></span>Signing in…';
   showMsg('pwMsg', 'loading', 'Signing in…');
 
-  const { ok, data } = await supabaseFetch('/token?grant_type=password', { email, password });
+  let ok = false;
+  let data = {};
+  try {
+    ({ ok, data } = await supabaseFetch('/token?grant_type=password', { email, password }));
+  } catch (err) {
+    showMsg('pwMsg', 'error', '❌ ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = 'Sign in with password';
+    return;
+  }
 
   if (ok && data.access_token) {
     localStorage.setItem('acc_token', data.access_token);
@@ -241,6 +286,21 @@ document.getElementById('passwordForm').addEventListener('submit', async (e) => 
     btn.disabled = false;
     btn.innerHTML = 'Sign in with password';
   }
+});
+
+// Admin token form (session-scoped by default)
+document.getElementById('adminTokenForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const token = document.getElementById('adminToken').value.trim();
+  const role = (document.getElementById('adminRole').value || 'operator').trim().toLowerCase();
+  if (!token) {
+    showMsg('adminMsg', 'error', '❌ Admin token is required.');
+    return;
+  }
+  sessionStorage.setItem('acc_admin_token', token);
+  sessionStorage.setItem('acc_admin_role', role || 'operator');
+  showMsg('adminMsg', 'success', '✅ Admin session set. Redirecting…');
+  setTimeout(() => { window.location.href = '/app'; }, 300);
 });
 
 // Handle magic link redirect (Supabase puts token in URL hash on callback)

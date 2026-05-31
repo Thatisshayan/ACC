@@ -28,9 +28,27 @@ function makeRes() {
 describe('requireTelegramSecret', () => {
   test('passes through when TELEGRAM_WEBHOOK_SECRET is not set', (t, done) => {
     delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    process.env.NODE_ENV = 'development';
     const mw = requireTelegramSecret();
     const req = makeReq(); const res = makeRes();
     mw(req, res, () => { assert.equal(res._status, 200); done(); });
+  });
+
+  test('fails closed in production when TELEGRAM_WEBHOOK_SECRET is not set', (t, done) => {
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    process.env.NODE_ENV = 'production';
+    const mw = requireTelegramSecret();
+    const req = makeReq(); const res = makeRes();
+    let nextCalled = false;
+    mw(req, res, () => { nextCalled = true; done(new Error('next() should not be called')); });
+    setImmediate(() => {
+      if (!nextCalled) {
+        assert.equal(res._status, 503);
+        assert.equal(res._body && res._body.success, false);
+        delete process.env.NODE_ENV;
+        done();
+      }
+    });
   });
 
   test('allows request with correct secret', (t, done) => {
@@ -86,12 +104,32 @@ describe('requireHmacSignature', () => {
     return 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
   }
 
-  test('passes through when secret env var is not set', (t, done) => {
+  test('passes through when secret env var is not set (non-production)', (t, done) => {
     delete process.env[SECRET_VAR];
+    delete process.env.NODE_ENV;
     const mw = requireHmacSignature({ secretEnvVar: SECRET_VAR });
     const req = makeReq({}, Buffer.from('hello'));
     const res = makeRes();
     mw(req, res, () => { assert.equal(res._status, 200); done(); });
+  });
+
+  test('fails closed in production when secret env var is not set', (t, done) => {
+    delete process.env[SECRET_VAR];
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const mw = requireHmacSignature({ secretEnvVar: SECRET_VAR });
+    const req = makeReq({}, Buffer.from('hello'));
+    const res = makeRes();
+    let nextCalled = false;
+    mw(req, res, () => { nextCalled = true; done(new Error('next() must not be called in production without secret')); });
+    setImmediate(() => {
+      if (!nextCalled) {
+        assert.equal(res._status, 503);
+        assert.equal(res._body && res._body.success, false);
+        if (prev !== undefined) { process.env.NODE_ENV = prev; } else { delete process.env.NODE_ENV; }
+        done();
+      }
+    });
   });
 
   test('accepts request with valid HMAC', (t, done) => {

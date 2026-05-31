@@ -20,9 +20,14 @@ html,body{height:100%;background:#000;display:flex;align-items:center;justify-co
 <div class="logo">ACC<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
 <script>
 // Auth guard — runs before /app loads
-(function() {
-  const SUPABASE_URL  = 'https://wfgdewzrnrjthugpgeey.supabase.co';
-  const SUPABASE_ANON = 'sb_publishable_I4Lp-Ivla-Txrk0mh9RtFA_jOjGJrXE';
+(async function() {
+  let SUPABASE_URL = null;
+  let SUPABASE_ANON = null;
+  try {
+    const cfg = await fetch('/api/config/public').then(r => r.json());
+    SUPABASE_URL = cfg?.config?.supabaseUrl || null;
+    SUPABASE_ANON = cfg?.config?.supabaseAnonKey || null;
+  } catch (_) {}
 
   // Handle magic link hash from Supabase
   const hash = window.location.hash;
@@ -40,9 +45,13 @@ html,body{height:100%;background:#000;display:flex;align-items:center;justify-co
   }
 
   const token = localStorage.getItem('acc_token');
-  if (!token) { window.location.href = '/login'; return; }
+  const adminToken = sessionStorage.getItem('acc_admin_token') || localStorage.getItem('acc_admin_token');
+  if (!token && !adminToken) { window.location.href = '/login'; return; }
+  if (!token && adminToken) { loadApp(); return; }
 
   // Verify token is still valid
+  if (!SUPABASE_URL || !SUPABASE_ANON) { signOut(); return; }
+
   fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + token }
   })

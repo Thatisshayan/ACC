@@ -11,7 +11,7 @@
 
 const express = require('express');
 const router  = express.Router();
-const { remember, recall, recallAll, search, logEvent, getEvents, stats } = require('../memory/store.js');
+const { remember, recall, recallAll, search, logEvent, getEvents, stats, forgetScope, exportScope, pruneExpired } = require('../memory/store.js');
 const { syncMemoryToSupabase, loadMemoryFromSupabase } = require('../storage/supabaseMemory.js');
 const { log } = require('../utils/logger.js');
 
@@ -96,6 +96,49 @@ router.post('/sync', async (req, res) => {
     });
     log(`[memory] Synced ${rows.length} rows from Supabase.`);
     return res.json({ success: true, synced: rows.length });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET /api/memory/export?scope=global
+router.get('/export', (req, res) => {
+  try {
+    const scope = String(req.query.scope || 'global');
+    const rows = exportScope(scope);
+    return res.json({
+      success: true,
+      scope,
+      exportedAt: new Date().toISOString(),
+      count: rows.length,
+      memories: rows,
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /api/memory/account-delete
+// Body: { scope: "user:123", confirm: true }
+router.post('/account-delete', (req, res) => {
+  try {
+    const scope = String(req.body?.scope || '').trim();
+    const confirm = req.body?.confirm === true;
+    if (!scope) return res.status(400).json({ success: false, error: 'scope is required.' });
+    if (!confirm) return res.status(400).json({ success: false, error: 'confirm=true is required.' });
+    const deleted = forgetScope(scope);
+    log(`[memory] Account delete for scope=${scope} removed=${deleted}`);
+    return res.json({ success: true, scope, deleted });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /api/memory/retention/prune
+router.post('/retention/prune', (req, res) => {
+  try {
+    const result = pruneExpired();
+    return res.json({ success: true, result, prunedAt: new Date().toISOString() });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
   }

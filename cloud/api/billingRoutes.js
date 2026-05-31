@@ -19,6 +19,14 @@ const express = require('express');
 const router  = express.Router();
 const { log } = require('../utils/logger.js');
 const { saveSubscription, loadSubscriptions } = require('../storage/supabaseMemory.js');
+const { requireOperatorOrAdmin } = require('../middleware/auth.js');
+
+function maskEmail(email) {
+  const value = String(email || '').trim();
+  const at = value.indexOf('@');
+  if (at <= 1) return '***';
+  return `${value.slice(0, 2)}***${value.slice(at)}`;
+}
 
 // In-memory subscription store — seeded from Supabase on startup
 const subscriptions = new Map();
@@ -62,6 +70,11 @@ const PLANS = {
     features:    ['Everything in Builder', 'White-label dashboard', 'Custom domain support', 'Priority support', 'Unlimited tasks'],
   },
 };
+
+router.use((req, res, next) => {
+  if (req.path === '/webhook' || req.path === '/plans') return next();
+  return requireOperatorOrAdmin(req, res, next);
+});
 
 function stripe() {
   const key = process.env.STRIPE_API_KEY;
@@ -109,7 +122,7 @@ router.post('/checkout', async (req, res) => {
       metadata:           { plan, email },
       subscription_data:  { metadata: { plan, email } },
     });
-    log(`[billing] Checkout session created for ${email} — ${plan}`);
+    log(`[billing] Checkout session created for ${maskEmail(email)} — ${plan}`);
     return res.json({ success: true, url: session.url, sessionId: session.id });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
@@ -134,8 +147,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   try {
     if (secret && sig) {
       event = stripe().webhooks.constructEvent(req.body, sig, secret);
+    } else if (process.env.NODE_ENV === 'production') {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
     } else {
-      event = JSON.parse(req.body);
+      event = JSON.parse(Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body || '{}'));
       log('[billing] Webhook secret not set — skipping signature verification.');
     }
   } catch (e) {
@@ -159,7 +174,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         };
         subscriptions.set(email.toLowerCase(), record);
         saveSubscription({ email, ...record }).catch(() => {});
-        log(`[billing] Subscription ${sub.status} — ${email} → ${plan}`);
+        log(`[billing] Subscription ${sub.status} — ${maskEmail(email)} → ${plan}`);
       }
       break;
     }
@@ -171,7 +186,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           existing.status    = 'cancelled';
           existing.updatedAt = new Date().toISOString();
         }
-        log(`[billing] Subscription cancelled — ${email}`);
+        log(`[billing] Subscription cancelled — ${maskEmail(email)}`);
       }
       break;
     }

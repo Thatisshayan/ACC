@@ -1,4 +1,5 @@
 // cloud/server.js
+require('./config/validateEnv'); // must be first — exits in production if critical env vars missing
 const express      = require("express");
 const path         = require("path");
 const cors         = require("cors");
@@ -14,16 +15,27 @@ const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const outreachRoutes           = require("./api/outreachRoutes.js");
 const synapseRoutes            = require("./api/synapseRoutes.js");
 const fscRoutes                = require("./api/fscRoutes.js");
-const emailRoutes              = safeRequire("./api/emailRoutes.js");
-const loopsRoutes              = safeRequire("./api/loopsRoutes.js");
+const moduleLoadStatus = {};
+const emailRoutes              = safeRequire("./api/emailRoutes.js", "email");
+const loopsRoutes              = safeRequire("./api/loopsRoutes.js", "loops");
 function safeRequire(mod) {
-  try { return require(mod); }
-  catch(e) { console.error(`[server] LOAD FAIL ${mod}: ${e.message}`); return null; }
+  return safeRequireWithName(mod, mod);
 }
-const cardRoutes    = safeRequire("./api/cardRoutes.js");
-const phoneRoutes   = safeRequire("./api/phoneRoutes.js");
-const billingRoutes = safeRequire("./api/billingRoutes.js");
-const memoryRoutes  = safeRequire("./api/memoryRoutes.js");
+function safeRequireWithName(mod, name) {
+  try {
+    const loaded = require(mod);
+    moduleLoadStatus[name] = { loaded: true, error: null };
+    return loaded;
+  } catch (e) {
+    moduleLoadStatus[name] = { loaded: false, error: e.message };
+    console.error(`[server] LOAD FAIL ${mod}: ${e.message}`);
+    return null;
+  }
+}
+const cardRoutes    = safeRequireWithName("./api/cardRoutes.js", "card");
+const phoneRoutes   = safeRequireWithName("./api/phoneRoutes.js", "phone");
+const billingRoutes = safeRequireWithName("./api/billingRoutes.js", "billing");
+const memoryRoutes  = safeRequireWithName("./api/memoryRoutes.js", "memory");
 const statusSummary            = require("./api/statusSummary.js");
 const messagesRoutes           = require("./api/messages.js");
 const assistantRoutes          = require("./api/assistant.js");
@@ -33,12 +45,16 @@ const hubRoutes                = require("./hub/routes.js");
 const autonomyRoutes           = require("./autonomy/routes.js");
 const autonomyLoop             = require("./autonomy/loop.js");
 const { startWSServer }        = require("./ws/server.js");
+const {
+  requireOperatorOrAdmin,
+  requireServiceOperatorOrAdmin,
+} = require("./middleware/auth.js");
 const orchestrator = require("./orchestrator.js");
-const cloudRouter  = require("./router.js");
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
 const UI_DIST_PATH = path.join(__dirname, "../ui/dist");
+app.locals.moduleLoadStatus = moduleLoadStatus;
 
 // Rate limiting — relaxed in dev, strict in prod
 const limiter = rateLimit({
@@ -85,6 +101,16 @@ app.use(cors({
   },
   credentials: true,
 }));
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
+  next();
+});
 app.use(express.json());
 app.use(limiter); // Apply rate limiting to all routes
 
@@ -97,6 +123,21 @@ function ensureWorker() {
   }
 }
 
+function maskEmail(email) {
+  const value = String(email || '').trim();
+  const at = value.indexOf('@');
+  if (at <= 1) return '***';
+  return `${value.slice(0, 2)}***${value.slice(at)}`;
+}
+
+function routeOrchestratorTask(task) {
+  const role = task?.assigned_agent_role;
+  if (role === "architect") return "copilot";
+  if (role === "writer") return "claude";
+  if (role === "engineer") return "copilot";
+  return "copilot";
+}
+
 // ---------- Health (root + /api/health — both must return JSON on Railway) ----------
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "ACC v2", time: new Date().toISOString(), env: process.env.NODE_ENV || "development" });
@@ -106,8 +147,22 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "ACC Module 7", version: "2.3.0", routes: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, time: new Date().toISOString() });
 });
 
+app.get("/api/config/public", (req, res) => {
+  res.json({
+    success: true,
+    config: {
+      supabaseUrl: (process.env.SUPABASE_URL || "").trim() || null,
+      supabaseAnonKey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || null,
+      appUrl: process.env.ACC_PUBLIC_URL || null,
+    },
+  });
+});
+
 // ONE-TIME SETUP — remove after running
-app.get("/api/admin/setup", async (req, res) => {
+app.get("/api/admin/setup", requireOperatorOrAdmin, async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ success: false, error: "Not found" });
+  }
   const results = { env: { stripe: !!process.env.STRIPE_API_KEY, supabase: !!process.env.SUPABASE_URL, svcKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY } };
   // 1. Waitlist count — use same init pattern as supabaseMemory.js
   try {
@@ -147,23 +202,29 @@ app.get("/api/admin/setup", async (req, res) => {
   res.json(results);
 });
 
-app.get("/api/debug", (req, res) => {
+app.get("/api/debug", requireOperatorOrAdmin, (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ success: false, error: "Not found" });
+  }
   const tests = {};
   ["./api/cardRoutes.js","./api/phoneRoutes.js","./api/billingRoutes.js","./api/memoryRoutes.js"].forEach(m => {
     try { require(m); tests[m] = "ok"; } catch(e) { tests[m] = e.message; }
   });
-  res.json({ version: "2.3.0", loaded: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, requires: tests, node: process.version, cwd: process.cwd() });
+  res.json({ version: "2.3.0", loaded: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, requires: tests, node: process.version });
 });
 
 // Inline billing test — bypasses sub-router to isolate 404 source
-app.get("/api/billing/plans", (req, res) => {
+app.get("/api/billing/plans", requireOperatorOrAdmin, (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ success: false, error: "Not found" });
+  }
   const { PLANS } = require("./api/billingRoutes.js");
   const plans = Object.entries(PLANS).map(([id, p]) => ({ id, name: p.name, price: p.price, features: p.features }));
   res.json({ success: true, source: "inline", plans });
 });
 
 // ---------- Execute (enqueue task) ----------
-app.post("/api/execute", (req, res) => {
+app.post("/api/execute", requireOperatorOrAdmin, (req, res) => {
   try {
     const { agentType, payload, meta } = req.body || {};
     if (!agentType) {
@@ -220,63 +281,52 @@ app.get("/app/*splat", (req, res) => {
 
 // ---------- Orchestrate (Module 6) ----------
 
-app.post("/orchestrate", (req, res) => {
+app.post("/orchestrate", requireOperatorOrAdmin, (req, res) => {
   const { command, project } = req.body || {};
   if (!command) return res.status(400).json({ error: "Missing 'command' in body" });
   const graph  = orchestrator.buildTaskGraph(command, project || "Generic");
-  const routed = graph.map(task => ({ ...task, target: cloudRouter.routeTask(task) }));
+  const routed = graph.map(task => ({ ...task, target: routeOrchestratorTask(task) }));
   res.json({ project: project || "Generic", command, task_graph: routed });
 });
 
 // ---------- Admin Dashboard ----------
 // Mounted at both /admin (legacy) and /api/admin (UI calls baseURL /api + /admin/*)
-app.use("/admin", adminRouter);
-app.use("/admin/dlq", dlqRoutes);
-app.use("/api/admin", adminRouter);
-app.use("/api/admin/dlq", dlqRoutes);
-
-// ---------- Task Bus auth middleware ----------
-// Set TASKBUS_API_KEY in .env to require Bearer token on all /api/taskbus/* routes.
-// If unset the routes are open (dev mode).
-const _TASKBUS_KEY = process.env.TASKBUS_API_KEY;
-function taskbusAuth(req, res, next) {
-  if (!_TASKBUS_KEY) return next();
-  const auth  = req.headers['authorization'] || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (token !== _TASKBUS_KEY) return res.status(401).json({ success: false, error: 'Unauthorized' });
-  next();
-}
+app.use("/admin", requireOperatorOrAdmin, adminRouter);
+app.use("/admin/dlq", requireOperatorOrAdmin, dlqRoutes);
+app.use("/api/admin", requireOperatorOrAdmin, adminRouter);
+app.use("/api/admin/dlq", requireOperatorOrAdmin, dlqRoutes);
 
 // ---------- Agent Task Bus ----------
-app.use("/api/taskbus", taskbusAuth, taskbusRoutes);
+app.use("/api/taskbus", requireServiceOperatorOrAdmin, taskbusRoutes);
 
 // ---------- App Hub (bidirectional app control) ----------
-// Uses same Bearer token as taskbus. Open in dev (no TASKBUS_API_KEY set).
-app.use("/api/hub", taskbusAuth, hubRoutes);
+// Uses the shared auth middleware boundary.
+app.use("/api/hub", requireServiceOperatorOrAdmin, hubRoutes);
 
 // ---------- Autonomy (self-scheduling loops) ----------
-app.use("/api/autonomy", taskbusAuth, autonomyRoutes);
+app.use("/api/autonomy", requireServiceOperatorOrAdmin, autonomyRoutes);
 
 // ---------- Security Approval + Telegram Webhook ----------
 app.use("/api", securityApproval);
 app.use("/api", telegramWebhook);
 app.use("/api", webhookHandler);
-app.use("/api/messages", messagesRoutes);
-app.use("/api/assistant", assistantRoutes);
+app.use("/api/messages", requireOperatorOrAdmin, messagesRoutes);
+app.use("/api/assistant", requireOperatorOrAdmin, assistantRoutes);
+app.use("/api/voice", requireOperatorOrAdmin, assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
-app.use("/api/outreach", outreachRoutes);
-app.use("/api/synapse",  synapseRoutes);
+app.use("/api/outreach", requireOperatorOrAdmin, outreachRoutes);
+app.use("/api/synapse", requireOperatorOrAdmin, synapseRoutes);
 app.use("/api/fsc",      fscRoutes);
 if (emailRoutes) app.use("/api/email", emailRoutes);
 if (loopsRoutes) app.use("/api/loops", loopsRoutes);
-if (cardRoutes)    app.use("/api/card",    cardRoutes);
+if (cardRoutes)    app.use("/api/card", requireOperatorOrAdmin, cardRoutes);
 if (phoneRoutes)   app.use("/api/phone",   phoneRoutes);
 if (billingRoutes) app.use("/api/billing", billingRoutes);
-if (memoryRoutes)  app.use("/api/memory",  memoryRoutes);
-app.use("/api/status", statusSummary);
+if (memoryRoutes)  app.use("/api/memory", requireOperatorOrAdmin, memoryRoutes);
+app.use("/api/status", requireOperatorOrAdmin, statusSummary);
 
 // ---------- UI Routes ----------
-app.use("/api/ui", uiRoutes);
+app.use("/api/ui", requireOperatorOrAdmin, uiRoutes);
 
 // ---------- Waitlist ----------
 app.post("/api/waitlist", async (req, res) => {
@@ -299,7 +349,7 @@ app.post("/api/waitlist", async (req, res) => {
       }
       if (error) throw error;
     }
-    console.log(`[waitlist] New signup: ${email}`);
+    console.log(`[waitlist] New signup: ${maskEmail(email)}`);
     return res.json({ success: true, message: "You're on the list!" });
   } catch (err) {
     console.error("[waitlist] error:", err.message);
