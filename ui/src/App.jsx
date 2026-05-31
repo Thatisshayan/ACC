@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import OnboardingChecklist from './components/OnboardingChecklist.jsx';
 import {
   LayoutDashboard, CheckSquare, ShieldCheck, MessageSquare, Mic,
   Bot, Plug, Search, Shield, Settings, ChevronLeft, ChevronRight,
@@ -121,7 +122,10 @@ const MOBILE_NAV = [
 ];
 
 const PAGE_PATHS = new Set(['dashboard','tasks','approvals','messages','assistant','synapse','workflows','autonomy','agents','integrations','audit','admin','settings']);
-function pathToPage(p) { const n = String(p||'').replace(/^\/+/,'').trim().toLowerCase(); return PAGE_PATHS.has(n) ? n : 'dashboard'; }
+function pathToPage(p) {
+  const n = String(p||'').replace(/^\/app\b/, '').replace(/^\/+/,'').trim().toLowerCase();
+  return PAGE_PATHS.has(n) ? n : 'dashboard';
+}
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 function Card({ className = '', children, glow = false }) {
@@ -425,7 +429,7 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.location.pathname !== `/${page}`) window.history.pushState({}, '', `/${page}`);
+    if (window.location.pathname !== `/app/${page}`) window.history.pushState({}, '', `/app/${page}`);
   }, [page]);
 
   useEffect(() => {
@@ -462,6 +466,10 @@ export default function App() {
 
     return (
       <div className="p-5 sm:p-6 space-y-5 acc-grid-bg min-h-screen">
+
+<<<<<<< HEAD
+        {/* ── Onboarding checklist — shown until dismissed ─────────────────── */}
+        <OnboardingChecklist />
 
         {/* ── Hero command bar ─────────────────────────────────────────────── */}
         <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#0c0c1e] via-[#09091a] to-[#0c0c18]">

@@ -15,7 +15,7 @@ async function buildContentPipelineGraph({ text, language = "en", userId, role }
     },
     {
       id: "TTS", agentType: "elevenlabs",
-      payload: { text: "SCRIPT_OUTPUT_PLACEHOLDER", voice: "Rachel", model: "eleven_multilingual_v2" },
+      payload: { text: "{{SCRIPT.output}}", voice: "Rachel", model: "eleven_multilingual_v2" },
       dependsOn: ["SCRIPT"], meta: { userId, role },
     },
     {

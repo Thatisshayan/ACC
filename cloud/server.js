@@ -106,53 +106,14 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "ACC Module 7", version: "2.3.0", routes: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, time: new Date().toISOString() });
 });
 
-// ONE-TIME SETUP — remove after running
-app.get("/api/admin/setup", async (req, res) => {
-  const results = { env: { stripe: !!process.env.STRIPE_API_KEY, supabase: !!process.env.SUPABASE_URL, svcKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY } };
-  // 1. Waitlist count — use same init pattern as supabaseMemory.js
-  try {
-    const { createClient } = require("@supabase/supabase-js");
-    const ws = require("ws");
-    const sb = createClient(
-      (process.env.SUPABASE_URL || "").trim(),
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
-      { realtime: { transport: ws } }
-    );
-    const { count, error } = await sb.from("acc_waitlist").select("*", { count: "exact", head: true });
-    results.waitlist = error ? { error: error.message } : { count };
-  } catch(e) { results.waitlist = { error: e.message }; }
-  // 2. Stripe products — use same lazy pattern as billingRoutes.js
-  try {
-    const key = process.env.STRIPE_API_KEY || process.env.STRIPE_SECRET_KEY;
-    if (!key) throw new Error("Neither STRIPE_API_KEY nor STRIPE_SECRET_KEY found in Railway env");
-    const stripe = require("stripe")(key);
-    const existing = await stripe.products.list({ limit: 20, active: true });
-    const has = name => existing.data.find(p => p.name === name);
-    const upsert = async (name, desc, cents) => {
-      const found = has(name);
-      if (found) {
-        const prices = await stripe.prices.list({ product: found.id, active: true, limit: 1 });
-        return { note: "already exists", product: found.id, price: prices.data[0]?.id };
-      }
-      const p = await stripe.products.create({ name, description: desc });
-      const price = await stripe.prices.create({ product: p.id, unit_amount: cents, currency: "usd", recurring: { interval: "month" } });
-      return { product: p.id, price: price.id };
-    };
-    results.stripe = {
-      starter:  await upsert("ACC Starter",  "AI OS for individuals — 50 tasks/mo",          1900),
-      builder:  await upsert("ACC Builder",  "For builders & small teams — 200 tasks/mo",    4900),
-      operator: await upsert("ACC Operator", "Full operator access — unlimited tasks",        9900),
-    };
-  } catch(e) { results.stripe = { error: e.message }; }
-  res.json(results);
-});
-
-app.get("/api/debug", (req, res) => {
-  const tests = {};
-  ["./api/cardRoutes.js","./api/phoneRoutes.js","./api/billingRoutes.js","./api/memoryRoutes.js"].forEach(m => {
-    try { require(m); tests[m] = "ok"; } catch(e) { tests[m] = e.message; }
+// ---------- Public config (safe to expose: only contains publishable keys) ----------
+// Serves Supabase anon key + URL so they never need to be hardcoded in HTML files.
+// Rotating the key in Railway env vars is sufficient — no code redeploy needed.
+app.get("/api/config/public", (req, res) => {
+  res.json({
+    supabaseUrl:     (process.env.SUPABASE_URL  || '').trim(),
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
   });
-  res.json({ version: "2.3.0", loaded: { card: !!cardRoutes, phone: !!phoneRoutes, billing: !!billingRoutes, memory: !!memoryRoutes }, requires: tests, node: process.version, cwd: process.cwd() });
 });
 
 // Inline billing test — bypasses sub-router to isolate 404 source
@@ -162,8 +123,8 @@ app.get("/api/billing/plans", (req, res) => {
   res.json({ success: true, source: "inline", plans });
 });
 
-// ---------- Execute (enqueue task) ----------
-app.post("/api/execute", (req, res) => {
+// ---------- Execute (enqueue task) — requires TASKBUS_API_KEY Bearer token ----------
+app.post("/api/execute", taskbusAuth, (req, res) => {
   try {
     const { agentType, payload, meta } = req.body || {};
     if (!agentType) {
@@ -206,6 +167,11 @@ app.get("/login", (req, res) => {
   res.sendFile(path.join(__dirname, "../landing/login.html"));
 });
 
+// Admin login page — served before the taskbusAuth-protected /admin/* routes
+app.get("/admin/login", (req, res) => {
+  res.sendFile(path.join(__dirname, "../landing/admin-login.html"));
+});
+
 // App entry point — auth-check wrapper, then React dashboard
 app.get("/app", (req, res) => {
   res.sendFile(path.join(__dirname, "../landing/auth-check.html"));
@@ -220,7 +186,7 @@ app.get("/app/*splat", (req, res) => {
 
 // ---------- Orchestrate (Module 6) ----------
 
-app.post("/orchestrate", (req, res) => {
+app.post("/orchestrate", taskbusAuth, (req, res) => {
   const { command, project } = req.body || {};
   if (!command) return res.status(400).json({ error: "Missing 'command' in body" });
   const graph  = orchestrator.buildTaskGraph(command, project || "Generic");
@@ -228,12 +194,11 @@ app.post("/orchestrate", (req, res) => {
   res.json({ project: project || "Generic", command, task_graph: routed });
 });
 
-// ---------- Admin Dashboard ----------
-// Mounted at both /admin (legacy) and /api/admin (UI calls baseURL /api + /admin/*)
-app.use("/admin", adminRouter);
-app.use("/admin/dlq", dlqRoutes);
-app.use("/api/admin", adminRouter);
-app.use("/api/admin/dlq", dlqRoutes);
+// ---------- Admin Dashboard — requires TASKBUS_API_KEY Bearer token ----------
+app.use("/admin",        taskbusAuth, adminRouter);
+app.use("/admin/dlq",    taskbusAuth, dlqRoutes);
+app.use("/api/admin",    taskbusAuth, adminRouter);
+app.use("/api/admin/dlq",taskbusAuth, dlqRoutes);
 
 // ---------- Task Bus auth middleware ----------
 // Set TASKBUS_API_KEY in .env to require Bearer token on all /api/taskbus/* routes.
@@ -264,15 +229,35 @@ app.use("/api", webhookHandler);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/assistant", assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
-app.use("/api/outreach", outreachRoutes);
-app.use("/api/synapse",  synapseRoutes);
-app.use("/api/fsc",      fscRoutes);
-if (emailRoutes) app.use("/api/email", emailRoutes);
-if (loopsRoutes) app.use("/api/loops", loopsRoutes);
-if (cardRoutes)    app.use("/api/card",    cardRoutes);
-if (phoneRoutes)   app.use("/api/phone",   phoneRoutes);
-if (billingRoutes) app.use("/api/billing", billingRoutes);
-if (memoryRoutes)  app.use("/api/memory",  memoryRoutes);
+// ---------- Subscription enforcement ----------
+// requireTier(tier) gates a route behind an active billing subscription.
+// Reads email from req.body/query/header. Falls through in dev (no TASKBUS_API_KEY).
+function requireTier(minTier) {
+  const TIER_RANK = { starter: 1, builder: 2, operator: 3 };
+  return function subscriptionGate(req, res, next) {
+    if (!_TASKBUS_KEY) return next(); // dev: no enforcement
+    if (!billingRoutes) return next(); // billing module not loaded
+    const email = req.body?.email || req.query?.email || req.headers['x-acc-email'] || '';
+    const tier  = billingRoutes.getTier ? billingRoutes.getTier(email) : null;
+    const rank  = TIER_RANK[tier] || 0;
+    if (rank >= (TIER_RANK[minTier] || 1)) return next();
+    return res.status(402).json({
+      success: false,
+      error:   `This feature requires an active ${minTier} subscription or higher.`,
+      upgrade: '/api/billing/plans',
+    });
+  };
+}
+
+app.use("/api/outreach", taskbusAuth, requireTier('starter'), outreachRoutes);
+app.use("/api/synapse",  taskbusAuth, requireTier('builder'), synapseRoutes);
+app.use("/api/fsc",      taskbusAuth, fscRoutes);
+if (emailRoutes) app.use("/api/email",  taskbusAuth, emailRoutes);
+if (loopsRoutes) app.use("/api/loops",  taskbusAuth, loopsRoutes);
+if (cardRoutes)    app.use("/api/card",    taskbusAuth, requireTier('builder'), cardRoutes);
+if (phoneRoutes)   app.use("/api/phone",   taskbusAuth, requireTier('builder'), phoneRoutes);
+if (billingRoutes) app.use("/api/billing", billingRoutes);  // /plans is public; checkout/webhook have own validation
+if (memoryRoutes)  app.use("/api/memory",  taskbusAuth, memoryRoutes);
 app.use("/api/status", statusSummary);
 
 // ---------- UI Routes ----------

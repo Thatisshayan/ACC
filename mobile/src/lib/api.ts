@@ -55,7 +55,7 @@ export function executeAssistantPrompt(payload: Json) {
 }
 
 export function voiceTranscribe(formData: FormData) {
-  return fetch(`${getApiBaseUrl()}/api/voice/transcribe`, {
+  return fetch(`${getApiBaseUrl()}/api/assistant/transcribe`, {
     method: 'POST',
     body: formData,
   }).then(async (res) => {
@@ -182,13 +182,13 @@ export function registerWithHub(payload: Json) {
 export function approveAdminApproval(id: string) {
   return request(`/api/admin/approvals/${encodeURIComponent(id)}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ resolvedBy: 'Shayan' }),
+    body: JSON.stringify({ resolvedBy: 'owner' }),
   });
 }
 
 export function rejectAdminApproval(id: string) {
   return request(`/api/admin/approvals/${encodeURIComponent(id)}/reject`, {
     method: 'POST',
-    body: JSON.stringify({ resolvedBy: 'Shayan' }),
+    body: JSON.stringify({ resolvedBy: 'owner' }),
   });
 }
