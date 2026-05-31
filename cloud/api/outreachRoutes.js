@@ -8,6 +8,18 @@ const pipeline = require('../workflows/outreachPipeline.js');
 const fs       = require('fs');
 const path     = require('path');
 
+// GET /api/outreach/unsubscribe?email=... — CASL-compliant opt-out
+router.get('/unsubscribe', async (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).send('Missing email parameter.');
+  try {
+    await pipeline.markUnsubscribed(email);
+    return res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:4rem"><h2>Unsubscribed</h2><p>${email} has been removed from all future outreach.</p></body></html>`);
+  } catch (e) {
+    return res.status(500).send('Error: ' + e.message);
+  }
+});
+
 // POST /api/outreach/run
 // Body: { leads: [{ name, company, domain, role, notes? }] }
 router.post('/run', async (req, res) => {

@@ -254,8 +254,27 @@ function runWatchdog() {
 }
 
 var _watchdogTimer = setInterval(runWatchdog, WATCHDOG_INTERVAL_MS);
-// Allow the process to exit even if the interval is still active.
 if (_watchdogTimer.unref) _watchdogTimer.unref();
+
+// ── 24h max-age auto-fail ─────────────────────────────────────────────────────
+// Tasks still in_progress after 24 hours are considered permanently stuck.
+// Runs hourly — separate from the 10-min watchdog to avoid changing its semantics.
+var _maxAgeStmt = db.prepare(
+  "UPDATE tasks SET status = 'failed', error = 'max_age_exceeded', updated_at = ? " +
+  "WHERE status = 'in_progress' AND created_at < ?"
+);
+
+function runMaxAgeCheck() {
+  var now    = new Date();
+  var cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  var info   = _maxAgeStmt.run(now.toISOString(), cutoff);
+  if (info.changes > 0) {
+    console.log('[store] MaxAge: auto-failed', info.changes, 'task(s) older than 24h in_progress');
+  }
+}
+
+var _maxAgeTimer = setInterval(runMaxAgeCheck, 60 * 60 * 1000); // hourly
+if (_maxAgeTimer.unref) _maxAgeTimer.unref();
 
 // ── Agents registry (static, unchanged) ──────────────────────────────────────
 const AGENTS = {

@@ -4,6 +4,20 @@ process.on('unhandledRejection', (e) => console.error('[start] UNHANDLED:', e));
 console.log('[start] process starting, NODE_ENV=' + process.env.NODE_ENV + ' PORT=' + process.env.PORT);
 require('dotenv').config({ path: require('path').join(__dirname, '../.env'), override: false });
 
+if (process.env.SENTRY_DSN) {
+  try {
+    const Sentry = require('@sentry/node');
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'production',
+      tracesSampleRate: 0.1,
+    });
+    console.log('[start] Sentry initialized');
+  } catch(e) {
+    console.warn('[start] Sentry not available (install @sentry/node to enable):', e.message);
+  }
+}
+
 const port = process.env.PORT || 4000;
 console.log('[start] loading worker...');
 const { startWorker } = require("../cloud/worker.js");

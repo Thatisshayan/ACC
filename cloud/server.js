@@ -14,6 +14,8 @@ const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const outreachRoutes           = require("./api/outreachRoutes.js");
 const synapseRoutes            = require("./api/synapseRoutes.js");
 const fscRoutes                = require("./api/fscRoutes.js");
+const emailRoutes              = safeRequire("./api/emailRoutes.js");
+const loopsRoutes              = safeRequire("./api/loopsRoutes.js");
 function safeRequire(mod) {
   try { return require(mod); }
   catch(e) { console.error(`[server] LOAD FAIL ${mod}: ${e.message}`); return null; }
@@ -229,8 +231,7 @@ app.use("/api/assistant", assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
 // ---------- Subscription enforcement ----------
 // requireTier(tier) gates a route behind an active billing subscription.
-// Reads email from Bearer token (if JWT) or from req.body/query.
-// Falls back to open in dev (no TASKBUS_API_KEY set) so local testing works.
+// Reads email from req.body/query/header. Falls through in dev (no TASKBUS_API_KEY).
 function requireTier(minTier) {
   const TIER_RANK = { starter: 1, builder: 2, operator: 3 };
   return function subscriptionGate(req, res, next) {
@@ -251,9 +252,11 @@ function requireTier(minTier) {
 app.use("/api/outreach", taskbusAuth, requireTier('starter'), outreachRoutes);
 app.use("/api/synapse",  taskbusAuth, requireTier('builder'), synapseRoutes);
 app.use("/api/fsc",      taskbusAuth, fscRoutes);
+if (emailRoutes) app.use("/api/email",  taskbusAuth, emailRoutes);
+if (loopsRoutes) app.use("/api/loops",  taskbusAuth, loopsRoutes);
 if (cardRoutes)    app.use("/api/card",    taskbusAuth, requireTier('builder'), cardRoutes);
 if (phoneRoutes)   app.use("/api/phone",   taskbusAuth, requireTier('builder'), phoneRoutes);
-if (billingRoutes) app.use("/api/billing", billingRoutes);  // /api/billing/plans is public pricing data; checkout/webhook have own validation
+if (billingRoutes) app.use("/api/billing", billingRoutes);  // /plans is public; checkout/webhook have own validation
 if (memoryRoutes)  app.use("/api/memory",  taskbusAuth, memoryRoutes);
 app.use("/api/status", statusSummary);
 

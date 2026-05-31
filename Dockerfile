@@ -1,21 +1,36 @@
+# ── Stage 1: Builder — builds UI, compiles native modules ──────────────────
+FROM node:20-alpine AS builder
+RUN apk add --no-cache python3 make g++
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY ui/package*.json ./ui/
+RUN cd ui && npm ci
+
+COPY . .
+RUN cd ui && npm run build
+
+# ── Stage 2: Runtime — prod deps only + system Chromium for Playwright ──────
 FROM node:20-alpine
 
-# Build tools for native modules (better-sqlite3 requires python3, make, g++)
-RUN apk add --no-cache python3 make g++
+# Native build tools (better-sqlite3) + system Chromium for Playwright
+RUN apk add --no-cache \
+  python3 make g++ \
+  chromium nss freetype harfbuzz ca-certificates ttf-freefont
 
 WORKDIR /app
 
-# Copy all source first (.dockerignore excludes node_modules)
-COPY . .
-
-# Install root dependencies — compiles better-sqlite3 for Linux
+COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Install Playwright Chromium for live browser automation (used when BROWSER_SANDBOX=false)
-RUN npx playwright install chromium --with-deps 2>/dev/null || true
+COPY . .
+COPY --from=builder /app/ui/dist ./ui/dist
 
-# Build UI
-RUN cd ui && npm ci && npm run build
+# Use system Chromium — skip Playwright's bundled download
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 EXPOSE 4000
 
