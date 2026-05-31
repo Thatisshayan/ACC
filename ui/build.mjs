@@ -7,5 +7,8 @@ await build({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      external: ['@sentry/react'],
+    },
   },
 });
