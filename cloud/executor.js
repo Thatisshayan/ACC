@@ -12,6 +12,8 @@ const { runElevenLabsTask }  = require("./connectors/elevenlabs.js");
 const { runDalleTask }       = require("./connectors/dalle.js");
 const { runMidjourneyTask }  = require("./connectors/midjourney.js");
 const { runDeepseekTask }    = require("./connectors/deepseek.js");
+const { GeminiConnector }    = require("./connectors/gemini.js");
+const _gemini = new GeminiConnector({ apiKey: process.env.GEMINI_API_KEY, enabled: true });
 const { uploadToR2 }         = require("./storage/r2.js");
 const { saveMediaRecord }    = require("./storage/supabase.js");
 const { getConnector }           = require("./connectors/registry.js");
@@ -120,31 +122,69 @@ async function executeTask(task = {}) {
     return result;
   }
 
-  // ---------- TEXT AGENTS — DeepSeek primary, Claude fallback ----------
+  // ---------- TEXT AGENTS — DeepSeek → OpenAI → Gemini → Smart Stub ----------
   if (["architect", "writer", "research", "engineer", "data"].includes(agentType)) {
     const explicitEngine = payload?.engine;
+    const prompt = payload.prompt || payload.query || JSON.stringify(payload);
+    const errors = [];
 
-    // Always try DeepSeek first (has credit, cheaper)
-    if (explicitEngine !== "claude") {
+    if (!explicitEngine || explicitEngine === "deepseek") {
       result = await runDeepseekTask({
         mode:    agentType === "research" ? "reason" : agentType === "engineer" ? "optimize" : "execute",
-        prompt:  payload.prompt || payload.query || JSON.stringify(payload),
+        prompt,
         context: { agentType },
       });
       if (result.success) {
+        result.provider_used = "deepseek";
         logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: "completed" });
         return result;
       }
-      console.warn(`[executor] DeepSeek failed for ${agentType}:`, typeof result.error === 'object' ? JSON.stringify(result.error) : result.error, "— trying Claude");
+      errors.push(`deepseek: ${typeof result.error === 'object' ? JSON.stringify(result.error) : result.error}`);
+      console.warn(`[executor] DeepSeek failed for ${agentType}:`, errors[errors.length - 1], "— trying OpenAI");
     }
 
-    // Fallback to Claude
-    result = await runClaudeTask(payload);
-    if (!result.success) {
-      const errMsg = typeof result.error === 'object' ? JSON.stringify(result.error) : result.error;
-      result = { success: false, error: errMsg };
+    if (!explicitEngine || explicitEngine === "openai") {
+      result = await runOpenAITask({ prompt, system: `You are a ${agentType} agent in a multi-agent orchestration system. Be precise and structured.` });
+      if (result.success) {
+        result.provider_used = "openai";
+        logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: "completed" });
+        return result;
+      }
+      errors.push(`openai: ${typeof result.error === 'object' ? JSON.stringify(result.error) : result.error}`);
+      console.warn(`[executor] OpenAI failed for ${agentType}:`, errors[errors.length - 1], "— trying Gemini");
     }
-    logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: result.success ? "completed" : "failed" });
+
+    if (!explicitEngine || explicitEngine === "gemini") {
+      result = await _gemini.run("generate", { prompt });
+      if (result.success) {
+        result.provider_used = "gemini";
+        logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: "completed" });
+        return result;
+      }
+      errors.push(`gemini: ${typeof result.error === 'object' ? JSON.stringify(result.error) : result.error}`);
+      console.warn(`[executor] Gemini failed for ${agentType}:`, errors[errors.length - 1], "— trying Claude");
+    }
+
+    // Claude (currently disabled — kept as final real-provider attempt)
+    if (!explicitEngine || explicitEngine === "claude") {
+      result = await runClaudeTask(payload);
+      if (result.success) {
+        result.provider_used = "claude";
+        logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: "completed" });
+        return result;
+      }
+      errors.push(`claude: ${typeof result.error === 'object' ? JSON.stringify(result.error) : result.error}`);
+    }
+
+    // All providers exhausted — return honest smart stub
+    result = {
+      success:      false,
+      stub:         true,
+      provider_used: "none",
+      error:        `[SMART STUB] All AI providers failed. Errors: ${errors.join("; ")}. Add API keys to Railway env vars.`,
+      output:       `[SMART STUB — ${agentType}] No AI provider available. Prompt was: ${prompt.slice(0, 200)}`,
+    };
+    logNodeRun({ nodeId: task.id, agentType, actorRole: requesterRole, snapshotId, payload, result, status: "failed" });
     return result;
   }
 

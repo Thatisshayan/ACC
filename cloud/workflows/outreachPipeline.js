@@ -125,6 +125,23 @@ function addUnsubscribeFooter(body, toEmail) {
     `To unsubscribe: ${unsubscribeUrl(toEmail)}`;
 }
 
+// ── Domain throttle — max 3 emails per domain per calendar day ────────────────
+const _domainDayCounts = new Map(); // "domain:YYYY-MM-DD" → count
+
+function domainKey(domain) {
+  return `${domain}:${new Date().toISOString().slice(0, 10)}`;
+}
+
+function isDomainThrottled(domain, maxPerDay = 3) {
+  const key = domainKey(domain);
+  return (_domainDayCounts.get(key) || 0) >= maxPerDay;
+}
+
+function recordDomainSend(domain) {
+  const key = domainKey(domain);
+  _domainDayCounts.set(key, (_domainDayCounts.get(key) || 0) + 1);
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 
 async function runPipeline(leads, { campaignId, requireApproval = true } = {}) {
@@ -144,9 +161,15 @@ async function runPipeline(leads, { campaignId, requireApproval = true } = {}) {
     let decision      = null;
 
     try {
-      // Dedup check
+      // Unsubscribe check
       if (await isUnsubscribed(lead.email || domain)) {
         results.push({ lead, status: 'unsubscribed', skipped: true });
+        continue;
+      }
+
+      // Domain throttle
+      if (isDomainThrottled(domain)) {
+        results.push({ lead, status: 'throttled', reason: 'domain_daily_limit', skipped: true });
         continue;
       }
 
@@ -173,10 +196,16 @@ async function runPipeline(leads, { campaignId, requireApproval = true } = {}) {
         const subject    = `Introduction: ACC v2 & ${name}`;
         messageDrafted   = true;
 
-        // Telegram approval
+        // Telegram approval — required whenever requireApproval=true.
+        // If Telegram is not configured in production, block the send rather than bypass.
         lead._approvalId = Date.now().toString(36);
-        if (requireApproval && (process.env.TELEGRAM_BOT_TOKEN || process.env.OUTREACH_REQUIRE_APPROVAL === '1')) {
+        if (requireApproval) {
           lead.email = emailAddress;
+          if (!process.env.TELEGRAM_BOT_TOKEN && process.env.NODE_ENV === 'production') {
+            warn('[outreach] TELEGRAM_BOT_TOKEN not set in production — blocking send to enforce approval requirement');
+            results.push({ lead, emailFound, emailAddress, messageDrafted, status: 'blocked', reason: 'approval_required_telegram_not_configured' });
+            continue;
+          }
           decision = await requestTelegramApproval(lead, subject, emailBody);
           if (decision === 'rejected' || decision === 'timeout') {
             status = decision === 'rejected' ? 'rejected' : 'timeout';
@@ -187,6 +216,7 @@ async function runPipeline(leads, { campaignId, requireApproval = true } = {}) {
 
         await resend.sendTaskFromACC(emailAddress, subject, emailBody);
         await recordSent({ to_address: emailAddress, subject, campaign_id: campaign });
+        recordDomainSend(domain);
         status = 'sent';
       } else {
         status = 'email_not_found';
@@ -213,4 +243,4 @@ async function runSingleLead(lead) {
   return runPipeline([lead]);
 }
 
-module.exports = { runPipeline, runSingleLead, markUnsubscribed, handleOutreachApproval };
+module.exports = { runPipeline, runSingleLead, markUnsubscribed, handleOutreachApproval, isDomainThrottled };
