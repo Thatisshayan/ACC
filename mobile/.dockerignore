@@ -1,0 +1,13 @@
+node_modules
+ui/node_modules
+mobile/node_modules
+ui/dist
+desktop/dist
+desktop/node_modules
+.git
+.claude
+.agents
+data
+*.log
+.env
+.env.*
