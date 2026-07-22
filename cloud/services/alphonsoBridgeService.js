@@ -2,8 +2,19 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const store = require('../taskbus/store.js');
 const { log } = require('../utils/logger.js');
+
+function timingSafeStringEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) {
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length, 0));
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 const DEFAULT_PATH_PREFIX = '/api/alphonso-bridge';
 
@@ -112,7 +123,7 @@ function authorizeBridgeRequest(headers = {}) {
 
   const authHeader = String(headers.authorization || headers.Authorization || '').trim();
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!bearer || bearer !== token) {
+  if (!bearer || !timingSafeStringEqual(bearer, token)) {
     return {
       ok: false,
       statusCode: 401,
