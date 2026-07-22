@@ -111,7 +111,14 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json());
+// Skip global JSON parsing for the Stripe webhook — it needs the raw body
+// intact for signature verification (billingRoutes.js mounts express.raw()
+// on that route itself; if express.json() runs first, the body is already
+// consumed and Stripe's constructEvent() will always fail).
+app.use((req, res, next) => {
+  if (req.path === "/api/billing/webhook") return next();
+  return express.json()(req, res, next);
+});
 app.use(limiter); // Apply rate limiting to all routes
 
 // Worker singleton
@@ -321,12 +328,18 @@ app.use("/api/voice", requireOperatorOrAdmin, assistantRoutes);
 app.use("/api/alphonso-bridge", alphonsoBridge);
 app.use("/api/outreach", requireOperatorOrAdmin, outreachRoutes);
 app.use("/api/synapse", requireOperatorOrAdmin, synapseRoutes);
-app.use("/api/fsc",      fscRoutes);
-if (emailRoutes) app.use("/api/email", emailRoutes);
-if (loopsRoutes) app.use("/api/loops", loopsRoutes);
+app.use("/api/fsc", requireOperatorOrAdmin, fscRoutes);
+if (emailRoutes) app.use("/api/email", requireOperatorOrAdmin, emailRoutes);
+if (loopsRoutes) app.use("/api/loops", requireOperatorOrAdmin, loopsRoutes);
 if (cardRoutes)    app.use("/api/card", requireOperatorOrAdmin, cardRoutes);
 if (phoneRoutes)   app.use("/api/phone",   phoneRoutes);
-if (billingRoutes) app.use("/api/billing", billingRoutes);
+if (billingRoutes) app.use("/api/billing", (req, res, next) => {
+  // Stripe calls this webhook directly with a Stripe-Signature header, never
+  // a Bearer token — don't gate it behind operator/admin auth. The route
+  // itself verifies the Stripe signature (see billingRoutes.js /webhook).
+  if (req.path === "/webhook") return next();
+  return requireOperatorOrAdmin(req, res, next);
+}, billingRoutes);
 if (memoryRoutes)  app.use("/api/memory", requireOperatorOrAdmin, memoryRoutes);
 app.use("/api/status", requireOperatorOrAdmin, statusSummary);
 
