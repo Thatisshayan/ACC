@@ -12,7 +12,7 @@ let wss = null;
  * @param {http.Server} httpServer
  */
 function startWSServer(httpServer) {
-  if (wss) return wss;
+  if (wss) return { wss, broadcast };
   wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
   wss.on("connection", (ws, req) => {
