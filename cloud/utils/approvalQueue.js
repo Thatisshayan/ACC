@@ -1,6 +1,9 @@
 // cloud/utils/approvalQueue.js
-// In-memory pending approval queue + Telegram notification stub.
+// In-memory pending approval queue + Telegram notification.
 // Nodes with requiresApproval:true are held here until an Operator/Admin approves.
+
+const fetch = require('node-fetch');
+const { readSecret } = require('../security/vaultStub.js');
 
 const pendingApprovals = new Map(); // approvalId → approval record
 
@@ -88,12 +91,34 @@ function getAllApprovals() {
 
 /**
  * notifyOperator
- * Stub — replace with real Telegram notification when bot is running.
+ * Logs locally and, when configured, sends a Telegram message to the
+ * Operator so pending graph-node approvals aren't silently invisible.
  */
 function notifyOperator(record) {
   console.log(`[approvalQueue] ⏳ PENDING APPROVAL ${record.approvalId}: node "${record.node.id}" (${record.node.agentType}) in snapshot ${record.snapshotId}`);
-  // TODO: send Telegram message to Operator chat
-  // bot.sendMessage(OPERATOR_CHAT_ID, `Approval needed: ${record.approvalId}\nNode: ${record.node.id}\nAgent: ${record.node.agentType}`);
+
+  const token  = readSecret('TELEGRAM_BOT_TOKEN')     || process.env.TELEGRAM_BOT_TOKEN     || null;
+  const chatId = readSecret('SHAYAN_TELEGRAM_CHAT_ID') || process.env.SHAYAN_TELEGRAM_CHAT_ID
+              || readSecret('SAYAN_TELEGRAM_CHAT_ID')   || process.env.SAYAN_TELEGRAM_CHAT_ID  || null;
+  if (!token || !chatId) {
+    console.log('[approvalQueue] TELEGRAM_BOT_TOKEN / chat id not set — skipping Telegram notify.');
+    return;
+  }
+
+  const text = [
+    `⏳ *Approval Required*`,
+    ``,
+    `🤖 Node: \`${record.node.id}\``,
+    `🎯 Agent: ${record.node.agentType}`,
+    `🆔 Approval ID: \`${record.approvalId}\``,
+    `📦 Snapshot: \`${record.snapshotId}\``,
+  ].join('\n');
+
+  fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+  }).catch(e => console.warn('[approvalQueue] Telegram notify failed:', e.message));
 }
 
 module.exports = {
