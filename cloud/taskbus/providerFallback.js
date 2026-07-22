@@ -134,13 +134,13 @@ async function tryDeepSeek(task) {
 
 async function tryAlibaba(task) {
   var ali = require('../integrations/alibaba.js');
-  if (!ali.enabled()) return null;
+  if (!ali.enabled()) return { tried: false, reason: 'Alibaba/Qwen not configured' };
   console.log('[provider] Trying Alibaba/Qwen...');
   try {
     var result = await ali.chat(task.instruction || task.title, 'qwen-plus');
-    if (!result.success) return null;
-    return { provider: 'alibaba_qwen', provider_used: 'alibaba_qwen', is_real_ai_result: true, cost_tier: 'low_cost', output: result.output, summary: result.output && result.output.slice(0, 200) };
-  } catch(e) { console.warn('[provider] Alibaba failed:', e.message); return null; }
+    if (!result.success) return { tried: true, success: false, reason: result.error || 'Alibaba/Qwen request failed' };
+    return { tried: true, success: true, provider: 'alibaba_qwen', provider_used: 'alibaba_qwen', is_real_ai_result: true, cost_tier: 'low_cost', output: result.output, summary: result.output && result.output.slice(0, 200) };
+  } catch(e) { console.warn('[provider] Alibaba failed:', e.message); return { tried: true, success: false, reason: e.message }; }
 }
 async function tryOllama(task) {
   log('[provider] Trying Ollama at', ollama.BASE_URL, 'model:', ollama.MODEL);
