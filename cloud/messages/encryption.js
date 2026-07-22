@@ -44,6 +44,30 @@ function getKeyMaterial() {
   return readKeyMaterialFromEnv() || readKeyMaterialFromFile();
 }
 
+// Resolve key material for a *specific* recorded source, so decrypting an
+// old envelope always uses the same key that encrypted it — even if the
+// live env-var priority order has since changed (e.g. ACC_MESSENGER_MASTER_KEY
+// got added after some messages were already encrypted under local-file or
+// ACC_VAULT_MASTER_KEY material). Falls back to current live resolution only
+// when the exact recorded source is no longer available.
+function getKeyMaterialBySource(source) {
+  if (!source) return getKeyMaterial();
+
+  if (source === 'local-file') {
+    if (fs.existsSync(KEY_FILE)) {
+      const raw = String(fs.readFileSync(KEY_FILE, 'utf8') || '').trim();
+      if (raw) return { source: 'local-file', material: raw };
+    }
+  } else if (source.startsWith('env:')) {
+    const envName = source.slice(4);
+    const raw = String(process.env[envName] || '').trim();
+    if (raw) return { source, material: raw };
+  }
+
+  console.warn(`[encryption] Could not resolve original key source "${source}" — falling back to current key material. Decryption may fail if the wrong key is used.`);
+  return getKeyMaterial();
+}
+
 function deriveKeyBuffer(material) {
   return crypto.createHash('sha256').update(String(material), 'utf8').digest();
 }
@@ -72,7 +96,7 @@ function decryptObject(envelope) {
   if (!envelope || typeof envelope !== 'object') return null;
   if (envelope.alg !== 'aes-256-gcm' || !envelope.ciphertext) return null;
 
-  const keyMaterial = getKeyMaterial();
+  const keyMaterial = getKeyMaterialBySource(envelope.key_source);
   const key = deriveKeyBuffer(keyMaterial.material);
   const decipher = crypto.createDecipheriv(
     'aes-256-gcm',
@@ -102,4 +126,5 @@ module.exports = {
   decryptObject,
   summarizeEnvelope,
   getKeyMaterial,
+  getKeyMaterialBySource,
 };
