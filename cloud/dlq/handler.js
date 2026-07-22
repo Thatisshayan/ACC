@@ -9,6 +9,17 @@ const path = require('path');
 const DLQ_DIR = path.join(__dirname, 'items');
 if (!fs.existsSync(DLQ_DIR)) fs.mkdirSync(DLQ_DIR, { recursive: true });
 
+// DLQ ids are always generated as dlq_<timestamp>_<sanitized-node-id> (see
+// writeToDLQ below). Reject anything else before it reaches the filesystem —
+// getDLQItem/markRequeued/deleteDLQItem take an id straight from a URL param
+// (cloud/admin/dlqRoutes.js) and previously built a path with no validation,
+// which is a path-traversal vector (e.g. id="../../../../some/file").
+const VALID_ID_RE = /^dlq_[0-9]+_[a-zA-Z0-9_]+$/;
+function safeDLQPath(id) {
+  if (typeof id !== 'string' || !VALID_ID_RE.test(id)) return null;
+  return path.join(DLQ_DIR, `${id}.json`);
+}
+
 /**
  * writeToDLQ
  * Persists a failed node to the DLQ.
@@ -67,8 +78,8 @@ function listDLQ() {
  * Returns a single DLQ item by id (full record).
  */
 function getDLQItem(id) {
-  const filePath = path.join(DLQ_DIR, `${id}.json`);
-  if (!fs.existsSync(filePath)) return null;
+  const filePath = safeDLQPath(id);
+  if (!filePath || !fs.existsSync(filePath)) return null;
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (_) { return null; }
@@ -79,8 +90,8 @@ function getDLQItem(id) {
  * Updates status to 'requeued' without deleting (audit trail).
  */
 function markRequeued(id) {
-  const filePath = path.join(DLQ_DIR, `${id}.json`);
-  if (!fs.existsSync(filePath)) return false;
+  const filePath = safeDLQPath(id);
+  if (!filePath || !fs.existsSync(filePath)) return false;
   const record     = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   record.status     = 'requeued';
   record.requeuedAt = new Date().toISOString();
@@ -93,8 +104,8 @@ function markRequeued(id) {
  * Permanently removes a DLQ item.
  */
 function deleteDLQItem(id) {
-  const filePath = path.join(DLQ_DIR, `${id}.json`);
-  if (!fs.existsSync(filePath)) return false;
+  const filePath = safeDLQPath(id);
+  if (!filePath || !fs.existsSync(filePath)) return false;
   fs.unlinkSync(filePath);
   return true;
 }
