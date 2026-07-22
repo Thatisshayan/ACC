@@ -1,6 +1,20 @@
 'use strict';
 
+const crypto = require('crypto');
+
 const APPROVAL_WINDOW_MS = 5 * 60 * 1000;
+
+function timingSafeStringEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) {
+    // Compare against a same-length dummy so the branch above doesn't leak
+    // length via early return timing.
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length, 0));
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 const approvalNonceStore = new Map();
 
 function parseBearerToken(req) {
@@ -57,7 +71,7 @@ function requireAuth(options) {
     const token = parseBearerToken(req);
     if (!token) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const principal = meta.principals.find((p) => p.key === token);
+    const principal = meta.principals.find((p) => timingSafeStringEqual(p.key, token));
     if (!principal) return res.status(401).json({ success: false, error: 'Unauthorized' });
     if (allowRoles && !allowRoles.has(principal.role)) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
