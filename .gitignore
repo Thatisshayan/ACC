@@ -12,7 +12,13 @@ data/messages/
 data/run/
 data/bot-heartbeat.json
 data/alphonso-bridge/
+data/storage/
+data/*.json
+data/*.txt
+!data/memory/*.json
 cloud/dlq/items/
+cloud/security/.approvals/
+cloud/security/.ephemeral_store/
 *.log
 bot.log
 
