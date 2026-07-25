@@ -74,3 +74,8 @@ build/
 .vs/
 desktop.ini
 audits/private/
+
+# Local runtime memory db (never commit)
+data/memory/*.sqlite3
+data/memory/*.sqlite3-shm
+data/memory/*.sqlite3-wal
