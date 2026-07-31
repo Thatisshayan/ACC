@@ -8,8 +8,9 @@ const { log } = require('../utils/logger.js');
 const { readSecret } = require('../security/vaultStub.js');
 
 const TELEGRAM_TOKEN = readSecret('TELEGRAM_BOT_TOKEN')     || process.env.TELEGRAM_BOT_TOKEN     || null;
-const SHAYAN_CHAT_ID = readSecret('SHAYAN_TELEGRAM_CHAT_ID') || process.env.SHAYAN_TELEGRAM_CHAT_ID
-                    || readSecret('SAYAN_TELEGRAM_CHAT_ID')   || process.env.SAYAN_TELEGRAM_CHAT_ID  || null;
+const SHAYAN_CHAT_ID = readSecret('ACC_OWNER_TELEGRAM_CHAT_ID') || process.env.ACC_OWNER_TELEGRAM_CHAT_ID
+                    || readSecret('SHAYAN_TELEGRAM_CHAT_ID')   || process.env.SHAYAN_TELEGRAM_CHAT_ID
+                    || readSecret('SAYAN_TELEGRAM_CHAT_ID')    || process.env.SAYAN_TELEGRAM_CHAT_ID  || null;
 
 function tgApi(method, body) {
   if (!TELEGRAM_TOKEN) return Promise.reject(new Error('[cardApprovalBot] Missing TELEGRAM_BOT_TOKEN'));

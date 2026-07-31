@@ -159,7 +159,7 @@ async function _runLoop(loopId) {
 
 function _notifyTelegram(text) {
   try {
-    var chatId = process.env.SHAYAN_TELEGRAM_CHAT_ID;
+    var chatId = process.env.ACC_OWNER_TELEGRAM_CHAT_ID || process.env.SHAYAN_TELEGRAM_CHAT_ID;
     if (!chatId) return;
     var token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
