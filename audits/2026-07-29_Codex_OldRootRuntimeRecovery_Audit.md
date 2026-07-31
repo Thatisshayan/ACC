@@ -1,7 +1,7 @@
 # Old Root Runtime Recovery Audit — 2026-07-29
 
 Agent: Codex
-Scope: Inspect untracked/runtime content under the previous repo root `C:\Users\Shaya\agent-command-center`, preserve old-only material into the current repo, and assess what remains worth keeping before deleting the old root.
+Scope: Inspect untracked/runtime content under the previous (pre-migration) repo root, preserve old-only material into the current repo, and assess what remains worth keeping before deleting the old root.
 Status: completed
 
 ## Sources reviewed
@@ -9,7 +9,7 @@ Status: completed
   - `audits/2026-07-23_Hermes_GovernanceBootstrap_Audit.md`
   - `audits/2026-07-29_Codex_RepoRootParity_Audit.md`
 - Filesystem state of:
-  - `C:\Users\Shaya\agent-command-center`
+  - the previous (pre-migration) repo root
   - `D:\AgentDevWork\repos\ACC`
 - Git status of both roots
 
@@ -28,15 +28,7 @@ Assessment:
 - `desktop/dist/` is the largest space consumer, but it is packaged Electron output rather than development source.
 
 ### 2. The high-value area is `data/`
-The old root contains meaningful runtime/user state under `data/`, including:
-
-- `data/memory/memory.sqlite3` plus WAL/SHM
-- `data/taskbus/taskbus.sqlite3` plus WAL/SHM
-- `data/messages/messenger.json`
-- `data/messages/messenger.key`
-- `data/storage/...` with stored user documents
-- `data/users/*.json`
-- prompt/result artifacts under `data/*.txt` and `data/*.json`
+The old root contains meaningful runtime/user state under `data/`: local databases (memory, taskbus), a messaging store (including its key material), stored user documents, per-user account records, and prompt/result artifacts. None of these are named individually here since they are credential- or user-data-bearing.
 
 Assessment:
 - Most of this state already exists in the current root at `D:\AgentDevWork\repos\ACC\data`.
@@ -80,7 +72,7 @@ This keeps the material local, recoverable, and out of Git because `audits/priva
 - Inspected old and current `data/` trees with PowerShell `Get-ChildItem`
 - Compared old-vs-current `data/` entry presence
 - Measured old logs total size with:
-  - `Get-ChildItem 'C:\Users\Shaya\agent-command-center\data\logs' -File | Measure-Object Length -Sum`
+  - `Get-ChildItem '<previous-repo-root>\data\logs' -File | Measure-Object Length -Sum`
 - Copied preserved material into:
   - `D:\AgentDevWork\repos\ACC\audits\private\2026-07-29_old-root-runtime-recovery`
 

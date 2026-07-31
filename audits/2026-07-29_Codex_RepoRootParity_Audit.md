@@ -1,7 +1,7 @@
 # Repo Root Parity Audit — 2026-07-29
 
 Agent: Codex
-Scope: Compare the previous repo root `C:\Users\Shaya\agent-command-center` against the current repo root `D:\AgentDevWork\repos\ACC`, identify content present in the old root but absent in the current one, and assess migration risk.
+Scope: Compare the previous (pre-migration) repo root against the current repo root `D:\AgentDevWork\repos\ACC`, identify content present in the old root but absent in the current one, and assess migration risk.
 Status: completed
 
 ## Sources reviewed
@@ -31,11 +31,11 @@ These top-level entries exist under the previous root but do not exist at the cu
 - `AGENT_4_TELEGRAM_TASKBUS_APPROVALS_CLAUDE_CLI`
 - `AGENT_5_INTEGRATIONS_BILLING_AI_FEATURES_CLAUDE-DC`
 - `Antigravity`
-- `CUsersShayaagent-command-centerlanding`
+- a `landing`-named side directory under the previous repo root (local-only, not Git-tracked)
 
 Assessment:
 - `.playwright-mcp`, `.tmp`, and `.vault` look environment-specific or runtime-generated.
-- `Antigravity` and `CUsersShayaagent-command-centerlanding` were not Git-tracked in the previous repo, so they appear to be local-only artifacts or side directories.
+- `Antigravity` and the `landing`-named side directory were not Git-tracked in the previous repo, so they appear to be local-only artifacts or side directories.
 - The five `AGENT_*` folders are the only top-level missing items that contain Git-tracked repository content.
 
 ### 2. Git-tracked content missing from the current repo
@@ -103,7 +103,7 @@ Assessment:
 - Refreshed codebase-memory index for `D:\AgentDevWork\repos\ACC`
 - Compared top-level filesystem entries between the old and current roots
 - Compared Git-tracked files with:
-  - `git -c safe.directory=C:/Users/Shaya/agent-command-center -C C:/Users/Shaya/agent-command-center ls-files`
+  - `git -c safe.directory=<previous-repo-root> -C <previous-repo-root> ls-files`
   - `git -C D:/AgentDevWork/repos/ACC ls-files`
 - Searched current repo references with `rg`
 

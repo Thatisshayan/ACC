@@ -139,7 +139,8 @@ async function routeTask(taskId, opts) {
   // These are safe utility agents (no external side-effects) that should never
   // be blocked by the approval gate.
   var BYPASS_AGENTS = ['imagegen', 'image', 'tavily', 'hunter', 'alibaba', 'qwen'];
-  if (BYPASS_AGENTS.indexOf(task.assigned_agent) !== -1) {
+  var isBypassAgent = BYPASS_AGENTS.indexOf(task.assigned_agent) !== -1;
+  if (isBypassAgent) {
     if (task.assigned_agent === 'imagegen' || task.assigned_agent === 'image') {
       var ig = require('../integrations/imageGen.js');
       if (ig.enabled()) {
@@ -256,7 +257,9 @@ async function routeTask(taskId, opts) {
   }
 
   // ── STEP 4: SAFETY GATE – runs before execution ──────────────────────────────
-  if (isFullAutoExternalRisk(task)) {
+  // Bypass agents (STEP 1) are safe utility agents with no external side-effects;
+  // they skip this gate even when their connector falls through unconfigured.
+  if (!isBypassAgent && isFullAutoExternalRisk(task)) {
     log('[router] BLOCKED – full_auto cannot execute high-risk external task');
     store.updateTask(taskId, { status: 'waiting_approval', automation_mode: 'sandbox' });
     var fullAutoApproval = store.createApproval(taskId, 'high_risk_execution');
@@ -270,7 +273,7 @@ async function routeTask(taskId, opts) {
     return { status: 'waiting_approval', taskId: taskId, approvalId: fullAutoApproval.id };
   }
 
-  if (isHighRisk(task) && !store.hasApprovedApproval(taskId, 'high_risk_execution')) {
+  if (!isBypassAgent && isHighRisk(task) && !store.hasApprovedApproval(taskId, 'high_risk_execution')) {
     log('[router] BLOCKED – high-risk task requires approval');
     store.updateTask(taskId, { status: 'waiting_approval' });
     var riskApproval = store.createApproval(taskId, 'high_risk_execution');

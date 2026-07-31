@@ -1,6 +1,7 @@
 # AGENTS.md
 
 This repository is governed by `REPO_RULES.md`. Read it before any work.
+See also `REPO_DIRECTIVE.md` for the goal-layer constitution (mission and task-traceability contract).
 
 Non-negotiable gates:
 - Branch-only workflow. No direct pushes or commits to `main`.
