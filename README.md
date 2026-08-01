@@ -1,7 +1,3 @@
-WE BACK !!!
-DONT MIND THE README FILES > WILL BE UPDATED SOOON
-----
-
 # ACC v2 — Agent Command Center
 
 **Version:** 2.0  
@@ -35,7 +31,7 @@ ACC is a personal AI orchestration system that runs autonomous agents to:
 ```bash
 # 1. Clone and install
 git clone https://github.com/Thatisshayan/ACC.git
-cd agent-command-center
+cd ACC
 npm install
 cd ui && npm install && cd ..
 
@@ -315,43 +311,48 @@ agent-command-center/
 
 ## Environment Variables
 
-Key variables to set in `.env`:
+`.env.example` is the canonical, complete list — copy it to `.env` and fill in values. Key variables:
 
 ```env
 # Core
 PORT=4000
 NODE_ENV=development
 
-# Telegram (Railway webhook mode)
+# Auth / API keys
+ACC_OPERATOR_API_KEY=          # [REQUIRED_PROD]
+ACC_ADMIN_API_KEY=
+TASKBUS_API_KEY=
+INTERNAL_SERVICE_TOKEN=
+
+# Security
+ACC_VAULT_MASTER_KEY=          # [REQUIRED_PROD] AES-256-GCM master key
+ACC_APPROVAL_HMAC_SECRET=
+
+# Database (Supabase)
+SUPABASE_URL=                  # [REQUIRED_PROD]
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=     # [REQUIRED_PROD] server-only
+
+# Telegram (webhook mode)
 TELEGRAM_BOT_TOKEN=
-WEBHOOK_URL=https://your-app.up.railway.app/api/telegram-webhook
-TELEGRAM_SECRET_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=       # [REQUIRED_PROD]
+SHAYAN_TELEGRAM_CHAT_ID=
 
 # AI Providers
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
 DEEPSEEK_API_KEY=
 GEMINI_API_KEY=
-ELEVENLABS_API_KEY=
-
-# Storage
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=
 
 # Integrations
-NOTION_TOKEN=
-STRIPE_SECRET_KEY=
-NETLIFY_TOKEN=
-
-# Security
-TASKBUS_API_KEY=
-VAULT_KEY=
-CORS_ALLOWED_ORIGINS=
+NOTION_API_KEY=
+STRIPE_API_KEY=                # or STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET=         # [REQUIRED_PROD]
+RESEND_API_KEY=
+SOCIALCLAW_API_KEY=
 ```
+
+See [.env.example](.env.example) for the full list (CORS, browser automation, billing prices, R2 storage, coding-agent toggles, etc.).
 
 ---
 
