@@ -166,6 +166,23 @@ else
   if [ "$orphans" -eq 0 ]; then notice "directive-lint" "all tasks trace to a defined phase/sprint/epic"; fi
 fi
 
+# ---------------------------------------------------------------- 6. orphan-lint
+# Dead-code advisory: cloud/ modules with zero incoming require() references.
+# Orphan files are a judgment call (Phase 5, SPRINT_2026-08) — report as a
+# `notice`, never a hard failure. Newly found orphans go to DEFERRED_WORK.md.
+echo "== orphan-lint =="
+if command -v node >/dev/null 2>&1 && [ -f scripts/findOrphanModules.js ]; then
+  orphans_out=$(node scripts/findOrphanModules.js 2>&1)
+  orphan_count=$(printf '%s\n' "$orphans_out" | grep -o 'orphan_count=[0-9]*' | head -1 | cut -d= -f2)
+  if [ -n "${orphan_count:-}" ] && [ "$orphan_count" -gt 0 ]; then
+    notice "orphan-lint" "orphan_count=$orphan_count cloud/ modules with zero incoming requires (advisory, see DEFERRED_WORK.md)"
+  else
+    notice "orphan-lint" "no orphaned cloud/ modules"
+  fi
+else
+  notice "orphan-lint" "node or scripts/findOrphanModules.js unavailable — skipping"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "VERIFY FAILED"
   exit 1

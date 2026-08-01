@@ -1,4 +1,6 @@
 // cloud/roles/approvalQueue.js
+// [ORPHAN] No incoming require() references repo-wide (Phase 5, SPRINT_2026-08).
+// Kept per R14 (no deletion without approval) — see docs/governance/DEFERRED_WORK.md.
 // Holds nodes that require Operator/Admin approval before execution.
 // In-memory; can be backed by Supabase/Notion later.
 

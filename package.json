@@ -23,6 +23,7 @@
     "smoke": "node scripts/smokeTest_sandbox.js",
     "verify:launch": "node scripts/verify-launch-criteria.js",
     "check:deps": "node scripts/checkDependencies.js",
+    "check:orphans": "node scripts/findOrphanModules.js",
     "canary:enable": "node scripts/toggleCanary.js enable",
     "canary:disable": "node scripts/toggleCanary.js disable",
     "ui": "cd ui && npm run dev"

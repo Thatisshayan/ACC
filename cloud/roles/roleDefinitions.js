@@ -1,4 +1,6 @@
 // cloud/roles/roleDefinitions.js
+// [ORPHAN] No incoming require() references repo-wide (Phase 5, SPRINT_2026-08).
+// Kept per R14 (no deletion without approval) — see docs/governance/DEFERRED_WORK.md.
 // Canonical role definitions, permissions, and guardrails for ACC.
 
 const ROLES = {
