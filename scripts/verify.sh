@@ -98,6 +98,13 @@ if [ -n "$PM" ]; then
     npm)  run_with_timeout 300 build npm ci ;;
   esac
   if [ $FAIL -eq 0 ]; then
+    # dependency-completeness guard: fail if any require()'d package is
+    # missing from package.json (prevents the twilio/openai silent-disable class)
+    if [ -f package.json ]; then
+      (npm run check:deps --if-present || node scripts/checkDependencies.js) >/dev/null 2>&1 \
+        && notice "check-deps" "all require()'d packages present in package.json" \
+        || error "check-deps" "require()'d package missing from package.json (run npm run check:deps)"
+    fi
     (npm run build --if-present || pnpm run build --if-present || yarn build) >/dev/null 2>&1 && notice build "build ok" || error build "build failed"
     (npm test --if-present || pnpm test --if-present || yarn test) >/dev/null 2>&1 && notice test "test ok" || error test "test failed"
   fi

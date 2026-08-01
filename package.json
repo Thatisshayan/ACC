@@ -22,6 +22,7 @@
     "mobile:build:ios": "cd mobile && npx eas build --platform ios --profile preview",
     "smoke": "node scripts/smokeTest_sandbox.js",
     "verify:launch": "node scripts/verify-launch-criteria.js",
+    "check:deps": "node scripts/checkDependencies.js",
     "canary:enable": "node scripts/toggleCanary.js enable",
     "canary:disable": "node scripts/toggleCanary.js disable",
     "ui": "cd ui && npm run dev"
@@ -41,6 +42,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
+    "form-data": "^4.0.6",
     "formdata-node": "^6.0.3",
     "imapflow": "^1.3.3",
     "node-fetch": "^2.7.0",

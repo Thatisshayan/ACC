@@ -102,6 +102,13 @@ if ($PM) {
     'npm'  { RunTimed 300 build @('npm','ci') }
   }
   if (-not $failed) {
+    # dependency-completeness guard: fail if any require()'d package is
+    # missing from package.json (prevents the twilio/openai silent-disable class)
+    if (Test-Path (Join-Path $RepoRoot 'package.json')) {
+      npm run check:deps *> $null
+      if ($LASTEXITCODE -eq 0) { Notice "check-deps" "all require()'d packages present in package.json" }
+      else { Err "check-deps" "require()'d package missing from package.json (run npm run check:deps)" }
+    }
     $buildCmd = if ($PM -eq 'npm') { 'npm run build --if-present' } elseif ($PM -eq 'pnpm') { 'pnpm run build --if-present' } else { 'yarn build' }
     Invoke-Expression $buildCmd >$null 2>&1; if ($LASTEXITCODE -eq 0) { Notice build "build ok" } else { Err build "build failed" }
     $testCmd = if ($PM -eq 'npm') { 'npm test --if-present' } elseif ($PM -eq 'pnpm') { 'pnpm test --if-present' } else { 'yarn test' }
