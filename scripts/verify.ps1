@@ -129,7 +129,7 @@ Write-Host "== deploy-dry =="
 if (Test-Path (Join-Path $RepoRoot 'vercel.json')) {
   vercel build --dry-run; if ($LASTEXITCODE -ne 0) { Err "deploy" "vercel dry-run failed" }
 } elseif ((Test-Path (Join-Path $RepoRoot 'railway.json')) -or (Test-Path (Join-Path $RepoRoot 'railway.toml'))) {
-  Notice "deploy" "railway target present; run 'railway up --detach' manually"
+  RunTimed 180 "deploy" @('node','scripts/deployDryRun.js')
 } elseif (Test-Path (Join-Path $RepoRoot 'eas.json')) {
   npx eas build --platform all --local --no-wait --non-interactive; if ($LASTEXITCODE -ne 0) { Err "deploy" "eas dry build failed" }
 } elseif (Test-Path (Join-Path $RepoRoot 'netlify.toml')) {

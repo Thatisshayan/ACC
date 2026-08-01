@@ -123,7 +123,7 @@ echo "== deploy-dry =="
 if [ -f vercel.json ]; then
   vercel build --dry-run >/dev/null 2>&1 || error "deploy" "vercel dry-run failed"
 elif [ -f railway.json ] || [ -f railway.toml ]; then
-  notice "deploy" "railway target present; run 'railway up --detach' manually"
+  run_with_timeout 180 "deploy" node scripts/deployDryRun.js
 elif [ -f eas.json ]; then
   npx eas build --platform all --local --no-wait --non-interactive >/dev/null 2>&1 \
     || error "deploy" "eas dry build failed"
