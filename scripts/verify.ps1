@@ -85,7 +85,11 @@ elseif (Test-Path (Join-Path $RepoRoot 'yarn.lock')) { $PM = 'yarn' }
 elseif (Test-Path (Join-Path $RepoRoot 'package-lock.json')) { $PM = 'npm' }
 
 function RunTimed($secs, $label, $cmd) {
-  $p = Start-Process -NoNewWindow -PassThru $cmd[0] $cmd[1..($cmd.Count-1)]
+  # On Windows npm/pnpm/yarn are .cmd shims; Start-Process needs the real name
+  # (otherwise: "%1 is not a valid Win32 application").
+  $exe = $cmd[0]
+  if ($IsWindows -and $exe -in @('npm','pnpm','yarn')) { $exe = "$exe.cmd" }
+  $p = Start-Process -NoNewWindow -PassThru $exe $cmd[1..($cmd.Count-1)]
   if (-not $p.WaitForExit($secs * 1000)) {
     try { $p.Kill() } catch {}
     Err $label "timed out after ${secs}s (likely network/install hang)"
