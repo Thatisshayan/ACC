@@ -7,6 +7,7 @@
 
 var store  = require('./store.js');
 var router = require('./router.js');
+var logger = require('../utils/logger.js');
 var { getProvidersStatus } = require('./providerFallback.js');
 
 // ── Safe text — strip Markdown chars that break Telegram's parser ─────────────
@@ -30,10 +31,10 @@ var SE = {
 function se(status) { return SE[status] || '\u2022'; }
 
 // ── Log helpers ───────────────────────────────────────────────────────────────
-function logCmd(cmd) { console.log('[taskbus] received:', cmd); }
-function logMatch(handler) { console.log('[taskbus] matched:', handler); }
-function logReply(chatId, len) { console.log('[taskbus] replied to', chatId, '— chars:', len); }
-function logErr(handler, err) { console.log('[taskbus] ERROR in', handler, '—', err && err.message || String(err)); }
+function logCmd(cmd) { logger.info('[taskbus] received:', cmd); }
+function logMatch(handler) { logger.info('[taskbus] matched:', handler); }
+function logReply(chatId, len) { logger.info('[taskbus] replied to', chatId, '— chars:', len); }
+function logErr(handler, err) { logger.error('[taskbus] ERROR in', handler, '—', err && err.message || String(err)); }
 
 // ── Safe send — no parse_mode, guaranteed delivery ───────────────────────────
 // sendFn from bot.js uses Markdown which can fail on special chars in IDs.
@@ -363,7 +364,7 @@ async function handleTaskBusCommand(chatId, userId, text, sendFn, user) {
       try {
         await safeSend(chatId, 'Task Bus command failed: ' + (e.message || 'unknown error'), sendFn);
       } catch(e2) {
-        console.log('[taskbus] CRITICAL — could not send error reply:', e2.message);
+        logger.error('[taskbus] CRITICAL — could not send error reply:', e2.message);
       }
     }
   }
@@ -549,7 +550,7 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
     priority:          'normal',
   });
 
-  console.log('[taskbus] createTask:', task.id.slice(0,8), '|', task.title.slice(0,50));
+  logger.info('[taskbus] createTask:', task.id.slice(0,8), '|', task.title.slice(0,50));
 
   // Acknowledge
   await safeSend(chatId, 'Working on it...\n\n' + task.title.slice(0, 60), sendFn);
@@ -558,7 +559,7 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
   // Execute and return result
   if (task.automation_mode !== 'manual') {
     try {
-      console.log('[taskbus] routing task:', task.id.slice(0,8));
+      logger.info('[taskbus] routing task:', task.id.slice(0,8));
       var routeResult = await router.routeTask(task.id);
 
       if (routeResult && routeResult.status === 'rate_limited') {
@@ -580,7 +581,7 @@ async function createTaskFromMessage(userId, text, assigned_agent, sendFn, chatI
         await safeSend(chatId, 'Task stored. Check: /task_' + task.id.slice(0, 8), sendFn);
       }
     } catch(e) {
-      console.log('[taskbus] execution error:', e.message);
+      logger.error('[taskbus] execution error:', e.message);
       await safeSend(chatId, 'Execution error: ' + e.message + '\n\nTask stored: ' + task.id.slice(0,8), sendFn);
     }
   }

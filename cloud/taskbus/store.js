@@ -11,6 +11,7 @@ const crypto  = require('crypto');
 const uuid    = require('uuid').v4;
 const Database = require('better-sqlite3');
 const persistence = require('./persistence.js');
+const logger  = require('../utils/logger.js');
 
 // Lazy-load memory to avoid circular dependency at startup
 function _mem() { return require('../memory/store.js'); }
@@ -684,7 +685,7 @@ function resolveApproval(id, decision, approvedBy, notes) {
 
   // Enforce TTL — expired approvals cannot be used
   if (existing.expires_at && new Date(existing.expires_at) < new Date()) {
-    console.warn('[store] resolveApproval: approval', id.slice(0, 8), 'expired at', existing.expires_at);
+    logger.warn('[store] resolveApproval: approval', id.slice(0, 8), 'expired at', existing.expires_at);
     throw new Error('approval_expired');
   }
 
@@ -692,7 +693,7 @@ function resolveApproval(id, decision, approvedBy, notes) {
   if (existing.action_hash) {
     var taskForHash = getTask(existing.task_id);
     if (taskForHash && _computeActionHash(taskForHash) !== existing.action_hash) {
-      console.warn('[store] resolveApproval: action_hash mismatch for approval', id.slice(0, 8), '— task was modified after approval creation');
+      logger.warn('[store] resolveApproval: action_hash mismatch for approval', id.slice(0, 8), '— task was modified after approval creation');
       throw new Error('action_payload_modified');
     }
   }
