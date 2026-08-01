@@ -20,6 +20,11 @@ Authorization: Bearer <ALPHONSO_BRIDGE_TOKEN>
 
 If the token is missing on the ACC side, the bridge reports `setup_required`.
 
+**All** bridge endpoints require this token — `POST /`, `GET /status`, and
+`GET /packets`. Read endpoints without a valid bearer token return `401
+unauthorized`; if the token is not configured at all they return `503
+setup_required`.
+
 Optional smoke-test override:
 
 - `ALPHONSO_BRIDGE_DATA_DIR`
