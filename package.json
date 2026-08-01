@@ -7,7 +7,7 @@
     "acc": "./acc.js"
   },
   "scripts": {
-    "test": "node cloud/taskbus/router.test.js && node --test cloud/security/webhookHmac.test.js cloud/taskbus/store.test.js cloud/messages/store.test.js cloud/middleware/auth.test.js cloud/memory/store.test.js cloud/utils/logger.test.js cloud/utils/sentry.test.js cloud/utils/safeRequire.test.js cloud/utils/errorMiddleware.test.js cloud/api/billingRoutes.test.js",
+    "test": "node cloud/taskbus/router.test.js && node --test cloud/security/webhookHmac.test.js cloud/taskbus/store.test.js cloud/messages/store.test.js cloud/middleware/auth.test.js cloud/memory/store.test.js cloud/utils/logger.test.js cloud/utils/sentry.test.js cloud/utils/safeRequire.test.js cloud/utils/errorMiddleware.test.js cloud/api/billingRoutes.test.js cloud/queue.test.js cloud/orchestrator.test.js cloud/worker.test.js",
     "telegram": "node telegram.js",
     "bridge": "node server.js",
     "cloud:api": "node cloud/server.js",
