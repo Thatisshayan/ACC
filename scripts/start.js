@@ -1,20 +1,34 @@
-process.on('uncaughtException', (e) => console.error('[start] UNCAUGHT:', e.message, e.stack));
-process.on('unhandledRejection', (e) => console.error('[start] UNHANDLED:', e));
+const sentry = require('../cloud/utils/sentry.js');
+
+// Process-level crash visibility. Log the error clearly, push it to Sentry
+// (if initialized), flush, then exit — crash loudly so the supervisor
+// (Railway restartPolicyType: "on_failure") restarts a clean process instead
+// of limping on in an unknown state.
+process.on('uncaughtException', async (err) => {
+  console.error('[start] UNCAUGHT EXCEPTION:', (err && err.stack) || err);
+  sentry.captureException(err, { tags: { handler: 'uncaughtException' } });
+  await sentry.flush(2000);
+  process.exit(1);
+});
+process.on('unhandledRejection', async (reason) => {
+  console.error('[start] UNHANDLED REJECTION:', (reason && reason.stack) || reason);
+  sentry.captureException(
+    reason instanceof Error ? reason : new Error(String(reason)),
+    { tags: { handler: 'unhandledRejection' } }
+  );
+  await sentry.flush(2000);
+  process.exit(1);
+});
 
 console.log('[start] process starting, NODE_ENV=' + process.env.NODE_ENV + ' PORT=' + process.env.PORT);
 require('dotenv').config({ path: require('path').join(__dirname, '../.env'), override: false });
 
 if (process.env.SENTRY_DSN) {
-  try {
-    const Sentry = require('@sentry/node');
-    Sentry.init({
-      dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV || 'production',
-      tracesSampleRate: 0.1,
-    });
+  const ok = sentry.initIfConfigured();
+  if (ok) {
     console.log('[start] Sentry initialized');
-  } catch(e) {
-    console.warn('[start] Sentry not available (install @sentry/node to enable):', e.message);
+  } else {
+    console.warn('[start] Sentry not available (install @sentry/node to enable)');
   }
 }
 

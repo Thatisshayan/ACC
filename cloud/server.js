@@ -15,23 +15,10 @@ const alphonsoBridge           = require("./api/alphonsoBridge.js");
 const outreachRoutes           = require("./api/outreachRoutes.js");
 const synapseRoutes            = require("./api/synapseRoutes.js");
 const fscRoutes                = require("./api/fscRoutes.js");
-const moduleLoadStatus = {};
+const { moduleLoadStatus, safeRequire, safeRequireWithName } = require("./utils/safeRequire.js");
+const { createErrorMiddleware } = require("./utils/errorMiddleware.js");
 const emailRoutes              = safeRequire("./api/emailRoutes.js", "email");
 const loopsRoutes              = safeRequire("./api/loopsRoutes.js", "loops");
-function safeRequire(mod) {
-  return safeRequireWithName(mod, mod);
-}
-function safeRequireWithName(mod, name) {
-  try {
-    const loaded = require(mod);
-    moduleLoadStatus[name] = { loaded: true, error: null };
-    return loaded;
-  } catch (e) {
-    moduleLoadStatus[name] = { loaded: false, error: e.message };
-    console.error(`[server] LOAD FAIL ${mod}: ${e.message}`);
-    return null;
-  }
-}
 const cardRoutes    = safeRequireWithName("./api/cardRoutes.js", "card");
 const phoneRoutes   = safeRequireWithName("./api/phoneRoutes.js", "phone");
 const billingRoutes = safeRequireWithName("./api/billingRoutes.js", "billing");
@@ -398,6 +385,11 @@ app.use((req, res, next) => {
 app.use("/api", (req, res) => {
   res.status(404).json({ success: false, error: `Route not found: ${req.method} ${req.path}` });
 });
+
+// Express error-handling middleware — registered after all routes so any
+// error escaping a route handler is captured by Sentry and answered with a
+// generic 500 (previously: undefined behavior / process crash, no record).
+app.use(createErrorMiddleware());
 
 const httpServer = app.listen(PORT, () => {
   autonomyLoop.seedDefaultLoops();
