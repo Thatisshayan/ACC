@@ -20,7 +20,11 @@ function isConfigured() {
          SUPABASE_URL &&
          SUPABASE_KEY &&
          !SUPABASE_URL.includes('change_me') &&
-         !SUPABASE_KEY.includes('change_me');
+         !SUPABASE_KEY.includes('change_me') &&
+         !SUPABASE_URL.includes('127.0.0.1') &&
+         !SUPABASE_URL.includes('localhost') &&
+         !SUPABASE_KEY.includes('dry-') &&
+         !SUPABASE_KEY.includes('fixture');
 }
 
 const MIGRATIONS_DIR = path.join(__dirname, '../migrations');
