@@ -28,6 +28,13 @@ describe('queue', () => {
     assert.equal(getTask('task-does-not-exist'), null);
   });
 
+  test('enqueueTask throws validation errors for missing or invalid params', () => {
+    assert.throws(() => enqueueTask(), /agentType is required/);
+    assert.throws(() => enqueueTask({ agentType: 123 }), /agentType is required/);
+    assert.throws(() => enqueueTask({ agentType: 'writer' }), /payload is required/);
+    assert.throws(() => enqueueTask({ agentType: 'writer', payload: 'not-an-obj' }), /payload is required/);
+  });
+
   test('priority derives from role: power=3, default normal=2, guest=1', () => {
     assert.equal(enqueueTask({ agentType: 'x', payload: {}, meta: { role: 'power' } }).meta.priority, 3);
     assert.equal(enqueueTask({ agentType: 'x', payload: {} }).meta.priority, 2);
