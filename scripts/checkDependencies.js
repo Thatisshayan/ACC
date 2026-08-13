@@ -19,15 +19,14 @@
 
 const fs = require('fs');
 const path = require('path');
-const { builtinModules } = require('module');
+const { builtinModules, isBuiltin: nodeIsBuiltin } = require('module');
 
 const ROOT = path.join(__dirname, '..');
 const PKG = require(path.join(ROOT, 'package.json'));
 
-const REQUIRED_DEPS = new Set([
-  ...Object.keys(PKG.dependencies || {}),
-  ...Object.keys(PKG.devDependencies || {}),
-]);
+const PROD_DEPS = new Set(Object.keys(PKG.dependencies || {}));
+const DEV_DEPS = new Set(Object.keys(PKG.devDependencies || {}));
+const ALL_DEPS = new Set([...PROD_DEPS, ...DEV_DEPS]);
 
 // First-party scan roots. Excludes node_modules, ui/, mobile/, desktop/,
 // and any *.test.js (tests use devDependencies anyway, but they are not part
@@ -60,7 +59,7 @@ function collectFiles() {
   }
   for (const name of fs.readdirSync(ROOT)) {
     const full = path.join(ROOT, name);
-    if (name.endsWith('.js') && fs.statSync(full).isFile()) {
+    if (name.endsWith('.js') && !name.endsWith('.test.js') && fs.statSync(full).isFile()) {
       files.push(full);
     }
   }
@@ -78,9 +77,10 @@ function packageNameOf(spec) {
 
 function extractRequires(source) {
   const out = new Set();
+  const stripped = stripComments(source);
   const re = /require\(\s*(['"])([^'"]+)\1\s*\)/g;
   let m;
-  while ((m = re.exec(stripComments(source))) !== null) {
+  while ((m = re.exec(stripped)) !== null) {
     out.add(m[2]);
   }
   return out;
@@ -97,6 +97,9 @@ function stripComments(source) {
 }
 
 function isBuiltin(spec) {
+  if (typeof nodeIsBuiltin === 'function') {
+    return nodeIsBuiltin(spec);
+  }
   const bare = spec.startsWith('node:') ? spec.slice(5) : spec;
   return builtinModules.includes(bare);
 }
@@ -104,26 +107,47 @@ function isBuiltin(spec) {
 function main() {
   const files = collectFiles();
   const missing = new Map(); // pkg -> [files]
+  const devOnlyInProd = new Map(); // pkg -> [files]
 
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
+    const relativePath = path.relative(ROOT, file);
+    const isRuntimeFile = !relativePath.startsWith('scripts' + path.sep) && !relativePath.startsWith('scripts/');
+
     for (const spec of extractRequires(source)) {
       if (spec.startsWith('.') || spec.startsWith('/')) continue; // relative / absolute
       if (isBuiltin(spec)) continue;
       const pkg = packageNameOf(spec);
-      if (!REQUIRED_DEPS.has(pkg)) {
+      if (!ALL_DEPS.has(pkg)) {
         if (!missing.has(pkg)) missing.set(pkg, []);
-        missing.get(pkg).push(path.relative(ROOT, file));
+        missing.get(pkg).push(relativePath);
+      } else if (isRuntimeFile && !PROD_DEPS.has(pkg) && DEV_DEPS.has(pkg)) {
+        if (!devOnlyInProd.has(pkg)) devOnlyInProd.set(pkg, []);
+        devOnlyInProd.get(pkg).push(relativePath);
       }
     }
   }
 
+  let failed = false;
+
   if (missing.size > 0) {
-    console.error('checkDependencies: FAIL — require()d package(s) missing from package.json:');
+    console.error('checkDependencies: FAIL — require()d package(s) completely missing from package.json:');
     for (const [pkg, refs] of [...missing.entries()].sort()) {
       console.error(`  ${pkg}  (required by: ${refs.join(', ')})`);
     }
-    console.error('Add the missing package(s) to package.json (dependencies or devDependencies), then re-run.');
+    failed = true;
+  }
+
+  if (devOnlyInProd.size > 0) {
+    console.error('checkDependencies: FAIL — devDependencies required by production/runtime file(s):');
+    for (const [pkg, refs] of [...devOnlyInProd.entries()].sort()) {
+      console.error(`  ${pkg}  (is only in devDependencies but required by runtime: ${refs.join(', ')})`);
+    }
+    console.error('Move these package(s) from devDependencies to dependencies in package.json.');
+    failed = true;
+  }
+
+  if (failed) {
     process.exit(1);
   }
 

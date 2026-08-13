@@ -15,12 +15,15 @@ Think of it as a smart friend you can text anytime. It can answer questions, wri
 ---
 
 ### 📋 3. The main menu buttons
-- **💬 Chat** – Start a normal conversation. Ask anything.
-- **📝 Tasks** – Tell the bot to do something for you (write, research, plan).
-- **🌍 Translate** – Translate text into any language.
-- **🔍 Search** – Find jobs, news, or info.
-- **⚙️ Settings** – Change how the bot talks to you (short/long answers, language).
-- **❓ Help** – Get this guide or contact support.
+- **🌐 Mini Web App** – Open the ACC web dashboard directly inside Telegram.
+- **📋 Live Task Lanes** – Inspect real-time status of your task queues (Pending, In Progress, Waiting, Completed, Failed).
+- **✅ Approvals Inbox** – Review and approve or reject tasks requiring human-in-the-loop authorization.
+- **🧭 Workflow Launcher** – Choose and start structured workflow automation graphs.
+- **📣 Content Studio** – Access content generation tools for scripts, social media posts, blog articles, and video concepts.
+- **💼 Job-Apply Assistant** – Launch guided, multi-stage job-search and auto-apply campaigns.
+- **🛠️ Tools** – Access advanced utilities, private messaging, and additional integrations.
+- **🔄 Refresh Dashboard** – Refresh system metrics and statuses.
+- **🟦 System Status** – Display health diagnostics for services, connectors, and active integrations.
 
 ---
 
@@ -38,17 +41,22 @@ Think of it as a smart friend you can text anytime. It can answer questions, wri
 
 ---
 
-### ⌨️ 5. Commands cheat sheet (10 most useful)
-- `/start` – Begin or reset the bot
-- `/help` – Show this guide
-- `/short` – Make answers shorter
-- `/long` – Make answers detailed
-- `/translate [language] [text]` – Translate anything
-- `/task [your task]` – Tell the bot to do a job
-- `/search [query]` – Find info or jobs
-- `/clear` – Delete our chat history
-- `/stop` – Pause the bot (it will stop replying)
-- `/settings` – Open settings menu
+### ⌨️ 5. Commands cheat sheet
+- `/start` — Begin or reset the bot / Main menu
+- `/help` — Show this guide
+- `/menu` — Feature categories
+- `/dashboard` / `/status` — Premium dashboard and system health
+- `/jobs` / `/tracker` — Job search and application tracker
+- `/notes` — Encrypted notes vault
+- `/settings` — Your profile and language settings
+- `/briefing` — Generate daily briefings
+- `/loops` / `/auto` — Autonomous loop status and control
+- `/inbox` / `/messages` — Private inbox messages
+- `/msg <recipientId> <message>` — Send private message
+- `/tasks` / `/taskstats` — List recent tasks and status counts
+- `/agents` — Show active agent and provider statuses
+- `/approvals` — Show pending approvals
+- `/workflows` — List all registered workflow graphs
 
 ---
 

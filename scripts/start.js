@@ -4,20 +4,34 @@ const sentry = require('../cloud/utils/sentry.js');
 // (if initialized), flush, then exit — crash loudly so the supervisor
 // (Railway restartPolicyType: "on_failure") restarts a clean process instead
 // of limping on in an unknown state.
-process.on('uncaughtException', async (err) => {
-  console.error('[start] UNCAUGHT EXCEPTION:', (err && err.stack) || err);
-  sentry.captureException(err, { tags: { handler: 'uncaughtException' } });
-  await sentry.flush(2000);
-  process.exit(1);
+let crashing = false;
+async function fatal(label, err) {
+  if (crashing) return;
+  crashing = true;
+  console.error(`[start] ${label.toUpperCase()}:`, (err && err.stack) || err);
+  const watchdog = setTimeout(() => {
+    console.error(`[start] shutdown watchdog timed out after 3000ms. Forcing exit.`);
+    process.exit(1);
+  }, 3000);
+  if (typeof watchdog.unref === 'function') watchdog.unref();
+
+  try {
+    sentry.captureException(err, { tags: { handler: label } });
+    await sentry.flush(2000);
+  } catch (e) {
+    console.error('[start] Sentry capture/flush failed during crash:', e.message);
+  } finally {
+    clearTimeout(watchdog);
+    process.exit(1);
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  fatal('uncaughtException', err);
 });
-process.on('unhandledRejection', async (reason) => {
-  console.error('[start] UNHANDLED REJECTION:', (reason && reason.stack) || reason);
-  sentry.captureException(
-    reason instanceof Error ? reason : new Error(String(reason)),
-    { tags: { handler: 'unhandledRejection' } }
-  );
-  await sentry.flush(2000);
-  process.exit(1);
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  fatal('unhandledRejection', err);
 });
 
 console.log('[start] process starting, NODE_ENV=' + process.env.NODE_ENV + ' PORT=' + process.env.PORT);

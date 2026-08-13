@@ -88,7 +88,8 @@ function RunTimed($secs, $label, $cmd) {
   # On Windows npm/pnpm/yarn are .cmd shims; Start-Process needs the real name
   # (otherwise: "%1 is not a valid Win32 application").
   $exe = $cmd[0]
-  if ($IsWindows -and $exe -in @('npm','pnpm','yarn')) { $exe = "$exe.cmd" }
+  $isWin = $IsWindows -or ($env:OS -eq 'Windows_NT')
+  if ($isWin -and $exe -in @('npm','pnpm','yarn')) { $exe = "$exe.cmd" }
   $p = Start-Process -NoNewWindow -PassThru $exe $cmd[1..($cmd.Count-1)]
   if (-not $p.WaitForExit($secs * 1000)) {
     try { $p.Kill() } catch {}
@@ -109,7 +110,8 @@ if ($PM) {
     # dependency-completeness guard: fail if any require()'d package is
     # missing from package.json (prevents the twilio/openai silent-disable class)
     if (Test-Path (Join-Path $RepoRoot 'package.json')) {
-      npm run check:deps *> $null
+      npm run check:deps --if-present *> $null
+      if ($LASTEXITCODE -ne 0) { node scripts/checkDependencies.js *> $null }
       if ($LASTEXITCODE -eq 0) { Notice "check-deps" "all require()'d packages present in package.json" }
       else { Err "check-deps" "require()'d package missing from package.json (run npm run check:deps)" }
     }

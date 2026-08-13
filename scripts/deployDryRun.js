@@ -45,11 +45,10 @@ const repoRoot = path.resolve(__dirname, '..');
 // entry in moduleLoadStatus as required: if the app could not load it, the
 // gate fails. (If a module is later made genuinely optional, move its key here
 // instead of deleting it.)
-// Keys: email + loops use the module path as their name (single-arg safeRequire);
-//       card, phone, billing, memory use their friendly names.
+// Keys: email, loops, card, phone, billing, memory use their friendly names.
 const REQUIRED_MODULES = [
-  './api/emailRoutes.js',
-  './api/loopsRoutes.js',
+  'email',
+  'loops',
   'card',
   'phone',
   'billing',
@@ -119,10 +118,13 @@ function getJson(url, bearerToken) {
   });
 }
 
-async function waitForHealth() {
+async function waitForHealth(child) {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
   let lastErr = null;
   while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`server process terminated early with exitCode=${child.exitCode} signalCode=${child.signalCode}`);
+    }
     try {
       const { status, body } = await getJson(`http://127.0.0.1:${PORT}/health`);
       if (status === 200 && body && body.ok === true) return body;
@@ -155,6 +157,9 @@ async function checkModules() {
 }
 
 function killGraceful(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     let done = false;
     const fin = () => { if (!done) { done = true; resolve(); } };
@@ -178,9 +183,10 @@ async function main() {
   let bootLog = '';
   child.stdout.on('data', (d) => { bootLog += d; });
   child.stderr.on('data', (d) => { bootLog += d; });
+  child.on('error', (e) => { bootLog += `\n[deployDry] spawn error: ${e.message}\n`; });
 
   try {
-    const health = await waitForHealth();
+    const health = await waitForHealth(child);
     console.log(`[deployDry] /health OK ->`, JSON.stringify(health));
     const loadedCount = await checkModules();
     console.log(`[deployDry] RESULT: PASS (${loadedCount} modules loaded, health OK)`);

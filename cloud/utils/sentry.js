@@ -15,12 +15,15 @@ let initialized = false;
 
 function initIfConfigured() {
   if (initialized) return true;
-  if (!process.env.SENTRY_DSN) return false;
+  const dsn = process.env.SENTRY_DSN;
+  if (!dsn || (!dsn.startsWith('http://') && !dsn.startsWith('https://'))) {
+    return false;
+  }
   try {
     Sentry = require('@sentry/node');
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV || 'production',
+      environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
       tracesSampleRate: 0.1,
     });
     initialized = true;
