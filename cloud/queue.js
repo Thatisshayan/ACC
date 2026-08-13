@@ -27,7 +27,13 @@ function roleToPriority(role) {
  * @param {Object} params.payload
  * @param {Object} [params.meta]   - should include userId + role
  */
-function enqueueTask({ agentType, payload, meta = {} }) {
+function enqueueTask({ agentType, payload, meta = {} } = {}) {
+  if (!agentType || typeof agentType !== "string") {
+    throw new Error("agentType is required and must be a string.");
+  }
+  if (!payload || typeof payload !== "object") {
+    throw new Error("payload is required and must be an object.");
+  }
   const id       = nextId();
   const role     = meta.role || "normal";
   const priority = meta.priority || roleToPriority(role);
