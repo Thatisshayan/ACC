@@ -21,24 +21,54 @@ function getChromium() {
   catch (e) { throw new Error('playwright not available — run: npm install playwright && npx playwright install chromium'); }
 }
 
-async function withPage(fn, retries = 2) {
+let globalBrowser = null;
+
+async function getBrowserInstance() {
+  if (globalBrowser && globalBrowser.isConnected()) {
+    return globalBrowser;
+  }
   const chromium = getChromium();
+  globalBrowser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  });
+
+  process.on('exit', () => {
+    if (globalBrowser) {
+      try { globalBrowser.close(); } catch (_) {}
+    }
+  });
+
+  return globalBrowser;
+}
+
+async function withPage(fn, retries = 2) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
-    const page = await (await browser.newContext({ userAgent: randomUA() })).newPage();
+    let browser;
+    let context;
+    let page;
     try {
+      browser = await getBrowserInstance();
+      context = await browser.newContext({ userAgent: randomUA() });
+      page = await context.newPage();
+
       const result = await fn(page);
       return result;
     } catch (e) {
       lastErr = e;
       log('[browser] attempt', attempt + 1, 'failed:', e.message);
+      if (browser && !browser.isConnected()) {
+        globalBrowser = null;
+      }
       if (attempt < retries) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
     } finally {
-      await browser.close();
+      if (page) {
+        try { await page.close(); } catch (_) {}
+      }
+      if (context) {
+        try { await context.close(); } catch (_) {}
+      }
     }
   }
   throw lastErr;

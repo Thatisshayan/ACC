@@ -44,6 +44,39 @@ db.exec(`
 
 const { v4: uuid } = require('uuid');
 
+// ── L1 Cache (Task 19) ────────────────────────────────────────────────────────
+const l1Cache = new Map();
+
+function getL1(scope, key) {
+  const cacheKey = `${scope || 'global'}:${key}`;
+  const entry = l1Cache.get(cacheKey);
+  if (!entry) return null;
+  if (entry.expiresAt && new Date(entry.expiresAt) <= new Date()) {
+    l1Cache.delete(cacheKey);
+    return null;
+  }
+  return entry.value;
+}
+
+function setL1(scope, key, value, expiresAt) {
+  const cacheKey = `${scope || 'global'}:${key}`;
+  l1Cache.set(cacheKey, { value, expiresAt });
+}
+
+function deleteL1(scope, key) {
+  const cacheKey = `${scope || 'global'}:${key}`;
+  l1Cache.delete(cacheKey);
+}
+
+function clearL1Scope(scope) {
+  const prefix = `${scope || 'global'}:`;
+  for (const k of l1Cache.keys()) {
+    if (k.startsWith(prefix)) {
+      l1Cache.delete(k);
+    }
+  }
+}
+
 // ── Write ─────────────────────────────────────────────────────────────────────
 
 function remember(scope, key, value, opts) {
@@ -60,19 +93,31 @@ function remember(scope, key, value, opts) {
       updated_at = datetime('now'),
       expires_at = excluded.expires_at
   `).run(id, scope || 'global', key, val, o.source || 'system', o.importance || 5, o.expiresAt || null);
+
+  setL1(scope, key, value, o.expiresAt || null);
+
   return { scope, key, value: val };
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────
 
 function recall(scope, key) {
+  const cached = getL1(scope, key);
+  if (cached !== null) return cached;
+
   var row = db.prepare(`
     SELECT * FROM memories
     WHERE scope = ? AND key = ?
       AND (expires_at IS NULL OR expires_at > datetime('now'))
   `).get(scope || 'global', key);
   if (!row) return null;
-  try { return JSON.parse(row.value); } catch (_) { return row.value; }
+
+  let parsedValue;
+  try { parsedValue = JSON.parse(row.value); } catch (_) { parsedValue = row.value; }
+
+  setL1(scope, key, parsedValue, row.expires_at || null);
+
+  return parsedValue;
 }
 
 function recallAll(scope, opts) {
@@ -133,11 +178,13 @@ function getEvents(scope, opts) {
 // ── Forget ────────────────────────────────────────────────────────────────────
 
 function forget(scope, key) {
+  deleteL1(scope, key);
   var info = db.prepare(`DELETE FROM memories WHERE scope = ? AND key = ?`).run(scope || 'global', key);
   return info.changes > 0;
 }
 
 function forgetScope(scope) {
+  clearL1Scope(scope);
   var info = db.prepare(`DELETE FROM memories WHERE scope = ?`).run(scope || 'global');
   return info.changes;
 }

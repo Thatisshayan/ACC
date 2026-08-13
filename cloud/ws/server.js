@@ -3,6 +3,7 @@
 const WebSocket      = require("ws");
 const { WebSocketServer } = require("ws");
 const { log }        = require("../utils/logger.js");
+const { validateToken } = require("../middleware/auth.js");
 
 let wss = null;
 
@@ -16,7 +17,32 @@ function startWSServer(httpServer) {
   wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
   wss.on("connection", (ws, req) => {
-    log("[ws] Client connected from", req.socket.remoteAddress);
+    // Parse query string to extract 'token' parameter
+    let url;
+    try {
+      url = new URL(req.url, 'http://localhost');
+    } catch (e) {
+      ws.close(4400, "Invalid handshake URL");
+      return;
+    }
+
+    const token = url.searchParams.get("token");
+    const principal = validateToken(token, ['operator', 'admin', 'service']);
+
+    const isProd = process.env.NODE_ENV === "production";
+    const hasKeys = String(process.env.ACC_OPERATOR_API_KEY || '').trim().length > 0 ||
+                    String(process.env.ACC_ADMIN_API_KEY || '').trim().length > 0;
+
+    if (!principal) {
+      if (isProd || hasKeys) {
+        log("[ws] Connection rejected: unauthorized (missing or invalid token)");
+        ws.close(4401, "Unauthorized");
+        return;
+      }
+      log("[ws] Warning: Client connected from", req.socket.remoteAddress, "without token (dev fallback)");
+    } else {
+      log("[ws] Client connected from", req.socket.remoteAddress, "authorized as:", principal.role, "subject:", principal.subject);
+    }
 
     ws.on("message", (raw) => {
       try {
@@ -54,4 +80,8 @@ function broadcast(event, payload) {
   }
 }
 
-module.exports = { startWSServer, broadcast };
+function resetWSServer() {
+  wss = null;
+}
+
+module.exports = { startWSServer, broadcast, resetWSServer };

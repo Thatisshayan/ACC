@@ -7,7 +7,7 @@
     "acc": "./acc.js"
   },
   "scripts": {
-    "test": "node cloud/taskbus/router.test.js && node --test cloud/security/webhookHmac.test.js cloud/taskbus/store.test.js cloud/messages/store.test.js cloud/middleware/auth.test.js cloud/memory/store.test.js cloud/utils/logger.test.js cloud/utils/sentry.test.js cloud/utils/safeRequire.test.js cloud/utils/errorMiddleware.test.js cloud/api/billingRoutes.test.js cloud/api/alphonsoBridge.test.js cloud/taskbus/providerFallback.test.js cloud/taskbus/routes.test.js cloud/hub/routes.test.js cloud/autonomy/loop.test.js cloud/telegram/botApi.test.js cloud/queue.test.js cloud/orchestrator.test.js cloud/worker.test.js",
+    "test": "node cloud/taskbus/router.test.js && node --test cloud/security/webhookHmac.test.js cloud/security/vaultStub.test.js cloud/ws/server.test.js cloud/taskbus/store.test.js cloud/messages/store.test.js cloud/middleware/auth.test.js cloud/memory/store.test.js cloud/utils/logger.test.js cloud/utils/sentry.test.js cloud/utils/safeRequire.test.js cloud/utils/errorMiddleware.test.js cloud/api/billingRoutes.test.js cloud/api/alphonsoBridge.test.js cloud/taskbus/providerFallback.test.js cloud/taskbus/routes.test.js cloud/hub/routes.test.js cloud/autonomy/loop.test.js cloud/queue.test.js cloud/orchestrator.test.js cloud/worker.test.js",
     "telegram": "node telegram.js",
     "bridge": "node server.js",
     "cloud:api": "node cloud/server.js",
@@ -48,7 +48,6 @@
     "formdata-node": "^6.0.3",
     "imapflow": "^1.3.3",
     "node-fetch": "^2.7.0",
-    "node-telegram-bot-api": "^1.2.0",
     "openai": "^6.48.0",
     "playwright": "^1.60.0",
     "stripe": "^22.1.1",
