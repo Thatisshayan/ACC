@@ -1,20 +1,48 @@
-process.on('uncaughtException', (e) => console.error('[start] UNCAUGHT:', e.message, e.stack));
-process.on('unhandledRejection', (e) => console.error('[start] UNHANDLED:', e));
+const sentry = require('../cloud/utils/sentry.js');
+
+// Process-level crash visibility. Log the error clearly, push it to Sentry
+// (if initialized), flush, then exit — crash loudly so the supervisor
+// (Railway restartPolicyType: "on_failure") restarts a clean process instead
+// of limping on in an unknown state.
+let crashing = false;
+async function fatal(label, err) {
+  if (crashing) return;
+  crashing = true;
+  console.error(`[start] ${label.toUpperCase()}:`, (err && err.stack) || err);
+  const watchdog = setTimeout(() => {
+    console.error(`[start] shutdown watchdog timed out after 3000ms. Forcing exit.`);
+    process.exit(1);
+  }, 3000);
+  if (typeof watchdog.unref === 'function') watchdog.unref();
+
+  try {
+    sentry.captureException(err, { tags: { handler: label } });
+    await sentry.flush(2000);
+  } catch (e) {
+    console.error('[start] Sentry capture/flush failed during crash:', e.message);
+  } finally {
+    clearTimeout(watchdog);
+    process.exit(1);
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  fatal('uncaughtException', err);
+});
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  fatal('unhandledRejection', err);
+});
 
 console.log('[start] process starting, NODE_ENV=' + process.env.NODE_ENV + ' PORT=' + process.env.PORT);
 require('dotenv').config({ path: require('path').join(__dirname, '../.env'), override: false });
 
 if (process.env.SENTRY_DSN) {
-  try {
-    const Sentry = require('@sentry/node');
-    Sentry.init({
-      dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV || 'production',
-      tracesSampleRate: 0.1,
-    });
+  const ok = sentry.initIfConfigured();
+  if (ok) {
     console.log('[start] Sentry initialized');
-  } catch(e) {
-    console.warn('[start] Sentry not available (install @sentry/node to enable):', e.message);
+  } else {
+    console.warn('[start] Sentry not available (install @sentry/node to enable)');
   }
 }
 

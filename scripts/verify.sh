@@ -98,6 +98,13 @@ if [ -n "$PM" ]; then
     npm)  run_with_timeout 300 build npm ci ;;
   esac
   if [ $FAIL -eq 0 ]; then
+    # dependency-completeness guard: fail if any require()'d package is
+    # missing from package.json (prevents the twilio/openai silent-disable class)
+    if [ -f package.json ]; then
+      (npm run check:deps --if-present || node scripts/checkDependencies.js) >/dev/null 2>&1 \
+        && notice "check-deps" "all require()'d packages present in package.json" \
+        || error "check-deps" "require()'d package missing from package.json (run npm run check:deps)"
+    fi
     (npm run build --if-present || pnpm run build --if-present || yarn build) >/dev/null 2>&1 && notice build "build ok" || error build "build failed"
     (npm test --if-present || pnpm test --if-present || yarn test) >/dev/null 2>&1 && notice test "test ok" || error test "test failed"
   fi
@@ -116,7 +123,7 @@ echo "== deploy-dry =="
 if [ -f vercel.json ]; then
   vercel build --dry-run >/dev/null 2>&1 || error "deploy" "vercel dry-run failed"
 elif [ -f railway.json ] || [ -f railway.toml ]; then
-  notice "deploy" "railway target present; run 'railway up --detach' manually"
+  run_with_timeout 180 "deploy" node scripts/deployDryRun.js
 elif [ -f eas.json ]; then
   npx eas build --platform all --local --no-wait --non-interactive >/dev/null 2>&1 \
     || error "deploy" "eas dry build failed"
@@ -157,6 +164,23 @@ else
     fi
   done < <(grep -E '^[[:space:]]*- \[ \] T[0-9]+' REPO_DIRECTIVE.md)
   if [ "$orphans" -eq 0 ]; then notice "directive-lint" "all tasks trace to a defined phase/sprint/epic"; fi
+fi
+
+# ---------------------------------------------------------------- 6. orphan-lint
+# Dead-code advisory: cloud/ modules with zero incoming require() references.
+# Orphan files are a judgment call (Phase 5, SPRINT_2026-08) — report as a
+# `notice`, never a hard failure. Newly found orphans go to DEFERRED_WORK.md.
+echo "== orphan-lint =="
+if command -v node >/dev/null 2>&1 && [ -f scripts/findOrphanModules.js ]; then
+  orphans_out=$(node scripts/findOrphanModules.js 2>&1)
+  orphan_count=$(printf '%s\n' "$orphans_out" | grep -o 'orphan_count=[0-9]*' | head -1 | cut -d= -f2)
+  if [ -n "${orphan_count:-}" ] && [ "$orphan_count" -gt 0 ]; then
+    notice "orphan-lint" "orphan_count=$orphan_count cloud/ modules with zero incoming requires (advisory, see DEFERRED_WORK.md)"
+  else
+    notice "orphan-lint" "no orphaned cloud/ modules"
+  fi
+else
+  notice "orphan-lint" "node or scripts/findOrphanModules.js unavailable — skipping"
 fi
 
 if [ "$FAIL" -ne 0 ]; then

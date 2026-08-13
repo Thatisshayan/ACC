@@ -1,4 +1,6 @@
 // cloud/roles/negotiationPolicy.js
+// [ORPHAN] No incoming require() references repo-wide (Phase 5, SPRINT_2026-08).
+// Kept per R14 (no deletion without approval) — see docs/governance/DEFERRED_WORK.md.
 // Stores and enforces negotiation rules for SalesBot and Agent roles.
 // Policies loaded from LTM (Notion) or defaults below.
 

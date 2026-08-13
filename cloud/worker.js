@@ -3,6 +3,7 @@ const { getNextTask, updateTask } = require("./queue.js");
 const { executeTask }             = require("./executor.js");
 const { updateWorkerHeartbeat }   = require("./system/health.js");
 const { logEvent }                = require("./logs/logger.js");
+const logger                      = require("./utils/logger.js");
 
 // Heartbeat every 2 seconds so health monitor can detect stalls
 setInterval(() => updateWorkerHeartbeat(), 2000);
@@ -27,7 +28,7 @@ async function workerLoop() {
       continue;
     }
 
-    console.log(`[worker] Running task ${task.id} | agentType: ${task.agentType} | priority: ${task.meta.priority}`);
+    logger.info(`[worker][task=${task.id}] Running | agentType: ${task.agentType} | priority: ${task.meta.priority}`);
     updateTask(task.id, { status: "running" });
     logEvent("task_start", "Task started", { taskId: task.id, agentType: task.agentType });
 
@@ -42,15 +43,15 @@ async function workerLoop() {
       if (result.success) {
         updateTask(task.id, { status: "completed", result, error: null });
         logEvent("task_complete", "Task completed", { taskId: task.id });
-        console.log(`[worker] Task ${task.id} completed | provider: ${result.provider || 'default'}`);
+        logger.info(`[worker][task=${task.id}] Completed | provider: ${result.provider || 'default'}`);
       } else {
         const errStr = typeof result.error === 'object' ? JSON.stringify(result.error) : (result.error || 'unknown error');
         updateTask(task.id, { status: "failed", error: errStr, result: null });
         logEvent("task_error", "Task failed", { taskId: task.id, error: errStr });
-        console.log(`[worker] Task ${task.id} failed: ${errStr}`);
+        logger.error(`[worker][task=${task.id}] Failed: ${errStr}`);
       }
     } catch (err) {
-      console.error(`[worker] Unhandled error on task ${task.id}:`, err.message);
+      logger.error(`[worker][task=${task.id}] Unhandled error:`, err.message);
       updateTask(task.id, { status: "failed", error: err.message, result: null });
       logEvent("task_error", "Unhandled worker error", { taskId: task.id, error: err.message });
     }
@@ -64,7 +65,7 @@ async function workerLoop() {
  */
 function startWorker({ intervalMs = 500 } = {}) {
   console.log("[worker] Starting priority-aware worker...");
-  workerLoop().catch(err => console.error("[worker] Fatal:", err));
+  workerLoop().catch(err => logger.error("[worker] Fatal:", err));
 }
 
 module.exports = { workerLoop, startWorker };

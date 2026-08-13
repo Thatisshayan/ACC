@@ -75,7 +75,7 @@ function sanitizeProviderError(err) {
 
 // ── Provider 0: Perplexity (research tasks only) ────────────────────────────────
 async function tryPerplexity(task) {
-  if (!perplexity.enabled()) return { tried: false, reason: 'PERPLEXITY_API_KEY not set' };
+  if (!perplexity.enabled()) return { tried: false, success: false, reason: 'PERPLEXITY_API_KEY not set' };
 
   log('[provider] Trying Perplexity (research)...');
   var res = await perplexity.research(buildUserPrompt(task));
@@ -104,7 +104,7 @@ async function tryPerplexity(task) {
 // ── Provider 1: DeepSeek ──────────────────────────────────────────────────────
 async function tryDeepSeek(task) {
   var key = process.env.DEEPSEEK_API_KEY;
-  if (!key) return { tried: false, reason: 'DEEPSEEK_API_KEY not set' };
+  if (!key) return { tried: false, success: false, reason: 'DEEPSEEK_API_KEY not set' };
 
   log('[provider] Trying DeepSeek...');
   try {
@@ -134,20 +134,45 @@ async function tryDeepSeek(task) {
 
 async function tryAlibaba(task) {
   var ali = require('../integrations/alibaba.js');
-  if (!ali.enabled()) return { tried: false, reason: 'Alibaba/Qwen not configured' };
-  console.log('[provider] Trying Alibaba/Qwen...');
+  if (!ali.enabled()) return { tried: false, success: false, reason: 'Alibaba/Qwen not configured' };
+  log('[provider] Trying Alibaba/Qwen...');
   try {
     var result = await ali.chat(task.instruction || task.title, 'qwen-plus');
     if (!result.success) return { tried: true, success: false, reason: result.error || 'Alibaba/Qwen request failed' };
-    return { tried: true, success: true, provider: 'alibaba_qwen', provider_used: 'alibaba_qwen', is_real_ai_result: true, cost_tier: 'low_cost', output: result.output, summary: result.output && result.output.slice(0, 200) };
-  } catch(e) { console.warn('[provider] Alibaba failed:', e.message); return { tried: true, success: false, reason: e.message }; }
+    var output = String(result.output || '');
+    return {
+      tried: true,
+      success: true,
+      provider: 'alibaba_qwen',
+      cost_tier: 'low_cost',
+      data: {
+        summary: output.slice(0, 200),
+        output: output,
+        files_changed: [],
+        risks: [],
+        next_request: ''
+      }
+    };
+  } catch(e) { log('[provider] Alibaba failed:', e.message); return { tried: true, success: false, reason: e.message }; }
 }
 async function tryOllama(task) {
   log('[provider] Trying Ollama at', ollama.BASE_URL, 'model:', ollama.MODEL);
-  var result = await ollama.generate(buildUserPrompt(task), SYSTEM_PROMPT);
+  var result;
+  try {
+    result = await ollama.generate(buildUserPrompt(task), SYSTEM_PROMPT);
+  } catch(e) {
+    var boomErr = sanitizeProviderError(e.message || e);
+    log('[provider] Ollama threw:', boomErr.slice(0, 100));
+    return { tried: true, success: false, reason: boomErr };
+  }
+  if (!result || typeof result.success !== 'boolean') {
+    log('[provider] Ollama returned malformed response');
+    return { tried: true, success: false, reason: 'Ollama returned no valid response' };
+  }
   if (!result.success) {
-    log('[provider] Ollama failed:', result.error.slice(0, 100));
-    return { tried: true, success: false, reason: result.error };
+    var err = String(result.error || 'Ollama request failed').slice(0, 100);
+    log('[provider] Ollama failed:', err);
+    return { tried: true, success: false, reason: result.error || 'Ollama request failed' };
   }
   var parsed = parseJSON(result.text);
   log('[provider] Ollama succeeded');
@@ -157,7 +182,7 @@ async function tryOllama(task) {
 // ── Provider 3: Claude ────────────────────────────────────────────────────────
 async function tryClaude(task) {
   var key = process.env.CLAUDE_API_KEY;
-  if (!key) return { tried: false, reason: 'CLAUDE_API_KEY not set' };
+  if (!key) return { tried: false, success: false, reason: 'CLAUDE_API_KEY not set' };
 
   log('[provider] Trying Claude (premium fallback)...');
   try {
@@ -319,4 +344,5 @@ async function executeWithProviderFallback(task) {
     execution_mode: task.automation_mode, cost_tier: 'zero_cost_stub', is_real_ai_result: false }, stub);
 }
 
-module.exports = { executeWithProviderFallback, getProvidersStatus, clearProviderCache };
+module.exports = { executeWithProviderFallback, getProvidersStatus, clearProviderCache,
+  tryPerplexity, tryDeepSeek, tryAlibaba, tryOllama, tryClaude };

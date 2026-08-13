@@ -85,7 +85,12 @@ elseif (Test-Path (Join-Path $RepoRoot 'yarn.lock')) { $PM = 'yarn' }
 elseif (Test-Path (Join-Path $RepoRoot 'package-lock.json')) { $PM = 'npm' }
 
 function RunTimed($secs, $label, $cmd) {
-  $p = Start-Process -NoNewWindow -PassThru $cmd[0] $cmd[1..($cmd.Count-1)]
+  # On Windows npm/pnpm/yarn are .cmd shims; Start-Process needs the real name
+  # (otherwise: "%1 is not a valid Win32 application").
+  $exe = $cmd[0]
+  $isWin = $IsWindows -or ($env:OS -eq 'Windows_NT')
+  if ($isWin -and $exe -in @('npm','pnpm','yarn')) { $exe = "$exe.cmd" }
+  $p = Start-Process -NoNewWindow -PassThru $exe $cmd[1..($cmd.Count-1)]
   if (-not $p.WaitForExit($secs * 1000)) {
     try { $p.Kill() } catch {}
     Err $label "timed out after ${secs}s (likely network/install hang)"
@@ -102,6 +107,14 @@ if ($PM) {
     'npm'  { RunTimed 300 build @('npm','ci') }
   }
   if (-not $failed) {
+    # dependency-completeness guard: fail if any require()'d package is
+    # missing from package.json (prevents the twilio/openai silent-disable class)
+    if (Test-Path (Join-Path $RepoRoot 'package.json')) {
+      npm run check:deps --if-present *> $null
+      if ($LASTEXITCODE -ne 0) { node scripts/checkDependencies.js *> $null }
+      if ($LASTEXITCODE -eq 0) { Notice "check-deps" "all require()'d packages present in package.json" }
+      else { Err "check-deps" "require()'d package missing from package.json (run npm run check:deps)" }
+    }
     $buildCmd = if ($PM -eq 'npm') { 'npm run build --if-present' } elseif ($PM -eq 'pnpm') { 'pnpm run build --if-present' } else { 'yarn build' }
     Invoke-Expression $buildCmd >$null 2>&1; if ($LASTEXITCODE -eq 0) { Notice build "build ok" } else { Err build "build failed" }
     $testCmd = if ($PM -eq 'npm') { 'npm test --if-present' } elseif ($PM -eq 'pnpm') { 'pnpm test --if-present' } else { 'yarn test' }
@@ -122,7 +135,7 @@ Write-Host "== deploy-dry =="
 if (Test-Path (Join-Path $RepoRoot 'vercel.json')) {
   vercel build --dry-run; if ($LASTEXITCODE -ne 0) { Err "deploy" "vercel dry-run failed" }
 } elseif ((Test-Path (Join-Path $RepoRoot 'railway.json')) -or (Test-Path (Join-Path $RepoRoot 'railway.toml'))) {
-  Notice "deploy" "railway target present; run 'railway up --detach' manually"
+  RunTimed 180 "deploy" @('node','scripts/deployDryRun.js')
 } elseif (Test-Path (Join-Path $RepoRoot 'eas.json')) {
   npx eas build --platform all --local --no-wait --non-interactive; if ($LASTEXITCODE -ne 0) { Err "deploy" "eas dry build failed" }
 } elseif (Test-Path (Join-Path $RepoRoot 'netlify.toml')) {
