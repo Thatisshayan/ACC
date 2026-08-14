@@ -23,6 +23,15 @@ function getChromium() {
 
 let globalBrowser = null;
 
+// Registered once at module load — closes whichever browser instance is
+// active at process exit, regardless of how many times it has been
+// relaunched (avoids accumulating a new listener per relaunch).
+process.on('exit', () => {
+  if (globalBrowser) {
+    try { globalBrowser.close(); } catch (_) {}
+  }
+});
+
 async function getBrowserInstance() {
   if (globalBrowser && globalBrowser.isConnected()) {
     return globalBrowser;
@@ -31,12 +40,6 @@ async function getBrowserInstance() {
   globalBrowser = await chromium.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
-
-  process.on('exit', () => {
-    if (globalBrowser) {
-      try { globalBrowser.close(); } catch (_) {}
-    }
   });
 
   return globalBrowser;
@@ -237,4 +240,4 @@ async function runBrowserTask(payload) {
   }
 }
 
-module.exports = { searchJobs, webSearch, screenshot, fillForm, navigateAndExtract, clickAndWait, runBrowserTask, checkHealth, SANDBOX };
+module.exports = { searchJobs, webSearch, screenshot, fillForm, navigateAndExtract, clickAndWait, runBrowserTask, checkHealth, SANDBOX, withPage, getBrowserInstance };

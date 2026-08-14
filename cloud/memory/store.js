@@ -45,6 +45,10 @@ db.exec(`
 const { v4: uuid } = require('uuid');
 
 // ── L1 Cache (Task 19) ────────────────────────────────────────────────────────
+// Bounded, insertion-order Map used as a simple LRU: a get() re-inserts the
+// entry to mark it most-recently-used, and set() evicts the oldest entry
+// once the cap is exceeded — prevents unbounded memory growth.
+const L1_MAX_ENTRIES = 5000;
 const l1Cache = new Map();
 
 function getL1(scope, key) {
@@ -55,12 +59,21 @@ function getL1(scope, key) {
     l1Cache.delete(cacheKey);
     return null;
   }
+  // Refresh recency: delete + re-set moves the key to the end of Map's
+  // iteration order.
+  l1Cache.delete(cacheKey);
+  l1Cache.set(cacheKey, entry);
   return entry.value;
 }
 
 function setL1(scope, key, value, expiresAt) {
   const cacheKey = `${scope || 'global'}:${key}`;
+  l1Cache.delete(cacheKey);
   l1Cache.set(cacheKey, { value, expiresAt });
+  while (l1Cache.size > L1_MAX_ENTRIES) {
+    const oldestKey = l1Cache.keys().next().value;
+    l1Cache.delete(oldestKey);
+  }
 }
 
 function deleteL1(scope, key) {

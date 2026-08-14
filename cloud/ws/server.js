@@ -26,7 +26,12 @@ function startWSServer(httpServer) {
       return;
     }
 
-    const token = url.searchParams.get("token");
+    // Prefer the Sec-WebSocket-Protocol header (set via the `protocols`
+    // argument of the WebSocket constructor) over the query string — query
+    // params get written into access logs and browser history, headers do
+    // not. The query param is kept as a fallback for existing callers.
+    const protocolToken = (req.headers["sec-websocket-protocol"] || "").split(",")[0].trim();
+    const token = protocolToken || url.searchParams.get("token");
     const principal = validateToken(token, ['operator', 'admin', 'service']);
 
     const isProd = process.env.NODE_ENV === "production";

@@ -1,6 +1,7 @@
 // cloud/connectors/marketplace/facebookMarketplace.js
 const { BaseMarketplaceConnector } = require("./baseMarketplace.js");
 const { log } = require("../../utils/logger.js");
+const { withPage } = require("../browser.js");
 
 class FacebookMarketplaceConnector extends BaseMarketplaceConnector {
   constructor(config = {}) {
@@ -12,24 +13,11 @@ class FacebookMarketplaceConnector extends BaseMarketplaceConnector {
     });
   }
 
-  // Lazy-load playwright
-  getChromium() {
-    try { return require('playwright').chromium; }
-    catch (e) { throw new Error('playwright not available — run: npm install playwright && npx playwright install chromium'); }
-  }
-
+  // Reuses the shared singleton browser instance/pool from
+  // cloud/connectors/browser.js instead of launching a fresh browser per
+  // call — avoids redundant lifecycle management and process overhead.
   async withPage(fn) {
-    const chromium = this.getChromium();
-    const browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
-    const page = await browser.newPage();
-    try {
-      return await fn(page);
-    } finally {
-      await browser.close();
-    }
+    return withPage(fn);
   }
 
   async postItem(payload = {}) {

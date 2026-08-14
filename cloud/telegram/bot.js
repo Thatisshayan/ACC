@@ -66,7 +66,8 @@ var telegramCommands = new Map();
 function loadTelegramCommands() {
   var cmdDir = path.join(__dirname, 'commands');
   if (!fs.existsSync(cmdDir)) return;
-  var files = fs.readdirSync(cmdDir).filter(function(f) { return f.endsWith('.js'); });
+  var SAFE_COMMAND_FILE = /^[a-z0-9-_]+\.js$/i;
+  var files = fs.readdirSync(cmdDir).filter(function(f) { return SAFE_COMMAND_FILE.test(f); });
   files.forEach(function(file) {
     try {
       var cmd = require(path.join(cmdDir, file));

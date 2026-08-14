@@ -44,10 +44,9 @@ async function run() {
 
   if (!backendRunning) {
     console.log('[ui-qa] Spawning backend server...');
-    backendProc = spawn('node', [path.join(__dirname, 'start.js')], {
+    backendProc = spawn(process.execPath, [path.join(__dirname, 'start.js')], {
       env: { ...process.env, PORT: PORT_BACKEND, NODE_ENV: 'development' },
-      stdio: 'ignore',
-      shell: true
+      stdio: 'ignore'
     });
   }
 
@@ -58,7 +57,9 @@ async function run() {
     frontendProc = spawn(npmCmd, ['run', 'dev', '--', '--port', PORT_FRONTEND], {
       cwd: uiDir,
       stdio: 'ignore',
-      shell: true
+      // .cmd shims require the shell on Windows to resolve; args are fixed
+      // constants (never user input), so this carries no injection risk.
+      shell: process.platform === 'win32'
     });
   }
 
