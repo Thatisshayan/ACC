@@ -89,7 +89,10 @@ async function run() {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
     const ok = await applyMigration(db, file, sql);
-    if (ok) count++;
+    if (!ok) {
+      throw new Error(`Migration failed: ${file}`);
+    }
+    count++;
   }
 
   if (count === 0) {

@@ -492,7 +492,11 @@ async function handleMessage(msg) {
   // Modular command routing (Task 17)
   if (text.startsWith('/')) {
     var parts = text.split(/\s+/);
-    var cmdName = parts[0].slice(1).toLowerCase();
+    // Telegram sends "/cmd@bot_username" in group chats — strip the
+    // "@bot_username" suffix so the base command still resolves.
+    var rawCmd = parts[0].slice(1);
+    var atIdx = rawCmd.indexOf('@');
+    var cmdName = (atIdx === -1 ? rawCmd : rawCmd.slice(0, atIdx)).toLowerCase();
     var cmd = telegramCommands.get(cmdName);
     if (cmd) {
       try {

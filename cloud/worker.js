@@ -51,6 +51,10 @@ async function workerLoop() {
             payload:   task.payload,
             meta:      task.meta,
           });
+          // Awaiting operator approval is not a failure — retrying it would
+          // create a duplicate approval request on every attempt, and
+          // dead-lettering it would abandon a task that's simply waiting.
+          if (res.status === "pendingApproval") return res;
           if (!res.success) {
             throw new Error(res.error || "Execution failed");
           }
@@ -62,27 +66,38 @@ async function workerLoop() {
         }
       );
 
-      updateTask(task.id, { status: "completed", result, error: null });
-      logEvent("task_complete", "Task completed", { taskId: task.id });
-      logger.info(`[worker][task=${task.id}] Completed | provider: ${result.provider || 'default'}`);
+      if (result.status === "pendingApproval") {
+        updateTask(task.id, { status: "pendingApproval", result: null, error: null });
+        logEvent("task_pending_approval", "Task awaiting operator approval", { taskId: task.id, approvalId: result.approvalId });
+        logger.info(`[worker][task=${task.id}] Awaiting approval (id: ${result.approvalId})`);
+      } else {
+        updateTask(task.id, { status: "completed", result, error: null });
+        logEvent("task_complete", "Task completed", { taskId: task.id });
+        logger.info(`[worker][task=${task.id}] Completed | provider: ${result.provider || 'default'}`);
+      }
     } catch (err) {
       logger.error(`[worker][task=${task.id}] Exhausted retries. Writing to DLQ. Error: ${err.message}`);
-      
-      const dlqRecord = writeToDLQ({
-        graphId: task.meta?.graphId || 'task-bus-graph',
-        node: {
-          id: task.id,
-          type: task.agentType,
-          payload: task.payload,
-          attempts: RETRY_POLICY.maxAttempts,
-          lastError: err.message
-        },
-        context: task.meta || {},
-        error: err.message
-      });
+
+      let dlqRecord;
+      try {
+        dlqRecord = writeToDLQ({
+          graphId: task.meta?.graphId || 'task-bus-graph',
+          node: {
+            id: task.id,
+            type: task.agentType,
+            payload: task.payload,
+            attempts: RETRY_POLICY.maxAttempts,
+            lastError: err.message
+          },
+          context: task.meta || {},
+          error: err.message
+        });
+      } catch (dlqError) {
+        logger.error(`[worker][task=${task.id}] DLQ write failed: ${dlqError.message}`);
+      }
 
       updateTask(task.id, { status: "failed", error: err.message, result: null });
-      logEvent("task_error", "Task failed and written to DLQ", { taskId: task.id, error: err.message, dlqId: dlqRecord.id });
+      logEvent("task_error", "Task failed", { taskId: task.id, error: err.message, dlqId: dlqRecord?.id || null });
     }
   }
 }

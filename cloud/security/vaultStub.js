@@ -18,6 +18,7 @@ if (!MASTER_KEY_ENV) {
   if (fs.existsSync(KEY_FILE)) {
     try {
       MASTER_KEY_ENV = fs.readFileSync(KEY_FILE, "utf8").trim();
+      fs.chmodSync(KEY_FILE, 0o600);
     } catch (e) {
       console.error("[vaultStub] Failed to read local .vault_key:", e.message);
     }
@@ -27,7 +28,8 @@ if (!MASTER_KEY_ENV) {
     console.warn("[vaultStub] ACC_VAULT_MASTER_KEY not set. Generating local dev-only encryption key in .vault_key");
     MASTER_KEY_ENV = crypto.randomBytes(32).toString("hex");
     try {
-      fs.writeFileSync(KEY_FILE, MASTER_KEY_ENV, { encoding: "utf8" });
+      fs.writeFileSync(KEY_FILE, MASTER_KEY_ENV, { encoding: "utf8", mode: 0o600 });
+      fs.chmodSync(KEY_FILE, 0o600); // enforce even if the file already existed with looser perms
     } catch (e) {
       console.error("[vaultStub] Failed to save local .vault_key:", e.message);
     }

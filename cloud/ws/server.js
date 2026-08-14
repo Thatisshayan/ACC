@@ -35,8 +35,11 @@ function startWSServer(httpServer) {
     const principal = validateToken(token, ['operator', 'admin', 'service']);
 
     const isProd = process.env.NODE_ENV === "production";
-    const hasKeys = String(process.env.ACC_OPERATOR_API_KEY || '').trim().length > 0 ||
-                    String(process.env.ACC_ADMIN_API_KEY || '').trim().length > 0;
+    const hasKeys = [
+      process.env.ACC_OPERATOR_API_KEY,
+      process.env.ACC_ADMIN_API_KEY,
+      process.env.TASKBUS_API_KEY,
+    ].some((raw) => String(raw || '').trim().length > 0);
 
     if (!principal) {
       if (isProd || hasKeys) {

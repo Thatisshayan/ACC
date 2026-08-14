@@ -99,6 +99,7 @@ async function main() {
 
   var isHostedWebhook = Boolean(
     process.env.TELEGRAM_BOT_MODE === 'webhook'
+    || process.env.ACC_WEBHOOK_BASE_URL
     || process.env.ACC_PUBLIC_URL
     || process.env.ACC_WEBAPP_URL
     || process.env.ACC_API_BASE_URL

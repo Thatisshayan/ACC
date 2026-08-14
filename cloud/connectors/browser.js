@@ -32,17 +32,31 @@ process.on('exit', () => {
   }
 });
 
+let launchPromise = null;
+
 async function getBrowserInstance() {
   if (globalBrowser && globalBrowser.isConnected()) {
     return globalBrowser;
   }
-  const chromium = getChromium();
-  globalBrowser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
-
-  return globalBrowser;
+  // Serialize concurrent callers onto a single in-flight launch — without
+  // this, two callers racing past the isConnected() check above would each
+  // launch their own Chromium instance, and the second assignment to
+  // globalBrowser would silently orphan the first (leaked process).
+  if (!launchPromise) {
+    const chromium = getChromium();
+    launchPromise = chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    }).then((browser) => {
+      globalBrowser = browser;
+      launchPromise = null;
+      return browser;
+    }).catch((err) => {
+      launchPromise = null;
+      throw err;
+    });
+  }
+  return launchPromise;
 }
 
 async function withPage(fn, retries = 2) {
@@ -61,7 +75,7 @@ async function withPage(fn, retries = 2) {
     } catch (e) {
       lastErr = e;
       log('[browser] attempt', attempt + 1, 'failed:', e.message);
-      if (browser && !browser.isConnected()) {
+      if (browser && !browser.isConnected() && browser === globalBrowser) {
         globalBrowser = null;
       }
       if (attempt < retries) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));

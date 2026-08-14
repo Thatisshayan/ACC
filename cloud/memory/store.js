@@ -51,8 +51,18 @@ const { v4: uuid } = require('uuid');
 const L1_MAX_ENTRIES = 5000;
 const l1Cache = new Map();
 
+// JSON.stringify-per-segment keeps scope/key boundaries unambiguous — a raw
+// `${scope}:${key}` join lets ("global", "a:b") and ("global:a", "b") collide
+// on the same string, aliasing two distinct memory records in the cache.
+function l1Key(scope, key) {
+  return `${JSON.stringify(scope || 'global')}::${JSON.stringify(key)}`;
+}
+function l1ScopePrefix(scope) {
+  return `${JSON.stringify(scope || 'global')}::`;
+}
+
 function getL1(scope, key) {
-  const cacheKey = `${scope || 'global'}:${key}`;
+  const cacheKey = l1Key(scope, key);
   const entry = l1Cache.get(cacheKey);
   if (!entry) return null;
   if (entry.expiresAt && new Date(entry.expiresAt) <= new Date()) {
@@ -67,7 +77,7 @@ function getL1(scope, key) {
 }
 
 function setL1(scope, key, value, expiresAt) {
-  const cacheKey = `${scope || 'global'}:${key}`;
+  const cacheKey = l1Key(scope, key);
   l1Cache.delete(cacheKey);
   l1Cache.set(cacheKey, { value, expiresAt });
   while (l1Cache.size > L1_MAX_ENTRIES) {
@@ -77,12 +87,11 @@ function setL1(scope, key, value, expiresAt) {
 }
 
 function deleteL1(scope, key) {
-  const cacheKey = `${scope || 'global'}:${key}`;
-  l1Cache.delete(cacheKey);
+  l1Cache.delete(l1Key(scope, key));
 }
 
 function clearL1Scope(scope) {
-  const prefix = `${scope || 'global'}:`;
+  const prefix = l1ScopePrefix(scope);
   for (const k of l1Cache.keys()) {
     if (k.startsWith(prefix)) {
       l1Cache.delete(k);
@@ -107,16 +116,23 @@ function remember(scope, key, value, opts) {
       expires_at = excluded.expires_at
   `).run(id, scope || 'global', key, val, o.source || 'system', o.importance || 5, o.expiresAt || null);
 
-  setL1(scope, key, value, o.expiresAt || null);
+  // Cache the serialized string (`val`), not the caller's object reference —
+  // a caller mutating its own object after this call must not silently
+  // mutate what future recall() calls return.
+  setL1(scope, key, val, o.expiresAt || null);
 
   return { scope, key, value: val };
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────
 
+function parseStoredValue(raw) {
+  try { return JSON.parse(raw); } catch (_) { return raw; }
+}
+
 function recall(scope, key) {
-  const cached = getL1(scope, key);
-  if (cached !== null) return cached;
+  const cachedRaw = getL1(scope, key);
+  if (cachedRaw !== null) return parseStoredValue(cachedRaw);
 
   var row = db.prepare(`
     SELECT * FROM memories
@@ -125,12 +141,9 @@ function recall(scope, key) {
   `).get(scope || 'global', key);
   if (!row) return null;
 
-  let parsedValue;
-  try { parsedValue = JSON.parse(row.value); } catch (_) { parsedValue = row.value; }
+  setL1(scope, key, row.value, row.expires_at || null);
 
-  setL1(scope, key, parsedValue, row.expires_at || null);
-
-  return parsedValue;
+  return parseStoredValue(row.value);
 }
 
 function recallAll(scope, opts) {

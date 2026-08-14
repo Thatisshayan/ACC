@@ -331,9 +331,13 @@ function validateWorkflows() {
     }
 
     const errors = [];
-    if (!json.id || typeof json.id !== 'string') errors.push("Missing or invalid 'id' string");
-    if (!json.name || typeof json.name !== 'string') errors.push("Missing or invalid 'name' string");
-    if (!json.flow || !Array.isArray(json.flow)) errors.push("Missing or invalid 'flow' array");
+    if (!json || typeof json !== 'object' || Array.isArray(json)) {
+      errors.push('Workflow document must be a JSON object');
+    } else {
+      if (!json.id || typeof json.id !== 'string') errors.push("Missing or invalid 'id' string");
+      if (!json.name || typeof json.name !== 'string') errors.push("Missing or invalid 'name' string");
+      if (!json.flow || !Array.isArray(json.flow)) errors.push("Missing or invalid 'flow' array");
+    }
 
     if (errors.length > 0) {
       console.error(`[workflow-validator] FAIL: ${file} failed schema validation:`);

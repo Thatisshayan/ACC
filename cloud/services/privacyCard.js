@@ -9,7 +9,13 @@ const BASE = 'https://api.privacy.com/v1';
 
 function isSandbox() {
   const key = process.env.PRIVACY_API_KEY;
-  return !key || key.includes('test_') || key.includes('deferred') || process.env.NODE_ENV !== 'production';
+  if (process.env.NODE_ENV === 'production') {
+    // A misconfigured production deploy with no key must fail loudly, not
+    // silently fall back to sandbox mode and hand out fake "approved" cards.
+    if (!key) throw new Error('[privacyCard] PRIVACY_API_KEY is required in production. Refusing to run in sandbox mode.');
+    return key.includes('test_') || key.includes('deferred');
+  }
+  return !key || key.includes('test_') || key.includes('deferred');
 }
 
 function headers() {
@@ -80,7 +86,7 @@ async function listCards() {
 
 async function pauseCard(token) {
   if (isSandbox()) {
-    return { card_token: token, state: 'PAUSED' };
+    return { token, state: 'PAUSED' };
   }
 
   const res = await fetch(`${BASE}/card`, {
@@ -95,7 +101,7 @@ async function pauseCard(token) {
 
 async function closeCard(token) {
   if (isSandbox()) {
-    return { card_token: token, state: 'CLOSED' };
+    return { token, state: 'CLOSED' };
   }
 
   const res = await fetch(`${BASE}/card`, {
