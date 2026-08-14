@@ -23,6 +23,7 @@ const root = process.cwd();
 const mode = process.env.WORKER_TEST_MODE;
 const queue = require(path.join(root, 'cloud/queue.js'));
 
+const attempts = {};
 const exPath = path.resolve(root, 'cloud/executor.js');
 require.cache[exPath] = {
   id: exPath,
@@ -31,6 +32,15 @@ require.cache[exPath] = {
   exports: {
     executeTask: async ({ id, agentType, payload }) => {
       if (payload && payload.boom) throw new Error('boom-' + payload.label);
+      if (payload && payload.fail_forever) {
+        return { success: false, error: 'permanently-failed' };
+      }
+      if (payload && payload.fail_until_attempt) {
+        attempts[id] = (attempts[id] || 0) + 1;
+        if (attempts[id] < payload.fail_until_attempt) {
+          return { success: false, error: 'temporary-failure-attempt-' + attempts[id] };
+        }
+      }
       return { success: true, provider: 'fake', output: 'ok-' + (payload && payload.label ? payload.label : '') };
     },
   },
@@ -44,6 +54,9 @@ if (mode === 'dispatch') {
 } else if (mode === 'throw') {
   queue.enqueueTask({ agentType: 'writer', payload: { label: 'boom1', boom: true }, meta: { role: 'admin' } });
   queue.enqueueTask({ agentType: 'writer', payload: { label: 'survivor' }, meta: { role: 'admin' } });
+} else if (mode === 'retry_dlq') {
+  queue.enqueueTask({ agentType: 'writer', payload: { label: 'A', fail_until_attempt: 2 }, meta: { role: 'admin' } });
+  queue.enqueueTask({ agentType: 'writer', payload: { label: 'B', fail_forever: true }, meta: { role: 'admin' } });
 } else {
   console.error('UNKNOWN_MODE ' + mode);
   process.exit(2);
@@ -78,6 +91,20 @@ const deadline = Date.now() + 10000;
     console.log(ok ? 'THROW_OK ' + lines : 'THROW_BAD ' + lines);
     process.exit(ok ? 0 : 1);
   }
+  if (mode === 'retry_dlq') {
+    const taskA = all[0];
+    const taskB = all[1];
+    const ok = taskA.status === 'completed' && taskB.status === 'failed' && /permanently-failed/.test(taskB.error);
+    const dlqHandler = require(path.join(root, 'cloud/dlq/handler.js'));
+    const dlqItems = dlqHandler.listDLQ();
+    const hasBInDLQ = dlqItems.some(item => item.nodeId === taskB.id);
+    for (const item of dlqItems) {
+      dlqHandler.deleteDLQItem(item.id);
+    }
+    const finalOk = ok && hasBInDLQ;
+    console.log(finalOk ? 'RETRY_DLQ_OK ' + lines : 'RETRY_DLQ_BAD ' + lines + ' hasBInDLQ=' + hasBInDLQ);
+    process.exit(finalOk ? 0 : 1);
+  }
 })();
 `;
 
@@ -109,4 +136,10 @@ test('a handler that throws marks the task failed without crashing the worker lo
   const { code, out } = await runChild('throw');
   assert.equal(code, 0, 'child should exit 0\n' + out);
   assert.match(out, /THROW_OK/, out);
+});
+
+test('worker retries failed tasks with backoff/jitter and writes to DLQ on exhaustion', async () => {
+  const { code, out } = await runChild('retry_dlq');
+  assert.equal(code, 0, 'child should exit 0\n' + out);
+  assert.match(out, /RETRY_DLQ_OK/, out);
 });

@@ -4,6 +4,15 @@ const { executeTask }             = require("./executor.js");
 const { updateWorkerHeartbeat }   = require("./system/health.js");
 const { logEvent }                = require("./logs/logger.js");
 const logger                      = require("./utils/logger.js");
+const { withRetry }               = require("./utils/retryPolicy.js");
+const { writeToDLQ }              = require("./dlq/handler.js");
+
+const RETRY_POLICY = {
+  maxAttempts: 3,
+  baseDelayMs: 100, // shorter delays during local test run safety
+  maxDelayMs: 1000,
+  jitter: 'full'
+};
 
 // Heartbeat every 2 seconds so health monitor can detect stalls
 setInterval(() => updateWorkerHeartbeat(), 2000);
@@ -32,28 +41,63 @@ async function workerLoop() {
     updateTask(task.id, { status: "running" });
     logEvent("task_start", "Task started", { taskId: task.id, agentType: task.agentType });
 
+    let result;
     try {
-      const result = await executeTask({
-        id:        task.id,
-        agentType: task.agentType,
-        payload:   task.payload,
-        meta:      task.meta,
-      });
+      result = await withRetry(
+        async () => {
+          const res = await executeTask({
+            id:        task.id,
+            agentType: task.agentType,
+            payload:   task.payload,
+            meta:      task.meta,
+          });
+          // Awaiting operator approval is not a failure — retrying it would
+          // create a duplicate approval request on every attempt, and
+          // dead-lettering it would abandon a task that's simply waiting.
+          if (res.status === "pendingApproval") return res;
+          if (!res.success) {
+            throw new Error(res.error || "Execution failed");
+          }
+          return res;
+        },
+        RETRY_POLICY,
+        (attempt, err) => {
+          logger.warn(`[worker][task=${task.id}] Attempt ${attempt} failed: ${err.message}. Retrying...`);
+        }
+      );
 
-      if (result.success) {
+      if (result.status === "pendingApproval") {
+        updateTask(task.id, { status: "pendingApproval", result: null, error: null });
+        logEvent("task_pending_approval", "Task awaiting operator approval", { taskId: task.id, approvalId: result.approvalId });
+        logger.info(`[worker][task=${task.id}] Awaiting approval (id: ${result.approvalId})`);
+      } else {
         updateTask(task.id, { status: "completed", result, error: null });
         logEvent("task_complete", "Task completed", { taskId: task.id });
         logger.info(`[worker][task=${task.id}] Completed | provider: ${result.provider || 'default'}`);
-      } else {
-        const errStr = typeof result.error === 'object' ? JSON.stringify(result.error) : (result.error || 'unknown error');
-        updateTask(task.id, { status: "failed", error: errStr, result: null });
-        logEvent("task_error", "Task failed", { taskId: task.id, error: errStr });
-        logger.error(`[worker][task=${task.id}] Failed: ${errStr}`);
       }
     } catch (err) {
-      logger.error(`[worker][task=${task.id}] Unhandled error:`, err.message);
+      logger.error(`[worker][task=${task.id}] Exhausted retries. Writing to DLQ. Error: ${err.message}`);
+
+      let dlqRecord;
+      try {
+        dlqRecord = writeToDLQ({
+          graphId: task.meta?.graphId || 'task-bus-graph',
+          node: {
+            id: task.id,
+            type: task.agentType,
+            payload: task.payload,
+            attempts: RETRY_POLICY.maxAttempts,
+            lastError: err.message
+          },
+          context: task.meta || {},
+          error: err.message
+        });
+      } catch (dlqError) {
+        logger.error(`[worker][task=${task.id}] DLQ write failed: ${dlqError.message}`);
+      }
+
       updateTask(task.id, { status: "failed", error: err.message, result: null });
-      logEvent("task_error", "Unhandled worker error", { taskId: task.id, error: err.message });
+      logEvent("task_error", "Task failed", { taskId: task.id, error: err.message, dlqId: dlqRecord?.id || null });
     }
   }
 }

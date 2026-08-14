@@ -6,7 +6,7 @@
 const axios = require('axios');
 const { log } = require('../utils/logger.js');
 
-const BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+const BASE_URL = process.env.OLLAMA_BASE_URL || process.env.OLLAMA_ENDPOINT || process.env.OLLAMA_URL || 'http://localhost:11434';
 const MODEL    = process.env.OLLAMA_MODEL    || 'llama3.1';
 function sanitizeError(err) {
   const raw = typeof err === 'string' ? err : (err && err.message) || 'Ollama request failed';
