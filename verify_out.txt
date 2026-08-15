@@ -1,0 +1,12 @@
+== secret-scan ==
+::error title=secret-scan::secret files present: ./data/messages/messenger.key
+== doc-freshness ==
+== build / test ==
+::notice title=build::ok
+== deploy-dry ==
+::error title=deploy::failed (rc=127): timeout: failed to execute process: No such file or directory (os error 2)
+== directive-lint ==
+::notice title=directive-lint::all tasks trace to a defined phase/sprint/epic
+== orphan-lint ==
+::notice title=orphan-lint::node or scripts/findOrphanModules.js unavailable ΓÇö skipping
+VERIFY FAILED
