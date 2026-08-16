@@ -44,6 +44,61 @@ db.exec(`
 
 const { v4: uuid } = require('uuid');
 
+// ── L1 Cache (Task 19) ────────────────────────────────────────────────────────
+// Bounded, insertion-order Map used as a simple LRU: a get() re-inserts the
+// entry to mark it most-recently-used, and set() evicts the oldest entry
+// once the cap is exceeded — prevents unbounded memory growth.
+const L1_MAX_ENTRIES = 5000;
+const l1Cache = new Map();
+
+// JSON.stringify-per-segment keeps scope/key boundaries unambiguous — a raw
+// `${scope}:${key}` join lets ("global", "a:b") and ("global:a", "b") collide
+// on the same string, aliasing two distinct memory records in the cache.
+function l1Key(scope, key) {
+  return `${JSON.stringify(scope || 'global')}::${JSON.stringify(key)}`;
+}
+function l1ScopePrefix(scope) {
+  return `${JSON.stringify(scope || 'global')}::`;
+}
+
+function getL1(scope, key) {
+  const cacheKey = l1Key(scope, key);
+  const entry = l1Cache.get(cacheKey);
+  if (!entry) return null;
+  if (entry.expiresAt && new Date(entry.expiresAt) <= new Date()) {
+    l1Cache.delete(cacheKey);
+    return null;
+  }
+  // Refresh recency: delete + re-set moves the key to the end of Map's
+  // iteration order.
+  l1Cache.delete(cacheKey);
+  l1Cache.set(cacheKey, entry);
+  return entry.value;
+}
+
+function setL1(scope, key, value, expiresAt) {
+  const cacheKey = l1Key(scope, key);
+  l1Cache.delete(cacheKey);
+  l1Cache.set(cacheKey, { value, expiresAt });
+  while (l1Cache.size > L1_MAX_ENTRIES) {
+    const oldestKey = l1Cache.keys().next().value;
+    l1Cache.delete(oldestKey);
+  }
+}
+
+function deleteL1(scope, key) {
+  l1Cache.delete(l1Key(scope, key));
+}
+
+function clearL1Scope(scope) {
+  const prefix = l1ScopePrefix(scope);
+  for (const k of l1Cache.keys()) {
+    if (k.startsWith(prefix)) {
+      l1Cache.delete(k);
+    }
+  }
+}
+
 // ── Write ─────────────────────────────────────────────────────────────────────
 
 function remember(scope, key, value, opts) {
@@ -60,19 +115,35 @@ function remember(scope, key, value, opts) {
       updated_at = datetime('now'),
       expires_at = excluded.expires_at
   `).run(id, scope || 'global', key, val, o.source || 'system', o.importance || 5, o.expiresAt || null);
+
+  // Cache the serialized string (`val`), not the caller's object reference —
+  // a caller mutating its own object after this call must not silently
+  // mutate what future recall() calls return.
+  setL1(scope, key, val, o.expiresAt || null);
+
   return { scope, key, value: val };
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────
 
+function parseStoredValue(raw) {
+  try { return JSON.parse(raw); } catch (_) { return raw; }
+}
+
 function recall(scope, key) {
+  const cachedRaw = getL1(scope, key);
+  if (cachedRaw !== null) return parseStoredValue(cachedRaw);
+
   var row = db.prepare(`
     SELECT * FROM memories
     WHERE scope = ? AND key = ?
       AND (expires_at IS NULL OR expires_at > datetime('now'))
   `).get(scope || 'global', key);
   if (!row) return null;
-  try { return JSON.parse(row.value); } catch (_) { return row.value; }
+
+  setL1(scope, key, row.value, row.expires_at || null);
+
+  return parseStoredValue(row.value);
 }
 
 function recallAll(scope, opts) {
@@ -133,11 +204,13 @@ function getEvents(scope, opts) {
 // ── Forget ────────────────────────────────────────────────────────────────────
 
 function forget(scope, key) {
+  deleteL1(scope, key);
   var info = db.prepare(`DELETE FROM memories WHERE scope = ? AND key = ?`).run(scope || 'global', key);
   return info.changes > 0;
 }
 
 function forgetScope(scope) {
+  clearL1Scope(scope);
   var info = db.prepare(`DELETE FROM memories WHERE scope = ?`).run(scope || 'global');
   return info.changes;
 }

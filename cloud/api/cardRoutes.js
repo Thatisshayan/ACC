@@ -15,6 +15,15 @@ const { sendCardApprovalRequest } = require('../telegram/cardApprovalBot.js');
 const { log } = require('../utils/logger.js');
 const { saveCardRequest, loadCardRequests } = require('../storage/supabaseMemory.js');
 
+// Strips full PAN/CVV before a card result is written to durable storage —
+// those only need to live in the in-memory completedCards map for the
+// requesting agent to retrieve once via GET /:id.
+function redactCardForPersistence(result) {
+  if (!result || !result.card) return result;
+  const { pan, cvv, ...safeCard } = result.card;
+  return { ...result, card: safeCard };
+}
+
 function maskAgent(agent) {
   const value = String(agent || 'unknown');
   return value.length <= 2 ? value : `${value.slice(0, 2)}***`;
@@ -111,7 +120,7 @@ async function approveCardRequest(id) {
   pendingRequests.delete(id);
   const result = { ...request, status: 'approved', card, approvedAt: new Date().toISOString() };
   completedCards.set(id, result);
-  saveCardRequest(result).catch(() => {});
+  saveCardRequest(redactCardForPersistence(result)).catch(() => {});
   log(`[card] Approved ${id} — token redacted`);
   return result;
 }

@@ -1,7 +1,7 @@
 'use strict';
 // scripts/migrate.js — runs any migrations not yet applied
 // Usage: node scripts/migrate.js
-//        or: called from start.js on boot (optional)
+//        or: called from start.js on boot
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env'), override: false });
 
@@ -10,21 +10,26 @@ const path = require('path');
 
 let _createClient = null;
 try { _createClient = require('@supabase/supabase-js').createClient; }
-catch (_) { console.error('[migrate] @supabase/supabase-js not installed — aborting.'); process.exit(1); }
+catch (_) { console.warn('[migrate] @supabase/supabase-js not installed — auto-migrations disabled.'); }
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('[migrate] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
-  process.exit(1);
+function isConfigured() {
+  return _createClient &&
+         SUPABASE_URL &&
+         SUPABASE_KEY &&
+         !SUPABASE_URL.includes('change_me') &&
+         !SUPABASE_KEY.includes('change_me') &&
+         !SUPABASE_URL.includes('127.0.0.1') &&
+         !SUPABASE_URL.includes('localhost') &&
+         !SUPABASE_KEY.includes('dry-') &&
+         !SUPABASE_KEY.includes('fixture');
 }
-
-const db = _createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const MIGRATIONS_DIR = path.join(__dirname, '../migrations');
 
-async function ensureMigrationsTable() {
+async function ensureMigrationsTable(db) {
   const { error } = await db.rpc('exec_sql', {
     sql: `CREATE TABLE IF NOT EXISTS acc_migrations (
       id          SERIAL PRIMARY KEY,
@@ -35,26 +40,24 @@ async function ensureMigrationsTable() {
 
   // rpc may not exist — fall back to direct query via REST
   if (error) {
-    // Try creating via a dummy select to see if table exists
     const { error: e2 } = await db.from('acc_migrations').select('id').limit(1);
     if (e2 && e2.code === '42P01') {
       console.error('[migrate] Cannot auto-create acc_migrations table via REST API.');
       console.error('[migrate] Run this SQL in the Supabase SQL Editor first:');
       console.error('  CREATE TABLE IF NOT EXISTS acc_migrations (id SERIAL PRIMARY KEY, filename TEXT UNIQUE NOT NULL, applied_at TIMESTAMPTZ DEFAULT now());');
-      process.exit(1);
+      throw new Error('Migrations table missing and auto-creation failed.');
     }
   }
 }
 
-async function getApplied() {
+async function getApplied(db) {
   const { data, error } = await db.from('acc_migrations').select('filename');
   if (error) throw new Error('Cannot read acc_migrations: ' + error.message);
   return new Set((data || []).map(r => r.filename));
 }
 
-async function applyMigration(filename, sql) {
+async function applyMigration(db, filename, sql) {
   console.log(`[migrate] Applying ${filename}…`);
-  // Execute via rpc if available
   const { error } = await db.rpc('exec_sql', { sql }).single().catch(() => ({ error: { message: 'rpc not available' } }));
   if (error) {
     console.error(`[migrate] Failed to apply ${filename}:`, error.message);
@@ -68,9 +71,15 @@ async function applyMigration(filename, sql) {
 }
 
 async function run() {
-  await ensureMigrationsTable();
+  if (!isConfigured()) {
+    console.log('[migrate] Supabase not fully configured; skipping auto-migrations.');
+    return;
+  }
 
-  const applied = await getApplied();
+  const db = _createClient(SUPABASE_URL, SUPABASE_KEY);
+  await ensureMigrationsTable(db);
+
+  const applied = await getApplied(db);
   const files = fs.readdirSync(MIGRATIONS_DIR)
     .filter(f => f.endsWith('.sql'))
     .sort();
@@ -79,8 +88,11 @@ async function run() {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    const ok = await applyMigration(file, sql);
-    if (ok) count++;
+    const ok = await applyMigration(db, file, sql);
+    if (!ok) {
+      throw new Error(`Migration failed: ${file}`);
+    }
+    count++;
   }
 
   if (count === 0) {
@@ -90,7 +102,11 @@ async function run() {
   }
 }
 
-run().catch(e => {
-  console.error('[migrate] Fatal:', e.message);
-  process.exit(1);
-});
+module.exports = { run };
+
+if (require.main === module) {
+  run().catch(e => {
+    console.error('[migrate] Fatal:', e.message);
+    process.exit(1);
+  });
+}

@@ -119,9 +119,23 @@ function requireApprovalFreshness(req, res, next) {
   return next();
 }
 
+function validateToken(token, allowRoles = ['operator', 'admin', 'service']) {
+  if (!token) return null;
+  const principals = readConfiguredPrincipals();
+  const allowed = allowRoles ? new Set(allowRoles) : null;
+  const principal = principals.find((p) => timingSafeStringEqual(p.key, token));
+  if (!principal) return null;
+  if (allowed && !allowed.has(principal.role)) return null;
+  return {
+    subject: principal.subject,
+    role: principal.role,
+  };
+}
+
 module.exports = {
   requireAuth,
   requireOperatorOrAdmin,
   requireServiceOperatorOrAdmin,
   requireApprovalFreshness,
+  validateToken,
 };

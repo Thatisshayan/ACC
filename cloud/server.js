@@ -234,7 +234,7 @@ app.post("/api/execute", requireOperatorOrAdmin, (req, res) => {
 });
 
 // ---------- Task status ----------
-app.get("/api/task/:id", (req, res) => {
+app.get("/api/task/:id", requireOperatorOrAdmin, (req, res) => {
   const task = getTask(req.params.id);
   if (!task) return res.status(404).json({ success: false, error: "Task not found." });
   return res.json({
