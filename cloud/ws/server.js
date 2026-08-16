@@ -3,6 +3,7 @@
 const WebSocket      = require("ws");
 const { WebSocketServer } = require("ws");
 const { log }        = require("../utils/logger.js");
+const { validateToken } = require("../middleware/auth.js");
 
 let wss = null;
 
@@ -16,7 +17,40 @@ function startWSServer(httpServer) {
   wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
   wss.on("connection", (ws, req) => {
-    log("[ws] Client connected from", req.socket.remoteAddress);
+    // Parse query string to extract 'token' parameter
+    let url;
+    try {
+      url = new URL(req.url, 'http://localhost');
+    } catch (e) {
+      ws.close(4400, "Invalid handshake URL");
+      return;
+    }
+
+    // Prefer the Sec-WebSocket-Protocol header (set via the `protocols`
+    // argument of the WebSocket constructor) over the query string — query
+    // params get written into access logs and browser history, headers do
+    // not. The query param is kept as a fallback for existing callers.
+    const protocolToken = (req.headers["sec-websocket-protocol"] || "").split(",")[0].trim();
+    const token = protocolToken || url.searchParams.get("token");
+    const principal = validateToken(token, ['operator', 'admin', 'service']);
+
+    const isProd = process.env.NODE_ENV === "production";
+    const hasKeys = [
+      process.env.ACC_OPERATOR_API_KEY,
+      process.env.ACC_ADMIN_API_KEY,
+      process.env.TASKBUS_API_KEY,
+    ].some((raw) => String(raw || '').trim().length > 0);
+
+    if (!principal) {
+      if (isProd || hasKeys) {
+        log("[ws] Connection rejected: unauthorized (missing or invalid token)");
+        ws.close(4401, "Unauthorized");
+        return;
+      }
+      log("[ws] Warning: Client connected from", req.socket.remoteAddress, "without token (dev fallback)");
+    } else {
+      log("[ws] Client connected from", req.socket.remoteAddress, "authorized as:", principal.role, "subject:", principal.subject);
+    }
 
     ws.on("message", (raw) => {
       try {
@@ -54,4 +88,8 @@ function broadcast(event, payload) {
   }
 }
 
-module.exports = { startWSServer, broadcast };
+function resetWSServer() {
+  wss = null;
+}
+
+module.exports = { startWSServer, broadcast, resetWSServer };

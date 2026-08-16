@@ -36,6 +36,11 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Narrowly allow only Dependabot, not '*' — this repo is public, and
+          # the action's own docs warn '*' lets any external App on a public
+          # repo invoke it with prompts they control. Dependabot PRs only ever
+          # touch package.json/lockfiles, a much narrower surface.
+          allowed_bots: 'dependabot[bot]'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'

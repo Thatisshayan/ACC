@@ -61,6 +61,30 @@ voice.init(TOKEN);
 scheduler.init(sendMsg);
 emailMon.init(sendMsg);
 
+// Modular commands (Task 17)
+var telegramCommands = new Map();
+function loadTelegramCommands() {
+  var cmdDir = path.join(__dirname, 'commands');
+  if (!fs.existsSync(cmdDir)) return;
+  var SAFE_COMMAND_FILE = /^[a-z0-9-_]+\.js$/i;
+  var files = fs.readdirSync(cmdDir).filter(function(f) { return SAFE_COMMAND_FILE.test(f); });
+  files.forEach(function(file) {
+    try {
+      var cmd = require(path.join(cmdDir, file));
+      if (cmd.name && typeof cmd.execute === 'function') {
+        telegramCommands.set(cmd.name.toLowerCase(), cmd);
+        if (Array.isArray(cmd.aliases)) {
+          cmd.aliases.forEach(function(alias) { telegramCommands.set(alias.toLowerCase(), cmd); });
+        }
+      }
+    } catch (e) {
+      console.error('[bot] Failed to load modular command:', file, e.message);
+    }
+  });
+  log('[bot] Loaded ' + telegramCommands.size + ' modular command handler(s)');
+}
+loadTelegramCommands();
+
 // ── Telegram API ──────────────────────────────────────────────────────────────
 
 var tg = axios.create({ baseURL: BASE, timeout: 35000 });
@@ -463,6 +487,27 @@ async function handleMessage(msg) {
       from: { id: userId }
     });
     return;
+  }
+
+  // Modular command routing (Task 17)
+  if (text.startsWith('/')) {
+    var parts = text.split(/\s+/);
+    // Telegram sends "/cmd@bot_username" in group chats — strip the
+    // "@bot_username" suffix so the base command still resolves.
+    var rawCmd = parts[0].slice(1);
+    var atIdx = rawCmd.indexOf('@');
+    var cmdName = (atIdx === -1 ? rawCmd : rawCmd.slice(0, atIdx)).toLowerCase();
+    var cmd = telegramCommands.get(cmdName);
+    if (cmd) {
+      try {
+        await cmd.execute(chatId, userId, text, msg, { sendMsg: sendMsg, sendButtons: sendButtons, user: user });
+        return;
+      } catch (err) {
+        console.error('[bot] Error executing modular command /' + cmdName + ':', err.message);
+        await sendMsg(chatId, '❌ Error executing command: ' + err.message);
+        return;
+      }
+    }
   }
 
   // ── Task Bus commands — strict prefix routing ─────────────────────────────
