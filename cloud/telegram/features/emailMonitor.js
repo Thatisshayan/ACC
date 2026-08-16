@@ -8,6 +8,7 @@ const path = require('path');
 const { ImapFlow } = require('imapflow');
 const users = require('../users.js');
 const memory = require('../../memory/store.js');
+const { withRetry } = require('../../utils/retryPolicy.js');
 
 var _sendFn = null;
 function init(sendFunction) { _sendFn = sendFunction; }
@@ -92,9 +93,12 @@ async function testConnection(email, password, imapHost, imapPort) {
     auth:   { user: email, pass: password },
     logger: false,
     tls:    { rejectUnauthorized: false },
+    connectionTimeout: 10000,
   });
   try {
-    await client.connect();
+    await withRetry(async () => {
+      await client.connect();
+    }, { maxAttempts: 2, baseDelayMs: 500, maxDelayMs: 2000 });
     await client.logout();
     return { success: true };
   } catch (err) {
@@ -144,11 +148,14 @@ async function checkEmails(userId) {
     auth:   { user: state.email, pass: state.password },
     logger: false,
     tls:    { rejectUnauthorized: false },
+    connectionTimeout: 10000,
   });
 
   const results = [];
   try {
-    await client.connect();
+    await withRetry(async () => {
+      await client.connect();
+    }, { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 2000 });
     const lock = await client.getMailboxLock('INBOX');
     try {
       // Fetch messages from last 24 hours

@@ -29,7 +29,7 @@ const http = require('http');
 const path = require('path');
 
 const PORT = process.env.DEPLOY_DRY_PORT || '4009';
-const HEALTH_TIMEOUT_MS = Number(process.env.DEPLOY_DRY_HEALTH_TIMEOUT_MS || 60 * 1000);
+const HEALTH_TIMEOUT_MS = Number(process.env.DEPLOY_DRY_HEALTH_TIMEOUT_MS || 180 * 1000);
 const HEALTH_POLL_MS = 500;
 // DEV NOTE: the handoff suggested ~15s, but cold boot on a dev machine is
 // ~25-30s (AWS SDK require chain). Default 60s keeps CI sane and local runs

@@ -309,6 +309,46 @@ function getWorkflowSummary(workflow) {
   };
 }
 
+function validateWorkflows() {
+  if (!fs.existsSync(CHATGPT_DIR)) return;
+  const files = fs.readdirSync(CHATGPT_DIR).filter(f => f.endsWith('.json') && f !== '_master_workflows.json');
+  for (const file of files) {
+    const filePath = path.join(CHATGPT_DIR, file);
+    let content;
+    try {
+      content = fs.readFileSync(filePath, 'utf8');
+    } catch (e) {
+      console.error(`[workflow-validator] Error reading ${file}:`, e.message);
+      continue;
+    }
+    
+    let json;
+    try {
+      json = JSON.parse(content);
+    } catch (e) {
+      console.error(`[workflow-validator] FAIL: ${file} is not valid JSON! Error: ${e.message}`);
+      continue;
+    }
+
+    const errors = [];
+    if (!json || typeof json !== 'object' || Array.isArray(json)) {
+      errors.push('Workflow document must be a JSON object');
+    } else {
+      if (!json.id || typeof json.id !== 'string') errors.push("Missing or invalid 'id' string");
+      if (!json.name || typeof json.name !== 'string') errors.push("Missing or invalid 'name' string");
+      if (!json.flow || !Array.isArray(json.flow)) errors.push("Missing or invalid 'flow' array");
+    }
+
+    if (errors.length > 0) {
+      console.error(`[workflow-validator] FAIL: ${file} failed schema validation:`);
+      errors.forEach(err => console.error(`  - ${err}`));
+    }
+  }
+}
+
+// Automatically validate all 25+ workflows on boot
+validateWorkflows();
+
 module.exports = {
   listWorkflows,
   resolveWorkflow,

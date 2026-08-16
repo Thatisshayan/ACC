@@ -4,7 +4,7 @@
 
 const axios = require('axios');
 
-const OLLAMA_ENDPOINT = process.env.OLLAMA_ENDPOINT || 'http://localhost:11434';
+const OLLAMA_ENDPOINT = process.env.OLLAMA_BASE_URL || process.env.OLLAMA_ENDPOINT || process.env.OLLAMA_URL || 'http://localhost:11434';
 const ALPHONSO_ENABLED = String(process.env.ALPHONSO_ENABLED || '').toLowerCase();
 const ALPHONSO_DEFAULT_MODEL = process.env.ALPHONSO_DEFAULT_MODEL || 'llama3';
 const ALPHONSO_RESEARCH_MODEL = process.env.ALPHONSO_RESEARCH_MODEL || 'llama3';
