@@ -12,7 +12,7 @@
     "build:ios": "npx eas build --platform ios --profile preview"
   },
   "dependencies": {
-    "expo": "^51.0.0",
+    "expo": "^57.0.12",
     "expo-av": "^14.0.7",
     "expo-constants": "~16.0.2",
     "expo-linking": "~6.3.1",
