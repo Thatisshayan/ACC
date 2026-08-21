@@ -239,7 +239,7 @@ agent-command-center/
 |----------|--------|-------------|
 | `/api/health` | GET | Server health check |
 | `/api/execute` | POST | Enqueue a task |
-| `/api/task/:id` | GET | Get task status |
+| `/api/task/:id` | GET | Get legacy task status (operator/admin auth required) |
 | `/orchestrate` | POST | Build + route task graph |
 
 ### UI Data
@@ -271,6 +271,16 @@ agent-command-center/
 | `/api/taskbus/tasks` | POST | Create task |
 | `/api/taskbus/tasks/:id` | GET | Get task |
 | `/api/taskbus/tasks/:id` | PATCH | Update task |
+| `/api/taskbus/socialclaw/publish` | POST | Create an approval-gated SocialClaw publish task |
+| `/api/taskbus/socialclaw/delete` | POST | Create an approval-gated SocialClaw delete task |
+
+### Phone
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/phone/status` | GET | Check Twilio configuration and account status |
+| `/api/phone/sms` | POST | Create an approval-gated Twilio SMS task |
+| `/api/phone/call` | POST | Create an approval-gated Twilio call task |
 
 ### Admin
 

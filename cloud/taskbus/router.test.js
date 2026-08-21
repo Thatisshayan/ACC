@@ -11,6 +11,7 @@ var fs     = require('fs');
 var _tasks     = {};
 var _approvals = {};
 var _tavilyEnabled = false;
+var _twilioCalls = [];
 
 var storeMock = {
   getTask: function(id) { return _tasks[id] || null; },
@@ -80,6 +81,18 @@ Module._load = function(request, parent, isMain) {
       }
     };
   }
+  if (resolved.endsWith(path.join('connectors', 'twilio.js'))) {
+    return {
+      sendSMS: async function(to, message) {
+        _twilioCalls.push({ action: 'send_sms', to: to, message: message });
+        return { sid: 'SM123', status: 'queued', from: '+10000000000' };
+      },
+      makeCall: async function(to, twiml) {
+        _twilioCalls.push({ action: 'make_call', to: to, twiml: twiml });
+        return { sid: 'CA123', status: 'queued', from: '+10000000000' };
+      }
+    };
+  }
   return _origLoad.apply(this, arguments);
 };
 
@@ -115,6 +128,7 @@ async function test(name, fn) {
   _tasks     = {};
   _approvals = {};
   _tavilyEnabled = false;
+  _twilioCalls = [];
   try {
     await fn();
     console.log('  ✓', name);
@@ -235,6 +249,26 @@ await test('user-supplied "scheduler" created_by does NOT bypass rate limit', as
   }
   var lastResult = results[results.length - 1];
   assert.strictEqual(lastResult.status, 'rate_limited', 'scheduler string should NOT bypass rate limit');
+});
+
+await test('approved twilio SMS tasks execute through the Twilio adapter', async function() {
+  var t = makeTask({
+    title: 'send SMS to candidate',
+    assigned_agent: 'twilio',
+    approval_required: true,
+    meta: {
+      twilio: {
+        action: 'send_sms',
+        params: { to: '+16135551234', message: 'hello world' },
+      },
+    },
+  });
+  _approvals['pre-approved'] = { id: 'pre-approved', task_id: t.id, action: 'high_risk_execution', status: 'approved' };
+  var result = await router.routeTask(t.id);
+  assert.strictEqual(result.status, 'done');
+  assert.strictEqual(result.provider_used, 'twilio');
+  assert.strictEqual(_twilioCalls.length, 1);
+  assert.strictEqual(_twilioCalls[0].action, 'send_sms');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

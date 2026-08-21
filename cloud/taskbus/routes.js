@@ -16,6 +16,23 @@ const socialclaw = require('../integrations/socialclaw.js');
 const { runLeadCollectorPollerOnce } = require('../workflows/leadCollectorPoller.js');
 const app     = express.Router();
 
+function createExternalActionTask(input) {
+  const task = store.createTask({
+    title: input.title,
+    instruction: input.instruction,
+    assigned_agent: input.assigned_agent,
+    priority: input.priority || 'high',
+    required_output: input.required_output || '',
+    approval_required: input.approval_required !== false,
+    automation_mode: input.automation_mode || 'semi_auto',
+    feature_ref: input.feature_ref || null,
+    created_by: input.created_by || 'ui:mini',
+    request_id: input.request_id || null,
+    meta: input.meta || null,
+  });
+  return task;
+}
+
 function withTimeout(promise, ms, label) {
   return Promise.race([
     Promise.resolve(promise),
@@ -129,8 +146,22 @@ app.post('/socialclaw/validate', async function(req, res) {
 // ── POST /api/taskbus/socialclaw/publish ──────────────────────────────────────
 app.post('/socialclaw/publish', async function(req, res) {
   try {
-    const result = await socialclaw.applyCampaign(req.body || {});
-    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+    const body = req.body || {};
+    const task = createExternalActionTask({
+      title: body.title || 'SocialClaw publish campaign',
+      instruction: body.instruction || 'Publish campaign through SocialClaw after operator approval.',
+      assigned_agent: 'socialclaw',
+      required_output: 'Publish confirmation and destination URL',
+      feature_ref: 'api:taskbus:socialclaw:publish',
+      created_by: body.created_by || 'ui:mini',
+      request_id: body.request_id || null,
+      meta: {
+        socialclaw: { action: 'apply' },
+        payload: Object.assign({}, body, { action: 'apply' }),
+      },
+    });
+    const routing = await routeTask(task.id);
+    res.json({ success: true, task, routing, timestamp: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -139,8 +170,22 @@ app.post('/socialclaw/publish', async function(req, res) {
 // ── POST /api/taskbus/socialclaw/delete ────────────────────────────────────────
 app.post('/socialclaw/delete', async function(req, res) {
   try {
-    const result = await socialclaw.deletePost(req.body || {});
-    res.json(Object.assign({ success: true, timestamp: new Date().toISOString() }, result));
+    const body = req.body || {};
+    const task = createExternalActionTask({
+      title: body.title || 'SocialClaw delete post',
+      instruction: body.instruction || 'Delete a SocialClaw post after operator approval.',
+      assigned_agent: 'socialclaw',
+      required_output: 'Delete confirmation from SocialClaw',
+      feature_ref: 'api:taskbus:socialclaw:delete',
+      created_by: body.created_by || 'ui:mini',
+      request_id: body.request_id || null,
+      meta: {
+        socialclaw: { action: 'posts:delete' },
+        payload: Object.assign({}, body, { action: 'posts:delete' }),
+      },
+    });
+    const routing = await routeTask(task.id);
+    res.json({ success: true, task, routing, timestamp: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

@@ -13,6 +13,8 @@
 const express = require('express');
 const router  = express.Router();
 const twilio  = require('../connectors/twilio.js');
+const store   = require('../taskbus/store.js');
+const { routeTask } = require('../taskbus/router.js');
 const fetch   = require('node-fetch');
 const { log } = require('../utils/logger.js');
 const twilioSdk = require('twilio');
@@ -43,6 +45,41 @@ function requireTwilioWebhookSignature(req, res, next) {
   return next();
 }
 
+function buildPhoneTask(body, type) {
+  const action = type === 'sms' ? 'send_sms' : 'make_call';
+  const title = type === 'sms'
+    ? `Send SMS to ${maskPhone(body.to)}`
+    : `Place call to ${maskPhone(body.to)}`;
+  const twiml = type === 'call'
+    ? `<Response><Say voice="Polly.Matthew">${body.message}</Say></Response>`
+    : null;
+
+  return store.createTask({
+    title,
+    instruction: type === 'sms'
+      ? 'Send an external SMS through Twilio after operator approval.'
+      : 'Place an external phone call through Twilio after operator approval.',
+    assigned_agent: 'twilio',
+    priority: body.priority || 'high',
+    required_output: type === 'sms' ? 'Twilio SMS SID and delivery status' : 'Twilio call SID and initiation status',
+    approval_required: true,
+    automation_mode: 'semi_auto',
+    feature_ref: type === 'sms' ? 'api:phone:sms' : 'api:phone:call',
+    created_by: body.agent || 'manual',
+    request_id: body.request_id || null,
+    meta: {
+      twilio: {
+        action,
+        params: {
+          to: body.to,
+          message: body.message,
+          twiml,
+        },
+      },
+    },
+  });
+}
+
 router.use((req, res, next) => {
   if (req.path.startsWith('/webhook/')) return next();
   return requireOperatorOrAdmin(req, res, next);
@@ -67,9 +104,10 @@ router.post('/sms', async (req, res) => {
   const { to, message, agent } = req.body || {};
   if (!to || !message) return res.status(400).json({ success: false, error: 'to and message are required.' });
   try {
-    const result = await twilio.sendSMS(to, message);
-    log(`[phone] SMS sent by ${agent || 'manual'} to ${maskPhone(to)} (content redacted)`);
-    return res.json({ success: true, sid: result.sid, status: result.status, to, from: result.from });
+    const task = buildPhoneTask(req.body || {}, 'sms');
+    const routing = await routeTask(task.id);
+    log(`[phone] SMS task queued by ${agent || 'manual'} to ${maskPhone(to)} (content redacted)`);
+    return res.json({ success: true, task, routing });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
   }
@@ -79,11 +117,11 @@ router.post('/sms', async (req, res) => {
 router.post('/call', async (req, res) => {
   const { to, message, agent } = req.body || {};
   if (!to || !message) return res.status(400).json({ success: false, error: 'to and message are required.' });
-  const twiml = `<Response><Say voice="Polly.Matthew">${message}</Say></Response>`;
   try {
-    const result = await twilio.makeCall(to, twiml);
-    log(`[phone] Call initiated by ${agent || 'manual'} to ${maskPhone(to)}`);
-    return res.json({ success: true, sid: result.sid, status: result.status, to });
+    const task = buildPhoneTask(req.body || {}, 'call');
+    const routing = await routeTask(task.id);
+    log(`[phone] Call task queued by ${agent || 'manual'} to ${maskPhone(to)}`);
+    return res.json({ success: true, task, routing });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
   }
