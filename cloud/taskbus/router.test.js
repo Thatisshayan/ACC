@@ -10,6 +10,7 @@ var fs     = require('fs');
 // ── Minimal store mock ────────────────────────────────────────────────────────
 var _tasks     = {};
 var _approvals = {};
+var _tavilyEnabled = false;
 
 var storeMock = {
   getTask: function(id) { return _tasks[id] || null; },
@@ -71,6 +72,14 @@ Module._load = function(request, parent, isMain) {
       }
     };
   }
+  if (resolved.endsWith(path.join('integrations', 'tavily.js'))) {
+    return {
+      enabled: function() { return _tavilyEnabled; },
+      sendTaskFromACC: async function() {
+        return { success: true, output: 'tavily-result', summary: 'tavily summary' };
+      }
+    };
+  }
   return _origLoad.apply(this, arguments);
 };
 
@@ -105,6 +114,7 @@ async function test(name, fn) {
   // Reset state between tests
   _tasks     = {};
   _approvals = {};
+  _tavilyEnabled = false;
   try {
     await fn();
     console.log('  ✓', name);
@@ -200,14 +210,17 @@ await test('isHighRisk correctly identifies high-risk patterns', function() {
   assert.ok(!router.isHighRisk({ title: 'research competitors', instruction: '' }));
 });
 
-await test('bypass agents (tavily) skip safety gate even with publish in title', async function() {
-  // Tavily is a bypass agent – if it's enabled it should execute even if title contains publish.
-  // Since tavily won't be enabled in test env, it falls through to the provider chain.
-  // What matters is it does NOT hit the high-risk gate and return waiting_approval.
+await test('bypass agents only skip approval when the bypass adapter actually executes', async function() {
+  _tavilyEnabled = true;
   var t = makeTask({ assigned_agent: 'tavily', title: 'publish research on tavily', approval_required: false });
   var result = await router.routeTask(t.id);
-  // tavily not configured in test, falls to provider chain
-  assert.notStrictEqual(result.status, 'waiting_approval', 'bypass agent should not hit approval gate');
+  assert.strictEqual(result.status, 'done');
+});
+
+await test('disabled bypass agents fall back into the normal approval gate', async function() {
+  var t = makeTask({ assigned_agent: 'tavily', title: 'publish research on tavily', approval_required: false });
+  var result = await router.routeTask(t.id);
+  assert.strictEqual(result.status, 'waiting_approval', 'disabled bypass agent should re-enter approval gate');
 });
 
 await test('user-supplied "scheduler" created_by does NOT bypass rate limit', async function() {

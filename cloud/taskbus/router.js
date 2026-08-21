@@ -190,6 +190,8 @@ async function routeTask(taskId, opts) {
     }
 
     // Connector not enabled – fall through to normal routing below
+    // Once we fall through, this task must re-enter the standard safety gate.
+    isBypassAgent = false;
   }
 
   // ── STEP 2: RATE LIMIT CHECK ─────────────────────────────────────────────────
