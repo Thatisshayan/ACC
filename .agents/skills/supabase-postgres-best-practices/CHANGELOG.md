@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.6.0](https://github.com/supabase/agent-skills/compare/supabase-postgres-best-practices-v1.5.0...supabase-postgres-best-practices-v1.6.0) (2026-07-30)
+## 1.6.0 (2026-07-30)
 
 
 ### Features
@@ -15,7 +15,7 @@
 * cover SECURITY DEFINER, auth.role() deprecation, and BOLA in security checklist ([#85](https://github.com/supabase/agent-skills/issues/85)) ([133f43e](https://github.com/supabase/agent-skills/commit/133f43e8c2ffc48823ff0630c692cabecea3e3a3))
 * **supabase-postgres-best-practices:** make skill description trigger-rich ([#194](https://github.com/supabase/agent-skills/issues/194)) ([3291216](https://github.com/supabase/agent-skills/commit/32912161e2732c3e5001c6811a76c1f8308ed0da))
 
-## [1.5.0](https://github.com/supabase/agent-skills/compare/supabase-postgres-best-practices-v1.4.0...supabase-postgres-best-practices-v1.5.0) (2026-07-30)
+## 1.5.0 (2026-07-30)
 
 
 ### Features
@@ -30,7 +30,7 @@
 * cover SECURITY DEFINER, auth.role() deprecation, and BOLA in security checklist ([#85](https://github.com/supabase/agent-skills/issues/85)) ([133f43e](https://github.com/supabase/agent-skills/commit/133f43e8c2ffc48823ff0630c692cabecea3e3a3))
 * **supabase-postgres-best-practices:** make skill description trigger-rich ([#194](https://github.com/supabase/agent-skills/issues/194)) ([3291216](https://github.com/supabase/agent-skills/commit/32912161e2732c3e5001c6811a76c1f8308ed0da))
 
-## [1.4.0](https://github.com/supabase/agent-skills/compare/v1.3.0...v1.4.0) (2026-07-10)
+## 1.4.0 (2026-07-10)
 
 
 ### Features
@@ -44,7 +44,7 @@
 * correct broken reference link in postgres best practices skill ([#58](https://github.com/supabase/agent-skills/issues/58)) ([f4e2277](https://github.com/supabase/agent-skills/commit/f4e22777fd8573537297b568c16e5a45a25927da))
 * cover SECURITY DEFINER, auth.role() deprecation, and BOLA in security checklist ([#85](https://github.com/supabase/agent-skills/issues/85)) ([133f43e](https://github.com/supabase/agent-skills/commit/133f43e8c2ffc48823ff0630c692cabecea3e3a3))
 
-## [1.3.0](https://github.com/supabase/agent-skills/compare/v1.2.0...v1.3.0) (2026-06-05)
+## 1.3.0 (2026-06-05)
 
 
 ### Features
@@ -58,7 +58,7 @@
 * correct broken reference link in postgres best practices skill ([#58](https://github.com/supabase/agent-skills/issues/58)) ([f4e2277](https://github.com/supabase/agent-skills/commit/f4e22777fd8573537297b568c16e5a45a25927da))
 * cover SECURITY DEFINER, auth.role() deprecation, and BOLA in security checklist ([#85](https://github.com/supabase/agent-skills/issues/85)) ([133f43e](https://github.com/supabase/agent-skills/commit/133f43e8c2ffc48823ff0630c692cabecea3e3a3))
 
-## [1.2.0](https://github.com/supabase/agent-skills/compare/v1.1.1...v1.2.0) (2026-06-02)
+## 1.2.0 (2026-06-02)
 
 
 ### Features

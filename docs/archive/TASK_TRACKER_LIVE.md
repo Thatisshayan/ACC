@@ -82,7 +82,7 @@
 - [ ] 2.6: Build & test (30m)
 
 **Expected Completion:** +6.5 hours from start  
-**Success Metric:** http://localhost:5173 with 3 pages  
+**Success Metric:** `http://localhost:5173` with 3 pages  
 **Blocking:** T6 (parallel OK)
 
 ---
@@ -279,4 +279,4 @@ If blockers occur:
 
 **Generated:** May 23, 2026 - 03:00 UTC  
 **Updated via:** ACC taskbus (real-time)  
-**Access:** http://localhost:4000/api/ui/dashboard
+**Access:** `http://localhost:4000/api/ui/dashboard`

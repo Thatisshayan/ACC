@@ -47,4 +47,4 @@ order by created_at, id
 limit 20;
 ```
 
-Reference: [Pagination](https://supabase.com/docs/guides/database/pagination)
+Reference: [Query optimization](https://supabase.com/docs/guides/database/query-optimization)

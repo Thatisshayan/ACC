@@ -1,13 +1,13 @@
 # Changelog
 
-## [0.1.7](https://github.com/supabase/agent-skills/compare/v0.1.6...supabase-v0.1.7) (2026-08-12)
+## 0.1.7 (2026-08-12)
 
 
 ### Features
 
 * **supabase:** add debugging workflows to the supabase skill ([#112](https://github.com/supabase/agent-skills/issues/112)) ([3a4f0ce](https://github.com/supabase/agent-skills/commit/3a4f0ce0782e0cbdcf187c362e8d15d9e324462b))
 
-## [0.1.6](https://github.com/supabase/agent-skills/compare/v0.1.5...supabase-v0.1.6) (2026-07-30)
+## 0.1.6 (2026-07-30)
 
 
 ### Features
@@ -25,7 +25,7 @@
 * cover SECURITY DEFINER, auth.role() deprecation, and BOLA in security checklist ([#85](https://github.com/supabase/agent-skills/issues/85)) ([133f43e](https://github.com/supabase/agent-skills/commit/133f43e8c2ffc48823ff0630c692cabecea3e3a3))
 * update Data API doc link and bump supabase skill to v0.1.1 ([#73](https://github.com/supabase/agent-skills/issues/73)) ([e5f7a7c](https://github.com/supabase/agent-skills/commit/e5f7a7cfd697765848ffd6a4505f3c02e1ee17ee))
 
-## [0.1.5](https://github.com/supabase/agent-skills/compare/v0.1.4...v0.1.5) (2026-07-10)
+## 0.1.5 (2026-07-10)
 
 
 ### Features
@@ -43,7 +43,7 @@
 * cover SECURITY DEFINER, auth.role() deprecation, and BOLA in security checklist ([#85](https://github.com/supabase/agent-skills/issues/85)) ([133f43e](https://github.com/supabase/agent-skills/commit/133f43e8c2ffc48823ff0630c692cabecea3e3a3))
 * update Data API doc link and bump supabase skill to v0.1.1 ([#73](https://github.com/supabase/agent-skills/issues/73)) ([e5f7a7c](https://github.com/supabase/agent-skills/commit/e5f7a7cfd697765848ffd6a4505f3c02e1ee17ee))
 
-## [0.1.4](https://github.com/supabase/agent-skills/compare/v0.1.3...v0.1.4) (2026-06-05)
+## 0.1.4 (2026-06-05)
 
 
 ### Features
@@ -60,7 +60,7 @@
 * cover SECURITY DEFINER, auth.role() deprecation, and BOLA in security checklist ([#85](https://github.com/supabase/agent-skills/issues/85)) ([133f43e](https://github.com/supabase/agent-skills/commit/133f43e8c2ffc48823ff0630c692cabecea3e3a3))
 * update Data API doc link and bump supabase skill to v0.1.1 ([#73](https://github.com/supabase/agent-skills/issues/73)) ([e5f7a7c](https://github.com/supabase/agent-skills/commit/e5f7a7cfd697765848ffd6a4505f3c02e1ee17ee))
 
-## [0.1.3](https://github.com/supabase/agent-skills/compare/v0.1.2...v0.1.3) (2026-06-02)
+## 0.1.3 (2026-06-02)
 
 
 ### Features

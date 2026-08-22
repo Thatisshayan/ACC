@@ -101,10 +101,13 @@ function RunTimed($secs, $label, $cmd) {
 }
 
 if ($PM) {
+  # Native modules (for example better-sqlite3 on Windows) can take several
+  # minutes to rebuild from a clean node_modules tree. Keep the install gate
+  # finite, but avoid killing a healthy install midway and leaving verify red.
   switch ($PM) {
-    'pnpm' { RunTimed 300 build @('pnpm','install','--frozen-lockfile') }
-    'yarn' { RunTimed 300 build @('yarn','install','--frozen-lockfile') }
-    'npm'  { RunTimed 300 build @('npm','ci') }
+    'pnpm' { RunTimed 900 build @('pnpm','install','--frozen-lockfile') }
+    'yarn' { RunTimed 900 build @('yarn','install','--frozen-lockfile') }
+    'npm'  { RunTimed 900 build @('npm','ci') }
   }
   if (-not $failed) {
     # dependency-completeness guard: fail if any require()'d package is

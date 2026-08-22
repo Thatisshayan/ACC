@@ -143,7 +143,7 @@ REALISTIC TIME: 4-5 hours (with testing overhead)
 ### Before Starting
 - [ ] All 4 team members have QUICK_REFERENCE.md
 - [ ] Everyone has MASTER_PLAN_v2.0.md (for details)
-- [ ] ACC server running (http://localhost:4000)
+- [ ] ACC server running (`http://localhost:4000`)
 - [ ] @OurAccbot responding
 - [ ] PM2 has 2 processes online
 - [ ] Supabase credentials in .env
