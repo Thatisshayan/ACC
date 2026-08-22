@@ -268,9 +268,9 @@ agent-command-center/
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/taskbus/tasks` | GET | List all tasks |
-| `/api/taskbus/tasks` | POST | Create task |
-| `/api/taskbus/tasks/:id` | GET | Get task |
-| `/api/taskbus/tasks/:id` | PATCH | Update task |
+| `/api/taskbus/task` | POST | Create task |
+| `/api/taskbus/task/:id` | GET | Get task |
+| `/api/taskbus/task/:id` | PATCH | Update task |
 | `/api/taskbus/socialclaw/publish` | POST | Create an approval-gated SocialClaw publish task |
 | `/api/taskbus/socialclaw/delete` | POST | Create an approval-gated SocialClaw delete task |
 
