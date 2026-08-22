@@ -32,7 +32,7 @@
 - **Outreach Pipeline:** 0% Complete (Not wired)
 
 ### What Works NOW ✅
-- API Server responding on http://localhost:4000
+- API Server responding on `http://localhost:4000`
 - Telegram Bot @OurAccbot online and polling
 - All 57 environment variables loaded
 - 9 of 10 connectors functional
@@ -114,7 +114,7 @@ Supabase (supabase.co)
 
 ### Layer 5: UI
 ```
-http://localhost:5173 (React/Vite)
+`http://localhost:5173` (React/Vite)
     ├── App.jsx ✅
     ├── pages/Dashboard.jsx ❌ (MISSING)
     ├── pages/Approvals.jsx ❌ (MISSING)
@@ -144,7 +144,7 @@ node C:\Users\Shaya\agent-command-center\test-health.js
 # 2️⃣ Outreach CRM: Status 404 (endpoint missing)
 ```
 
-**Server Location:** http://localhost:4000
+**Server Location:** `http://localhost:4000`
 
 **Key Routes:**
 - GET /api/health → 200 OK
@@ -238,7 +238,7 @@ node C:\Users\Shaya\agent-command-center\test-health.js
 - RLS policies
 
 **How to Create (15 min):**
-Go to https://supabase.com → SQL Editor → Paste SQL → Run
+Go to `https://supabase.com` → SQL Editor → Paste SQL → Run
 
 ### Outreach Pipeline ❌ 0%
 
@@ -358,14 +358,14 @@ Tap "Job Search"
    cd ui
    npm run build
    npm run dev
-   Open http://localhost:5173
+   Open `http://localhost:5173`
    Test each page loads correctly
    ```
 
 **Validation:**
 ```bash
 npm run dev
-→ http://localhost:5173 opens
+→ `http://localhost:5173` opens
 Click Dashboard tab → Shows connector status (not "disabled")
 Click Approvals tab → Shows approval list
 Click Audit tab → Shows logs
@@ -972,7 +972,7 @@ export default function Dashboard() {
       <div className="bg-gray-50 border rounded p-6">
         <h3 className="font-bold mb-2">ℹ️ System Info</h3>
         <p className="text-sm text-gray-700">
-          API: http://localhost:4000 • UI: http://localhost:5173 • Bot: @OurAccbot
+          API: `http://localhost:4000` • UI: `http://localhost:5173` • Bot: @OurAccbot
         </p>
       </div>
     </div>
@@ -1035,7 +1035,7 @@ Expected: 200 OK with pipeline results
 ### Dashboard Testing
 ```bash
 # Test 1: Open dashboard
-Open: http://localhost:5173
+Open: `http://localhost:5173`
 Expected: App.jsx loads, navigation visible
 
 # Test 2: Dashboard page
@@ -1128,7 +1128,7 @@ Files to create:
 Files to modify:
 - ui/src/App.jsx (routing)
 
-Expected output: http://localhost:5173 with 3 working pages
+Expected output: `http://localhost:5173` with 3 working pages
 Success metric: All pages load and show data, no API errors
 ```
 
@@ -1184,8 +1184,8 @@ C:\Users\Shaya\agent-command-center\start-REDACTED.bat
 
 ### 3. Test Each Component
 **Telegram:** Send /start to @OurAccbot  
-**API:** curl http://localhost:4000/api/health  
-**Dashboard:** Open http://localhost:5173  
+**API:** `curl http://localhost:4000/api/health`  
+**Dashboard:** Open `http://localhost:5173`  
 
 ### 4. Run Your Task
 Each team member gets specific tasks (see Team Coordination Guide above)  

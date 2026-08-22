@@ -14,6 +14,41 @@ if (!fs.existsSync(STORE_DIR)) {
 
 const store = new Map(); // id → record
 
+function scheduleExpiry(record) {
+  if (!record || !record.id || !record.expiresAt) return;
+  const delayMs = Math.max(0, Number(record.expiresAt) - Date.now()) + 1000;
+  setTimeout(() => {
+    const current = store.get(record.id);
+    if (current && Date.now() >= current.expiresAt) {
+      store.delete(record.id);
+      removeFromDisk(record.id);
+    }
+  }, delayMs);
+}
+
+function loadPersistedSnapshots() {
+  try {
+    const files = fs.readdirSync(STORE_DIR).filter((name) => name.endsWith(".json"));
+    files.forEach((name) => {
+      const file = path.join(STORE_DIR, name);
+      try {
+        const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (!parsed || !parsed.id) return;
+        if (Number(parsed.expiresAt) <= Date.now()) {
+          removeFromDisk(parsed.id);
+          return;
+        }
+        store.set(parsed.id, parsed);
+        scheduleExpiry(parsed);
+      } catch (e) {
+        console.warn("[ephemeralSnapshots] load failed:", e.message);
+      }
+    });
+  } catch (e) {
+    console.warn("[ephemeralSnapshots] startup scan failed:", e.message);
+  }
+}
+
 // ── Disk helpers ──────────────────────────────────────────────────────────────
 
 function persistToDisk(id, record) {
@@ -55,15 +90,7 @@ function createSnapshot({ data, meta = {}, ttlMs = DEFAULT_TTL_MS }) {
 
   store.set(id, record);
   persistToDisk(id, record);
-
-  // Auto-purge after TTL
-  setTimeout(() => {
-    const r = store.get(id);
-    if (r && Date.now() >= r.expiresAt) {
-      store.delete(id);
-      removeFromDisk(id);
-    }
-  }, ttlMs + 1000);
+  scheduleExpiry(record);
 
   return record;
 }
@@ -111,3 +138,5 @@ module.exports = {
   deleteSnapshot,
   approveSnapshot,
 };
+
+loadPersistedSnapshots();

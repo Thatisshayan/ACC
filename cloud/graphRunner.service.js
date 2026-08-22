@@ -4,7 +4,7 @@ const { v4: uuidv4 }            = require('uuid');
 const { executeTask }           = require('./executor.js');
 const { expandGraph }           = require('./orchestrator/graphExpander.js');
 const { memoryEngine }          = require('./memory/memoryEngine.js');
-const { createSnapshot }        = require('./security/ephemeralSnapshots.js');
+const { createSnapshot, getSnapshot: getApprovalSnapshot } = require('./security/ephemeralSnapshots.js');
 const { redactObject }          = require('./security/piiRedactor.js');
 const { requiresSnapshotApproval } = require('./security/policy.js');
 const { notifyApprovalRequest } = require('./telegram/approvalBot.js');
@@ -139,6 +139,8 @@ async function _runLoop(graphId) {
     if (state.status === 'paused') { await _sleep(500); continue; }
     if (state.status === 'stopped') break;
 
+    await _reconcilePendingApprovalNodes(state, inDegree, dependents);
+
     const running  = state.nodes.filter(n => n.status === 'running').length;
     const slots    = state.concurrency - running;
     const runnable = state.nodes.filter(n =>
@@ -157,6 +159,17 @@ async function _runLoop(graphId) {
       break;
     }
 
+    const waitingOnApproval = state.nodes.some(n => n.status === 'pendingApproval');
+    if (runnable.length === 0 && running === 0 && waitingOnApproval) {
+      if (state.status !== 'awaiting_approval') {
+        state.status = 'awaiting_approval';
+        state.updatedAt = new Date().toISOString();
+        _broadcastStatus(graphId, 'awaiting_approval');
+      }
+      await _sleep(200);
+      continue;
+    }
+
     if (runnable.length === 0 && running === 0) {
       state.status    = 'deadlocked';
       state.updatedAt = new Date().toISOString();
@@ -166,6 +179,11 @@ async function _runLoop(graphId) {
     }
 
     for (const node of runnable) {
+      if (state.status !== 'running') {
+        state.status = 'running';
+        state.updatedAt = new Date().toISOString();
+        _broadcastStatus(graphId, 'running');
+      }
       node.status    = 'running';
       node.startedAt = new Date().toISOString();
       _executeNode(graphId, node, inDegree, dependents).catch(err => {
@@ -199,38 +217,17 @@ async function _executeNode(graphId, node, inDegree, dependents) {
       }
     );
 
-    node.status     = 'completed';
-    node.result     = result;
-    node.finishedAt = new Date().toISOString();
-    node.updatedAt  = new Date().toISOString();
-    state.updatedAt = new Date().toISOString();
-
-    for (const depId of (dependents.get(node.id) || [])) {
-      inDegree.set(depId, (inDegree.get(depId) || 1) - 1);
+    if (result && result.awaitingApproval) {
+      node.status            = 'pendingApproval';
+      node.pendingSnapshotId = result.snapshotId;
+      node.result            = result.result;
+      node.updatedAt         = new Date().toISOString();
+      state.updatedAt        = new Date().toISOString();
+      _broadcastNode(graphId, node, 'pendingApproval');
+      return;
     }
 
-    try {
-      const snap = { nodes: state.nodes, getNodeOutput: id => state.nodes.find(x => x.id === id)?.result || null };
-      const newNodes = await expandGraph(snap, node.id);
-      if (Array.isArray(newNodes) && newNodes.length) {
-        for (const nn of newNodes) {
-          if (!state.nodes.find(x => x.id === nn.id)) {
-            const nnDeps = nn.deps || nn.dependsOn || [];
-            state.nodes.push({ ...nn, type: nn.type || nn.agentType, deps: nnDeps, status: 'pending', attempts: 0, lastError: null, startedAt: null, finishedAt: null, result: null });
-            inDegree.set(nn.id, nnDeps.length);
-            dependents.set(nn.id, []);
-            for (const d of nnDeps) {
-              const dl = dependents.get(d) || [];
-              dl.push(nn.id);
-              dependents.set(d, dl);
-            }
-            log(`[GraphRunnerService] Dynamically added node ${nn.id}`);
-          }
-        }
-      }
-    } catch (_) {}
-
-    _broadcastNode(graphId, node, 'completed');
+    await _finalizeCompletedNode(state, graphId, node, inDegree, dependents, result);
 
   } catch (err) {
     node.status     = 'failed';
@@ -280,7 +277,10 @@ async function _runNodeOnce(graphId, node, state) {
     throw new Error(result?.error || `Node ${node.id} returned failure`);
   }
 
-  await _handleSnapshot(graphId, node, result, context);
+  const snapshot = await _handleSnapshot(graphId, node, result, context);
+  if (snapshot) {
+    return { awaitingApproval: true, snapshotId: snapshot.id, result };
+  }
   return result;
 }
 
@@ -306,9 +306,6 @@ async function _handleSnapshot(graphId, node, result, context) {
     meta: { nodeId: node.id, graphId, createdBy: context.role || 'Agent', taskId: context.requestId || null },
   });
 
-  node.status    = 'pendingApproval';
-  node.updatedAt = new Date().toISOString();
-
   try {
     await notifyApprovalRequest({
       snapshotId: snap.id,
@@ -316,7 +313,71 @@ async function _handleSnapshot(graphId, node, result, context) {
     });
   } catch (_) {}
 
-  try { broadcast('nodeUpdate', { graphId, nodeId: node.id, type: node.type, status: 'pendingApproval', snapshotId: snap.id }); } catch (_) {}
+  return snap;
+}
+
+async function _reconcilePendingApprovalNodes(state, inDegree, dependents) {
+  for (const node of state.nodes.filter((n) => n.status === 'pendingApproval' && n.pendingSnapshotId)) {
+    const snapshot = getApprovalSnapshot(node.pendingSnapshotId);
+    if (snapshot && snapshot.pendingApproval) continue;
+
+    if (snapshot && snapshot.approvedAt) {
+      const approvedResult = node.result;
+      node.pendingSnapshotId = null;
+      await _finalizeCompletedNode(state, state.graphId, node, inDegree, dependents, approvedResult);
+      continue;
+    }
+
+    node.status = 'failed';
+    node.lastError = 'Snapshot rejected, expired, or missing';
+    node.pendingSnapshotId = null;
+    node.finishedAt = new Date().toISOString();
+    node.updatedAt = new Date().toISOString();
+    state.updatedAt = new Date().toISOString();
+
+    try {
+      await writeToDLQ({ graphId: state.graphId, node, context: _redactContext(state.context), error: node.lastError });
+    } catch (dlqErr) {
+      log(`[GraphRunnerService] DLQ write failed:`, dlqErr.message);
+    }
+
+    _broadcastNode(state.graphId, node, 'failed');
+  }
+}
+
+async function _finalizeCompletedNode(state, graphId, node, inDegree, dependents, result) {
+  node.status     = 'completed';
+  node.result     = result;
+  node.finishedAt = new Date().toISOString();
+  node.updatedAt  = new Date().toISOString();
+  state.updatedAt = new Date().toISOString();
+
+  for (const depId of (dependents.get(node.id) || [])) {
+    inDegree.set(depId, (inDegree.get(depId) || 1) - 1);
+  }
+
+  try {
+    const snap = { nodes: state.nodes, getNodeOutput: id => state.nodes.find(x => x.id === id)?.result || null };
+    const newNodes = await expandGraph(snap, node.id);
+    if (Array.isArray(newNodes) && newNodes.length) {
+      for (const nn of newNodes) {
+        if (!state.nodes.find(x => x.id === nn.id)) {
+          const nnDeps = nn.deps || nn.dependsOn || [];
+          state.nodes.push({ ...nn, type: nn.type || nn.agentType, deps: nnDeps, status: 'pending', attempts: 0, lastError: null, startedAt: null, finishedAt: null, result: null });
+          inDegree.set(nn.id, nnDeps.length);
+          dependents.set(nn.id, []);
+          for (const d of nnDeps) {
+            const dl = dependents.get(d) || [];
+            dl.push(nn.id);
+            dependents.set(d, dl);
+          }
+          log(`[GraphRunnerService] Dynamically added node ${nn.id}`);
+        }
+      }
+    }
+  } catch (_) {}
+
+  _broadcastNode(graphId, node, 'completed');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

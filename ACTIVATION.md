@@ -111,7 +111,7 @@ Add these DNS records:
 SSL certificate provisions automatically within 2 minutes of DNS propagating.
 DNS propagation takes 5-30 min typically.
 
-Test with: https://acccommand.center/api/health → should return { "ok": true }
+Test with: `https://acccommand.center/api/health` → should return `{ "ok": true }`
 
 ---
 
@@ -128,8 +128,8 @@ Test with: https://acccommand.center/api/health → should return { "ok": true }
 2. Dashboard shows Account SID and Auth Token at the top → copy both
 3. Go to: Phone Numbers → Manage → Buy a Number → search Canada/US → buy one (~$1.15/mo)
 4. On the number's config page set:
-   - "A Message Comes In" → Webhook → https://acccommand.center/api/phone/webhook/sms
-   - "A Call Comes In"    → Webhook → https://acccommand.center/api/phone/webhook/voice
+   - "A Message Comes In" → Webhook → `https://acccommand.center/api/phone/webhook/sms`
+   - "A Call Comes In"    → Webhook → `https://acccommand.center/api/phone/webhook/voice`
 5. Add all 3 values to Railway env vars
 
 ### Stripe (Billing)
@@ -140,7 +140,7 @@ Test with: https://acccommand.center/api/health → should return { "ok": true }
    - Name: "ACC Builder"  → Price: $49.00/month recurring → copy Price ID → STRIPE_PRICE_BUILDER
    - Name: "ACC Operator" → Price: $99.00/month recurring → copy Price ID → STRIPE_PRICE_OPERATOR
 4. Developers → Webhooks → + Add endpoint:
-   - URL: https://acccommand.center/api/billing/webhook
+   - URL: `https://acccommand.center/api/billing/webhook`
    - Events: customer.subscription.created, customer.subscription.updated, customer.subscription.deleted
    - Copy Signing secret → STRIPE_WEBHOOK_SECRET
 
@@ -149,10 +149,10 @@ Test with: https://acccommand.center/api/health → should return { "ok": true }
 ## STEP 5 — Verify everything is live
 Run these URLs in your browser after DNS propagates:
 
-- https://acccommand.center/api/health         → { "ok": true }
-- https://acccommand.center/api/billing/status → { "stripe": true }
-- https://acccommand.center/api/phone/status   → { "configured": true }
-- https://acccommand.center/api/card/status    → { "configured": true }
-- https://acccommand.center/landing            → landing page loads
+- `https://acccommand.center/api/health`         → `{ "ok": true }`
+- `https://acccommand.center/api/billing/status` → returns billing config status
+- `https://acccommand.center/api/phone/status`   → returns phone config status
+- `https://acccommand.center/api/card/status`    → returns card config status
+- `https://acccommand.center/landing`            → landing page loads
 
 All green = ACC is fully live on acccommand.center.

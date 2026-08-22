@@ -46,7 +46,7 @@ After T2 done: T6 (1.5h) + T7 (3.5h) = ~12h total
 
 ### Subtask 4.1: Create Tables (15 min)
 
-Go to: https://supabase.com → SQL Editor
+Go to: `https://supabase.com` → SQL Editor
 
 Paste & run:
 ```sql
@@ -333,7 +333,7 @@ File: `TEST_CHECKLIST.md`
 - [ ] Approval buttons work
 
 ## Dashboard UI (Antigravity's T2)
-- [ ] http://localhost:5173 loads
+- [ ] `http://localhost:5173` loads
 - [ ] Dashboard tab shows status
 - [ ] Connectors display (not "disabled")
 - [ ] Approvals tab works
@@ -372,7 +372,7 @@ File: `TEST_CHECKLIST.md`
    - Tap a job option ✅
 
 3. **Check Dashboard**
-   - http://localhost:5173 loads ✅
+   - `http://localhost:5173` loads ✅
    - Shows connector status ✅
    - Shows tasks in queue ✅
 
@@ -502,8 +502,8 @@ await gmailAction.execute({ to, subject, body });
 ## 🚄 RAILWAY DEPLOYMENT - YES, WE'RE ON IT
 
 **Current Status:**
-- ✅ Local: http://localhost:4000 (running)
-- ✅ Railway: https://acc-REDACTED-a26c.up.railway.app (live)
+- ✅ Local: `http://localhost:4000` (running)
+- ✅ Railway: `https://acc-REDACTED-a26c.up.railway.app` (live)
 
 **What Railway Does:**
 - Hosts the backend 24/7

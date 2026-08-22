@@ -10,6 +10,82 @@
 const path = require('path');
 const { test, describe, beforeEach, afterEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
+const Module = require('module');
+
+function createSupertestShim() {
+  return function request(app) {
+    function makeRequest(method, routePath) {
+      const state = { headers: {}, body: undefined };
+      const run = async function() {
+        const server = await new Promise((resolve) => {
+          const s = app.listen(0, () => resolve(s));
+        });
+        try {
+          const address = server.address();
+          const res = await fetch(`http://127.0.0.1:${address.port}${routePath}`, {
+            method,
+            headers: state.headers,
+            body: state.body === undefined ? undefined : JSON.stringify(state.body),
+          });
+          const text = await res.text();
+          let body = null;
+          try { body = text ? JSON.parse(text) : null; } catch (_) { body = text; }
+          return { status: res.status, body, text, headers: Object.fromEntries(res.headers.entries()) };
+        } finally {
+          await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+        }
+      };
+
+      return {
+        set(name, value) {
+          state.headers[name] = value;
+          return this;
+        },
+        send(body) {
+          state.body = body;
+          if (!state.headers['Content-Type']) state.headers['Content-Type'] = 'application/json';
+          return this;
+        },
+        then(resolve, reject) {
+          return run().then(resolve, reject);
+        },
+        catch(reject) {
+          return run().catch(reject);
+        },
+      };
+    }
+
+    return {
+      get(routePath) { return makeRequest('GET', routePath); },
+      post(routePath) { return makeRequest('POST', routePath); },
+      patch(routePath) { return makeRequest('PATCH', routePath); },
+    };
+  };
+}
+
+const originalLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  if (request === 'media-typer') {
+    return {
+      parse(value) {
+        const raw = String(value || 'application/json');
+        const parts = raw.split(';')[0].trim().split('/');
+        return { type: parts[0] || 'application', subtype: parts[1] || 'json', suffix: '', parameters: {} };
+      },
+      format(obj) {
+        return `${obj.type || 'application'}/${obj.subtype || 'json'}`;
+      },
+      test(expected, value) {
+        const parsed = this.parse(value);
+        return `${parsed.type}/${parsed.subtype}` === expected;
+      },
+    };
+  }
+  if (request === 'supertest') {
+    return createSupertestShim();
+  }
+  return originalLoad.apply(this, arguments);
+};
 const express = require('express');
 const request = require('supertest');
 
@@ -17,8 +93,126 @@ function cacheStub(absPath, exports) {
   require.cache[absPath] = { id: absPath, filename: absPath, loaded: true, exports };
 }
 
+const taskState = {
+  tasks: new Map(),
+  approvals: new Map(),
+  messages: new Map(),
+  results: new Map(),
+};
+
+const storeStub = {
+  AGENTS: {
+    claude: { id: 'claude', name: 'Claude' },
+    chatgpt: { id: 'chatgpt', name: 'ChatGPT' },
+    human: { id: 'human', name: 'Human' },
+  },
+  createTask(input) {
+    const task = {
+      id: 'task-' + Math.random().toString(16).slice(2, 10),
+      title: input.title || 'Untitled Task',
+      instruction: input.instruction || '',
+      assigned_agent: input.assigned_agent || 'claude',
+      status: 'pending',
+      priority: input.priority || 'normal',
+      required_output: input.required_output || '',
+      approval_required: input.approval_required !== false,
+      automation_mode: input.automation_mode || 'sandbox',
+      feature_ref: input.feature_ref || null,
+      created_by: input.created_by || 'chatgpt',
+      request_id: input.request_id || null,
+      meta: input.meta || null,
+      provider_used: null,
+      error: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    taskState.tasks.set(task.id, task);
+    return task;
+  },
+  getTask(id) {
+    return taskState.tasks.get(id) || null;
+  },
+  getTasks(filter) {
+    return Array.from(taskState.tasks.values()).filter((task) => {
+      if (filter?.status && task.status !== filter.status) return false;
+      if (filter?.assigned_agent && task.assigned_agent !== filter.assigned_agent) return false;
+      if (filter?.priority && task.priority !== filter.priority) return false;
+      return true;
+    });
+  },
+  updateTask(id, patch) {
+    const existing = taskState.tasks.get(id);
+    if (!existing) return null;
+    const updated = Object.assign({}, existing, patch, { updated_at: new Date().toISOString() });
+    taskState.tasks.set(id, updated);
+    return updated;
+  },
+  addResult(input) {
+    const result = {
+      id: 'result-' + Math.random().toString(16).slice(2, 10),
+      task_id: input.task_id,
+      provider_used: input.provider_used || 'manual',
+      is_real_ai_result: !!input.is_real_ai_result,
+      output: input.output || '',
+      summary: input.summary || '',
+    };
+    const current = taskState.results.get(input.task_id) || [];
+    current.unshift(result);
+    taskState.results.set(input.task_id, current);
+    return result;
+  },
+  getResults(id) {
+    return taskState.results.get(id) || [];
+  },
+  getAllResults() {
+    return Array.from(taskState.results.values()).flat();
+  },
+  addMessage(taskId, from_agent, to_agent, content) {
+    const msg = { id: 'msg-' + Math.random().toString(16).slice(2, 10), task_id: taskId, from_agent, to_agent, content };
+    const current = taskState.messages.get(taskId) || [];
+    current.unshift(msg);
+    taskState.messages.set(taskId, current);
+    return msg;
+  },
+  getMessages(taskId) {
+    return taskState.messages.get(taskId) || [];
+  },
+  createApproval(taskId, action) {
+    const approval = { id: 'approval-' + Math.random().toString(16).slice(2, 10), task_id: taskId, action, status: 'pending', notes: '' };
+    taskState.approvals.set(approval.id, approval);
+    return approval;
+  },
+  resolveApproval(id, decision, approved_by, notes) {
+    const approval = taskState.approvals.get(id);
+    if (!approval) return null;
+    approval.status = decision;
+    approval.approved_by = approved_by;
+    approval.notes = notes || '';
+    return approval;
+  },
+  getPendingApprovals() {
+    return Array.from(taskState.approvals.values()).filter((approval) => approval.status === 'pending');
+  },
+  hasApprovedApproval(taskId, action) {
+    return Array.from(taskState.approvals.values()).some((approval) =>
+      approval.task_id === taskId
+        && approval.status === 'approved'
+        && (!action || approval.action === action)
+    );
+  },
+  getStats() {
+    return { total_tasks: taskState.tasks.size, pending_approvals: storeStub.getPendingApprovals().length, total_results: storeStub.getAllResults().length };
+  },
+};
+
 cacheStub(path.resolve(__dirname, 'router.js'), {
-  routeTask: async () => ({ status: 'completed', output: 'fake output', provider_used: 'smart_stub' }),
+  routeTask: async (taskId) => {
+    const task = storeStub.getTask(taskId);
+    if (task && task.approval_required && !storeStub.hasApprovedApproval(taskId, 'high_risk_execution') && !storeStub.hasApprovedApproval(taskId, 'publish')) {
+      return { status: 'waiting_approval', approvalId: 'approval-test-1', provider_used: task.assigned_agent };
+    }
+    return { status: 'completed', output: 'fake output', provider_used: 'smart_stub' };
+  },
   notifyTelegramFailure: () => {},
 });
 cacheStub(path.resolve(__dirname, 'providerFallback.js'), {
@@ -33,6 +227,21 @@ cacheStub(path.resolve(__dirname, 'providerFallback.js'), {
 });
 cacheStub(path.resolve(__dirname, '../workflows/leadCollectorPoller.js'), {
   runLeadCollectorPollerOnce: async () => ({}),
+});
+cacheStub(path.resolve(__dirname, 'store.js'), storeStub);
+cacheStub(path.resolve(__dirname, '../workflows/accOutreachCrmModule.js'), {
+  health: () => ({ ok: true }),
+  bootstrapOutreachCrm: async () => ({ success: true }),
+});
+cacheStub(path.resolve(__dirname, '../integrations/socialclaw.js'), {
+  enabled: () => true,
+  checkHealth: async () => ({ status: 'connected' }),
+  listAccounts: async () => ({ accounts: [] }),
+  getUsage: async () => ({ usage: {} }),
+  previewCampaign: async () => ({ preview: true }),
+  validateCampaign: async () => ({ valid: true }),
+  applyCampaign: async () => ({ published: true }),
+  deletePost: async () => ({ deleted: true }),
 });
 
 const routes = require('./routes.js');
@@ -50,6 +259,10 @@ function mount() {
 }
 
 beforeEach(() => {
+  taskState.tasks.clear();
+  taskState.approvals.clear();
+  taskState.messages.clear();
+  taskState.results.clear();
   mock.method(workflowRegistry, 'listWorkflows', () => []);
   mock.method(workflowDispatcher, 'launchWorkflow', async (key) => ({ success: true, workflow: key, taskId: 'wf-task-1' }));
   mock.method(workflowDispatcher, 'launchWorkflowsInParallel', async (keys) => ({ success: true, launched: keys.length }));
@@ -96,7 +309,7 @@ describe('taskbus routes (Phase 3)', () => {
 
   test('POST /task with auto mode routes through the chain', async () => {
     const res = await request(app).post('/api/taskbus/task').send({
-      title: 'auto task', instruction: 'x', automation_mode: 'auto',
+      title: 'auto task', instruction: 'x', automation_mode: 'auto', approval_required: false,
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.routing.status, 'completed');
@@ -219,5 +432,25 @@ describe('taskbus routes (Phase 3)', () => {
     const poller = await request(app).post('/api/taskbus/workflow/outreach-crm/poller/run');
     assert.equal(poller.status, 200);
     assert.equal(poller.body.success, true);
+  });
+
+  test('POST /socialclaw/publish creates an approval-gated taskbus task', async () => {
+    const res = await request(app).post('/api/taskbus/socialclaw/publish').send({ content: 'hello' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.task.assigned_agent, 'socialclaw');
+    assert.equal(res.body.task.approval_required, true);
+    assert.equal(res.body.routing.status, 'waiting_approval');
+    assert.equal(res.body.task.meta.payload.action, 'apply');
+  });
+
+  test('POST /socialclaw/delete creates an approval-gated delete task', async () => {
+    const res = await request(app).post('/api/taskbus/socialclaw/delete').send({ postId: 'abc123' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.task.assigned_agent, 'socialclaw');
+    assert.equal(res.body.task.approval_required, true);
+    assert.equal(res.body.routing.status, 'waiting_approval');
+    assert.equal(res.body.task.meta.payload.action, 'posts:delete');
   });
 });

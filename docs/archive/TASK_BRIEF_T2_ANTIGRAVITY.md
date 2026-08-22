@@ -14,7 +14,7 @@ Build the React dashboard (3 pages) that shows ACC system status, approvals, and
 
 **Current State:** App.jsx exists but is empty.  
 **Your Job:** Create 4 new components + wire routing.  
-**Success:** http://localhost:5173 shows real data from API.
+**Success:** `http://localhost:5173` shows real data from API.
 
 ---
 
@@ -124,7 +124,7 @@ Then implement components one by one, test each.
 - [ ] Audit.jsx shows logs
 - [ ] App.jsx has 3-tab navigation
 - [ ] npm run dev works
-- [ ] http://localhost:5173 loads
+- [ ] `http://localhost:5173` loads
 - [ ] All data from real API calls
 - [ ] No console errors
 - [ ] All pages responsive

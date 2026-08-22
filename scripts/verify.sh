@@ -91,11 +91,14 @@ run_with_timeout() { # $1=seconds $2=label $3..=cmd
   notice "$label" "ok"
 }
 if [ -n "$PM" ]; then
+  # Native modules (for example better-sqlite3 on Windows) can take several
+  # minutes to rebuild from a clean node_modules tree. Keep the install gate
+  # finite, but avoid killing a healthy install midway and leaving verify red.
   case "$PM" in
-    pnpm) run_with_timeout 300 build pnpm install --frozen-lockfile
+    pnpm) run_with_timeout 900 build pnpm install --frozen-lockfile
           pnpm run build --if-present 2>&1 | tail -3 ;;
-    yarn) run_with_timeout 300 build yarn install --frozen-lockfile ;;
-    npm)  run_with_timeout 300 build npm ci ;;
+    yarn) run_with_timeout 900 build yarn install --frozen-lockfile ;;
+    npm)  run_with_timeout 900 build npm ci ;;
   esac
   if [ $FAIL -eq 0 ]; then
     # dependency-completeness guard: fail if any require()'d package is

@@ -10,8 +10,8 @@
 ## ✅ DELIVERABLES COMPLETED
 
 ### 1️⃣ ACC RESTART (SOLID) ✅
-- ✅ Local server: http://localhost:4000 (running)
-- ✅ Railway: https://acc-REDACTED-a26c.up.railway.app (LIVE)
+- ✅ Local server: `http://localhost:4000` (running)
+- ✅ Railway: `https://acc-REDACTED-a26c.up.railway.app` (LIVE)
 - ✅ Bot: @OurAccbot (polling)
 - ✅ All 57 env vars loaded
 - ✅ PM2 managing services
@@ -89,7 +89,7 @@ await gmailAction.execute({
 
 **Current Setup:**
 - ✅ Project: acc-REDACTED-a26c
-- ✅ URL: https://acc-REDACTED-a26c.up.railway.app
+- ✅ URL: `https://acc-REDACTED-a26c.up.railway.app`
 - ✅ Environment: All 57 vars configured
 - ✅ Monitoring: 24/7 uptime tracking
 - ✅ Logs: Accessible via Railway dashboard
@@ -196,7 +196,7 @@ Expected: 8 interactive buttons appear
 
 ### T2 Success: ✅ Dashboard fully operational
 ```bash
-Open: http://localhost:5173
+Open: `http://localhost:5173`
 Expected: 3 tabs (Dashboard, Approvals, Audit) with real data
 ```
 

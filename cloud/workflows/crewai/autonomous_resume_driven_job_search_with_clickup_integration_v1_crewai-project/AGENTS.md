@@ -912,7 +912,7 @@ Get Automation UUID from Automations → Select crew → Additional Details → 
 
 ```bash
 curl -X POST \
-     -H "Authorization: Bearer YOUR_PERSONAL_ACCESS_TOKEN" \
+     -H "Authorization: Bearer <CREWAI_PAT>" \
      https://app.crewai.com/crewai_plus/api/v1/crews/YOUR-AUTOMATION-UUID/deploy
 ```
 

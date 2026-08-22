@@ -190,6 +190,8 @@ async function routeTask(taskId, opts) {
     }
 
     // Connector not enabled – fall through to normal routing below
+    // Once we fall through, this task must re-enter the standard safety gate.
+    isBypassAgent = false;
   }
 
   // ── STEP 2: RATE LIMIT CHECK ─────────────────────────────────────────────────
@@ -518,7 +520,58 @@ async function routeTask(taskId, opts) {
     log('[router] SocialClaw not configured – falling through');
   }
 
-  // ── STEP 14: Provider fallback chain (DeepSeek → Ollama → Smart Stub) ────────
+  // ── STEP 14: Twilio – phone / SMS adapter ────────────────────────────────────
+  if (task.assigned_agent === 'twilio') {
+    var twilio = require('../connectors/twilio.js');
+    var action = task.meta && task.meta.twilio && task.meta.twilio.action;
+    var params = task.meta && task.meta.twilio && task.meta.twilio.params || {};
+    try {
+      store.updateTask(taskId, { status: 'in_progress' });
+      var twResult;
+      if (action === 'send_sms') {
+        twResult = await twilio.sendSMS(params.to, params.message);
+      } else if (action === 'make_call') {
+        twResult = await twilio.makeCall(params.to, params.twiml);
+      } else {
+        throw new Error('Unsupported Twilio action: ' + String(action || 'unknown'));
+      }
+
+      var twOutput = JSON.stringify({
+        action: action,
+        sid: twResult.sid || null,
+        status: twResult.status || null,
+        to: params.to || null,
+        from: twResult.from || null,
+      });
+      var twR = store.addResult({
+        task_id: taskId,
+        provider_used: 'twilio',
+        is_real_ai_result: false,
+        cost_tier: 'api_call',
+        output: twOutput,
+        summary: action === 'send_sms' ? 'Twilio SMS sent' : 'Twilio call initiated',
+      });
+      store.updateTask(taskId, { status: 'done', provider_used: 'twilio' });
+      return {
+        status: 'done',
+        taskId: taskId,
+        provider_used: 'twilio',
+        resultId: twR.id,
+        output: twOutput,
+        summary: twR.summary || '',
+      };
+    } catch (err) {
+      store.updateTask(taskId, { status: 'failed', provider_used: 'twilio', error: err.message });
+      return {
+        status: 'failed',
+        taskId: taskId,
+        provider_used: 'twilio',
+        error: err.message,
+      };
+    }
+  }
+
+  // ── STEP 15: Provider fallback chain (DeepSeek → Ollama → Smart Stub) ────────
   store.addMessage(taskId, 'system', task.assigned_agent,
     'Executing | mode: ' + task.automation_mode + ' | chain: deepseek→ollama→alibaba→smart_stub');
 

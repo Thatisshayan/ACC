@@ -10,6 +10,8 @@ var fs     = require('fs');
 // ── Minimal store mock ────────────────────────────────────────────────────────
 var _tasks     = {};
 var _approvals = {};
+var _tavilyEnabled = false;
+var _twilioCalls = [];
 
 var storeMock = {
   getTask: function(id) { return _tasks[id] || null; },
@@ -71,6 +73,26 @@ Module._load = function(request, parent, isMain) {
       }
     };
   }
+  if (resolved.endsWith(path.join('integrations', 'tavily.js'))) {
+    return {
+      enabled: function() { return _tavilyEnabled; },
+      sendTaskFromACC: async function() {
+        return { success: true, output: 'tavily-result', summary: 'tavily summary' };
+      }
+    };
+  }
+  if (resolved.endsWith(path.join('connectors', 'twilio.js'))) {
+    return {
+      sendSMS: async function(to, message) {
+        _twilioCalls.push({ action: 'send_sms', to: to, message: message });
+        return { sid: 'SM123', status: 'queued', from: '+10000000000' };
+      },
+      makeCall: async function(to, twiml) {
+        _twilioCalls.push({ action: 'make_call', to: to, twiml: twiml });
+        return { sid: 'CA123', status: 'queued', from: '+10000000000' };
+      }
+    };
+  }
   return _origLoad.apply(this, arguments);
 };
 
@@ -105,6 +127,8 @@ async function test(name, fn) {
   // Reset state between tests
   _tasks     = {};
   _approvals = {};
+  _tavilyEnabled = false;
+  _twilioCalls = [];
   try {
     await fn();
     console.log('  ✓', name);
@@ -200,14 +224,17 @@ await test('isHighRisk correctly identifies high-risk patterns', function() {
   assert.ok(!router.isHighRisk({ title: 'research competitors', instruction: '' }));
 });
 
-await test('bypass agents (tavily) skip safety gate even with publish in title', async function() {
-  // Tavily is a bypass agent – if it's enabled it should execute even if title contains publish.
-  // Since tavily won't be enabled in test env, it falls through to the provider chain.
-  // What matters is it does NOT hit the high-risk gate and return waiting_approval.
+await test('bypass agents only skip approval when the bypass adapter actually executes', async function() {
+  _tavilyEnabled = true;
   var t = makeTask({ assigned_agent: 'tavily', title: 'publish research on tavily', approval_required: false });
   var result = await router.routeTask(t.id);
-  // tavily not configured in test, falls to provider chain
-  assert.notStrictEqual(result.status, 'waiting_approval', 'bypass agent should not hit approval gate');
+  assert.strictEqual(result.status, 'done');
+});
+
+await test('disabled bypass agents fall back into the normal approval gate', async function() {
+  var t = makeTask({ assigned_agent: 'tavily', title: 'publish research on tavily', approval_required: false });
+  var result = await router.routeTask(t.id);
+  assert.strictEqual(result.status, 'waiting_approval', 'disabled bypass agent should re-enter approval gate');
 });
 
 await test('user-supplied "scheduler" created_by does NOT bypass rate limit', async function() {
@@ -222,6 +249,26 @@ await test('user-supplied "scheduler" created_by does NOT bypass rate limit', as
   }
   var lastResult = results[results.length - 1];
   assert.strictEqual(lastResult.status, 'rate_limited', 'scheduler string should NOT bypass rate limit');
+});
+
+await test('approved twilio SMS tasks execute through the Twilio adapter', async function() {
+  var t = makeTask({
+    title: 'send SMS to candidate',
+    assigned_agent: 'twilio',
+    approval_required: true,
+    meta: {
+      twilio: {
+        action: 'send_sms',
+        params: { to: '+16135551234', message: 'hello world' },
+      },
+    },
+  });
+  _approvals['pre-approved'] = { id: 'pre-approved', task_id: t.id, action: 'high_risk_execution', status: 'approved' };
+  var result = await router.routeTask(t.id);
+  assert.strictEqual(result.status, 'done');
+  assert.strictEqual(result.provider_used, 'twilio');
+  assert.strictEqual(_twilioCalls.length, 1);
+  assert.strictEqual(_twilioCalls[0].action, 'send_sms');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

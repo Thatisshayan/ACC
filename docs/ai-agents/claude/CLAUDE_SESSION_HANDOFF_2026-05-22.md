@@ -15,10 +15,10 @@ Read every line. No explanations needed. Execute immediately.
 
 | Item | Value |
 |---|---|
-| Local server | http://localhost:4000 (PM2, online) |
+| Local server | `http://localhost:4000` (PM2, online) |
 | Local bot | @OurAccbot (PM2, online) |
-| Railway ACC | https://acc-REDACTED-a26c.up.railway.app/api/health → 200 ✅ |
-| Railway TapCash | https://nurturing-freedom-REDACTED-2b46.up.railway.app/api/health → 200 ✅ |
+| Railway ACC | `https://acc-REDACTED-a26c.up.railway.app/api/health` → 200 ✅ |
+| Railway TapCash | `https://nurturing-freedom-REDACTED-2b46.up.railway.app/api/health` → 200 ✅ |
 | Railway PORT fix | PORT=8080 applied by Codex — both services healthy |
 | Repo | github.com/Thatisshayan/ACC branch: safety/desktop-autostart-checkpoint |
 | Latest commit | bded4a3 (chore: gitignore electron builds — 457 files cleaned) |
@@ -86,7 +86,7 @@ post: meta: instagram: facebook: job search: find jobs:
 | Tavily | ✅ Live | Real-time web search |
 | Hunter.io | ✅ Live | Email finder |
 | Resend | ✅ Live | Email sending (approval-gated) |
-| Alibaba/Qwen | ⚠️ Key format wrong | Need DashScope key from dashscope.aliyuncs.com |
+| Alibaba/Qwen | ⚠️ Key format wrong | Need DashScope key from `https://dashscope.aliyuncs.com` |
 | Image Gen | ⚠️ Blocked | OpenAI billing capped + Alibaba key wrong |
 | Meta/Instagram | ⚠️ Needs setup | Get tokens from developers.facebook.com |
 
@@ -187,7 +187,7 @@ openhands: Fix TapCash Railway deployment. Repo: github.com/Thatisshayan/Tapcash
 
 ### TASK 5 — Supabase Tables
 
-Go to supabase.com → your project → SQL Editor → New Query
+Go to `https://supabase.com` → your project → SQL Editor → New Query
 Paste content of: `C:\Users\Shaya\agent-command-center\tasks\supabase-setup.sql`
 Click Run. Creates acc_tasks, acc_results, acc_users tables.
 This makes Railway data persist across restarts.
@@ -195,7 +195,7 @@ This makes Railway data persist across restarts.
 ### TASK 6 — Fix Alibaba Image Gen
 
 Get the correct DashScope API key:
-1. Go to: https://dashscope.aliyuncs.com
+1. Go to: `https://dashscope.aliyuncs.com`
 2. Login with your Alibaba account
 3. Go to API Keys section
 4. Create new key — it starts with `sk-`
