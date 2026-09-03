@@ -9,7 +9,12 @@
 // access, no identifiers beyond the whitelist below, so there is no code-execution
 // surface to escape from.
 
-const FUNCTIONS = {
+// Map, not a plain object: `FUNCTIONS['constructor']` or `FUNCTIONS['toString']` on a
+// {}-literal resolves via the inherited Object.prototype chain to a real (if harmless)
+// function instead of undefined, slipping past the `if (!fn)` whitelist check below.
+// Map has no such inherited-property surface — .get(name) returns exactly what was
+// .set(), and nothing else, for any input.
+const FUNCTIONS = new Map(Object.entries({
   abs:   Math.abs,
   round: Math.round,
   floor: Math.floor,
@@ -20,9 +25,9 @@ const FUNCTIONS = {
   pow:   (a, b) => Math.pow(a, b),
   log:   Math.log,
   log10: Math.log10,
-};
+}));
 
-const CONSTANTS = { pi: Math.PI, e: Math.E };
+const CONSTANTS = new Map(Object.entries({ pi: Math.PI, e: Math.E }));
 
 const TOKEN_RE = /\s*([0-9]+\.?[0-9]*|\.[0-9]+|[A-Za-z_][A-Za-z0-9_]*|\*\*|[()+\-*/%^,])/y;
 
@@ -120,11 +125,11 @@ function parse(tokens) {
           while (peek() === ',') { next(); args.push(parseExpr()); }
         }
         if (next() !== ')') throw new Error('safeExpr: expected ")"');
-        const fn = FUNCTIONS[name];
+        const fn = FUNCTIONS.get(name);
         if (!fn) throw new Error(`safeExpr: unknown function "${name}"`);
         return fn(...args);
       }
-      if (name in CONSTANTS) return CONSTANTS[name];
+      if (CONSTANTS.has(name)) return CONSTANTS.get(name);
       throw new Error(`safeExpr: unknown identifier "${name}"`);
     }
 

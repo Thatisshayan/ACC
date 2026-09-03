@@ -95,6 +95,17 @@ describe('codeExec SSRF guard (requires CODEEXEC_ENABLED=true)', () => {
     assert.match(r.error, /invalid URL/);
   });
 
+  test('blocks decimal/octal/hex-obfuscated IP hosts (well-known SSRF filter-bypass elsewhere)', async () => {
+    // The WHATWG URL parser normalizes all three forms to "127.0.0.1" before this
+    // code ever sees a hostname, so they're caught by the same private-IP check as
+    // any literal IP — this test exists to pin that behavior, not a separate guard.
+    for (const url of ['http://2130706433/', 'http://0x7f000001/', 'http://017700000001/']) {
+      const r = await codeExec.httpRequest('GET', url);
+      assert.equal(r.success, false, url);
+      assert.match(r.error, /blocked outbound request to private\/internal address \(127\.0\.0\.1\)/);
+    }
+  });
+
   test('honors an explicit host allowlist when set', async () => {
     process.env.CODEEXEC_HTTP_ALLOWLIST = 'example.com';
     const codeExecAllowlisted = freshCodeExec();

@@ -104,6 +104,9 @@ function safeLookup(hostname, options, callback) {
   });
 }
 
+// Plain http.Agent is intentional, not an oversight: admins using this action need
+// to be able to hit plain-http internal/dev endpoints, not just https ones. Both
+// agents share the same safeLookup SSRF guard above regardless of scheme.
 const safeHttpAgent  = new http.Agent({ lookup: safeLookup });
 const safeHttpsAgent = new https.Agent({ lookup: safeLookup });
 
@@ -123,6 +126,12 @@ function assertAllowedUrl(rawUrl) {
   if (net.isIP(bareHost) && isPrivateOrReservedIP(bareHost)) {
     throw new Error(`codeExec: blocked outbound request to private/internal address (${bareHost})`);
   }
+  // Decimal/octal/hex-encoded IP hosts (e.g. "2130706433" or "0x7f000001" for
+  // 127.0.0.1) are a well-known SSRF filter-bypass technique elsewhere, but not
+  // here: the WHATWG URL parser normalizes all of these to dotted-quad form before
+  // `parsed.hostname` is ever read (verified — `new URL('http://2130706433/').hostname`
+  // is already "127.0.0.1"), so they're caught by the private-IP check above like
+  // any other literal IP. See cloud/connectors/codeExec.test.js.
   if (HTTP_ALLOWLIST.length && !HTTP_ALLOWLIST.includes(parsed.hostname.toLowerCase())) {
     throw new Error(`codeExec: host "${parsed.hostname}" is not on the allowlist.`);
   }
@@ -156,7 +165,12 @@ async function httpRequest(method, url, headers = {}, body) {
     options.body = typeof body === 'string' ? body : JSON.stringify(body);
   }
   try {
-    const res = await fetch(parsed.toString(), options);
+    // `parsed` is the caller-supplied URL, but it has already passed assertAllowedUrl()
+    // (protocol + literal-IP + obfuscated-IP checks above) and `options.agent` pins the
+    // DNS resolution used for the actual TCP connection to safeLookup(), which re-checks
+    // every resolved address before connecting. See cloud/connectors/codeExec.test.js for
+    // the SSRF regression coverage (metadata IP, loopback IP, DNS-rebinding-style hostname).
+    const res = await fetch(parsed.toString(), options); // codeql[js/request-forgery] -- see comment above; SSRF guard covered by tests, not a taint sanitizer CodeQL recognizes
     if (res.status >= 300 && res.status < 400) {
       return { success: false, error: 'codeExec: redirect responses are not followed (SSRF guard).', status: res.status };
     }

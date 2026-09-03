@@ -33,6 +33,18 @@ describe('safeExpr.evaluate', () => {
     assert.throws(() => evaluate('globalThis'));
   });
 
+  test('rejects Object.prototype member names as function/constant lookups', () => {
+    // A plain {}-literal used as a name->function map would resolve these via the
+    // inherited prototype chain (FUNCTIONS['constructor'] -> Object) instead of
+    // undefined, silently bypassing the whitelist check. Using Map for FUNCTIONS/
+    // CONSTANTS closes this off entirely — assert it stays closed.
+    assert.throws(() => evaluate('constructor(1)'), /unknown function/);
+    assert.throws(() => evaluate('constructor'), /unknown identifier/);
+    assert.throws(() => evaluate('toString()'), /unknown function/);
+    assert.throws(() => evaluate('hasOwnProperty(1)'), /unknown function/);
+    assert.throws(() => evaluate('__proto__'), /unknown identifier/);
+  });
+
   test('rejects empty input', () => {
     assert.throws(() => evaluate(''));
     assert.throws(() => evaluate('   '));
