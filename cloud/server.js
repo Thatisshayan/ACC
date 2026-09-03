@@ -334,9 +334,25 @@ app.use("/api/status", requireOperatorOrAdmin, statusSummary);
 app.use("/api/ui", requireOperatorOrAdmin, uiRoutes);
 
 // ---------- Waitlist ----------
+// Backtracking-free email shape check (exactly one "@", no whitespace on either
+// side, a "." in the domain not at its start/end). The regex this replaced
+// ("^[^\s@]+@[^\s@]+\.[^\s@]+$") is the textbook ReDoS-cited email pattern —
+// "." sits inside the negated character class on both sides of the literal ".",
+// so the engine has many equivalent ways to split a long domain-like string
+// across the two groups. Doing the same three checks with indexOf/lastIndexOf
+// has no backtracking at all, by construction.
+function isPlausibleEmail(value) {
+  const str = String(value || "");
+  const at = str.indexOf("@");
+  if (at <= 0 || at !== str.lastIndexOf("@") || /\s/.test(str)) return false;
+  const domain = str.slice(at + 1);
+  const dot = domain.lastIndexOf(".");
+  return dot > 0 && dot < domain.length - 1;
+}
+
 app.post("/api/waitlist", async (req, res) => {
   const { email, automate, role, control } = req.body || {};
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!email || !isPlausibleEmail(email)) {
     return res.status(400).json({ success: false, error: "Valid email required." });
   }
   try {

@@ -169,10 +169,17 @@ function search(query, opts) {
   var o = opts || {};
   var limit = o.limit || 20;
   var scope = o.scope;
-  var pattern = '%' + String(query).replace(/%/g, '\\%') + '%';
+  // SQLite's LIKE has no default escape character — "\%" only means "escaped %"
+  // if the query itself declares ESCAPE '\'. Without that clause (missing below
+  // until now), the old `.replace(/%/g, '\\%')` was a no-op: a literal "%" in a
+  // search term still acted as a wildcard, and "_" (SQLite's single-char wildcard)
+  // wasn't escaped at all either. Escape the escape character first, then both
+  // wildcards, and declare ESCAPE '\' so the escaping is actually honored.
+  var escaped = String(query).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+  var pattern = '%' + escaped + '%';
   var rows = scope
-    ? db.prepare(`SELECT * FROM memories WHERE scope = ? AND (key LIKE ? OR value LIKE ?) AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY importance DESC LIMIT ?`).all(scope, pattern, pattern, limit)
-    : db.prepare(`SELECT * FROM memories WHERE (key LIKE ? OR value LIKE ?) AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY importance DESC LIMIT ?`).all(pattern, pattern, limit);
+    ? db.prepare(`SELECT * FROM memories WHERE scope = ? AND (key LIKE ? ESCAPE '\\' OR value LIKE ? ESCAPE '\\') AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY importance DESC LIMIT ?`).all(scope, pattern, pattern, limit)
+    : db.prepare(`SELECT * FROM memories WHERE (key LIKE ? ESCAPE '\\' OR value LIKE ? ESCAPE '\\') AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY importance DESC LIMIT ?`).all(pattern, pattern, limit);
   return rows.map(function(r) {
     var val;
     try { val = JSON.parse(r.value); } catch (_) { val = r.value; }

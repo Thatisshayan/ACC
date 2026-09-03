@@ -12,6 +12,7 @@
 
 const express = require('express');
 const router  = express.Router();
+const rateLimit = require('express-rate-limit');
 const twilio  = require('../connectors/twilio.js');
 const store   = require('../taskbus/store.js');
 const { routeTask } = require('../taskbus/router.js');
@@ -19,6 +20,26 @@ const fetch   = require('node-fetch');
 const { log } = require('../utils/logger.js');
 const twilioSdk = require('twilio');
 const { requireOperatorOrAdmin } = require('../middleware/auth.js');
+
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// Dedicated, stricter budget on top of the app-wide limiter in server.js — this
+// router's own middleware performs the operator/admin auth check, so it's worth
+// slowing credential-guessing against it specifically, not just relying on the
+// generic per-IP request budget everything else shares.
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 20 : 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function maskPhone(input) {
   const value = String(input || '');
@@ -51,7 +72,7 @@ function buildPhoneTask(body, type) {
     ? `Send SMS to ${maskPhone(body.to)}`
     : `Place call to ${maskPhone(body.to)}`;
   const twiml = type === 'call'
-    ? `<Response><Say voice="Polly.Matthew">${body.message}</Say></Response>`
+    ? `<Response><Say voice="Polly.Matthew">${escapeXml(body.message)}</Say></Response>`
     : null;
 
   return store.createTask({
@@ -82,7 +103,7 @@ function buildPhoneTask(body, type) {
 
 router.use((req, res, next) => {
   if (req.path.startsWith('/webhook/')) return next();
-  return requireOperatorOrAdmin(req, res, next);
+  return authLimiter(req, res, () => requireOperatorOrAdmin(req, res, next));
 });
 
 // GET /api/phone/status

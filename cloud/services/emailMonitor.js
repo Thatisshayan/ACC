@@ -4,7 +4,30 @@
 // Requires: imapflow (already in package.json)
 
 const { ImapFlow } = require('imapflow');
-const { log, warn, error: logError } = require('../utils/logger.js');
+const { log, warn, error: logError, safeErrorMessage } = require('../utils/logger.js');
+const { encryptObject, decryptObject } = require('../messages/encryption.js');
+
+// Encrypt/decrypt the IMAP app password with the same AES-256-GCM helper the
+// messenger uses, instead of the base64 "encoding" this used to do (trivially
+// reversible — not encryption at all). decodePassword() falls back to the old
+// base64 format for credentials saved before this change so they don't break;
+// every save from here on writes the real encrypted envelope.
+function encodePassword(password) {
+  return JSON.stringify(encryptObject({ password }));
+}
+
+function decodePassword(stored) {
+  try {
+    const envelope = JSON.parse(stored);
+    if (envelope && envelope.alg === 'aes-256-gcm') {
+      const payload = decryptObject(envelope);
+      if (payload && typeof payload.password === 'string') return payload.password;
+    }
+  } catch {
+    // not JSON — fall through to legacy base64 format below
+  }
+  return Buffer.from(stored, 'base64').toString('utf8');
+}
 
 let _db = null;
 function db() {
@@ -28,8 +51,7 @@ async function saveCredential({ userId, email, password, provider = 'gmail', ima
   const host = imapHost || (provider === 'gmail' ? 'imap.gmail.com' : 'imap.mail.yahoo.com');
   const port = imapPort || 993;
 
-  // Simple XOR obfuscation — replace with proper AES-256 if you add a vault key
-  const password_enc = Buffer.from(password).toString('base64');
+  const password_enc = encodePassword(password);
 
   const now = new Date().toISOString();
   const { error } = await client.from('acc_email_credentials').upsert({
@@ -69,7 +91,7 @@ async function deleteCredential(id) {
 // ── IMAP polling ──────────────────────────────────────────────────────────────
 
 async function pollInbox(cred) {
-  const password = Buffer.from(cred.password_enc, 'base64').toString('utf8');
+  const password = decodePassword(cred.password_enc);
 
   const client = new ImapFlow({
     host:   cred.imap_host,
@@ -99,7 +121,10 @@ async function pollInbox(cred) {
     }
     await client.logout();
   } catch (e) {
-    logError('[emailMonitor] IMAP poll error for', cred.email, ':', e.message);
+    // e came from a client constructed with a password; don't forward the
+    // library's own error text (some IMAP servers echo the failed AUTH exchange
+    // back into it) — log a safe summary only.
+    logError('[emailMonitor] IMAP poll error for', cred.email, ':', safeErrorMessage(e));
     throw e;
   }
 
@@ -135,7 +160,15 @@ async function sendEmailSummaryToTelegram(chatId, email, messages) {
 }
 
 function escTg(str) {
-  return String(str || '').replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+  // Escape literal backslashes FIRST: MarkdownV2 uses "\" as its own escape
+  // character, so a "\" already present in the input (e.g. a crafted email
+  // subject) has to become "\\" before any other character gets a "\" prefix —
+  // otherwise a backslash immediately followed by a special char could combine
+  // into what Telegram reads as an escaped backslash + an unescaped special
+  // char, breaking back out of the intended plain-text formatting.
+  return String(str || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
 }
 
 // ── Test connection ───────────────────────────────────────────────────────────

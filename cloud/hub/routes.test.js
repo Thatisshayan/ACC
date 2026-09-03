@@ -56,6 +56,28 @@ describe('hub routes (Phase 3)', () => {
     assert.equal(res.body.success, false);
   });
 
+  // Regression for the 2026-09-03 fix: sendCommand() (cloud/hub/commands.js)
+  // later POSTs to whatever webhookUrl was registered here — an unvalidated
+  // caller-supplied URL is an SSRF vector (register an app pointing at an
+  // internal address, then anything that commands it makes the server request
+  // that address). registry.register() now rejects it up front.
+  test('register rejects a webhookUrl pointing at a private/internal address', async () => {
+    const res = await request(app).post('/api/hub/register').send({
+      id: 'evil-app', name: 'Evil', webhookUrl: 'http://169.254.169.254/latest/meta-data/',
+    });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.success, false);
+    assert.match(res.body.error, /private\/internal address/);
+  });
+
+  test('register accepts a normal public webhookUrl', async () => {
+    const res = await request(app).post('/api/hub/register').send({
+      id: 'good-app', name: 'Good', webhookUrl: 'https://example.com/webhook',
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.app.webhookUrl, 'https://example.com/webhook');
+  });
+
   test('heartbeat returns true for known app, false for unknown', async () => {
     await request(app).post('/api/hub/register').send({ id: 'app-1', name: 'A' });
     const known = await request(app).post('/api/hub/heartbeat').send({ appId: 'app-1' });

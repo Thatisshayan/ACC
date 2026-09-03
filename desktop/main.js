@@ -62,13 +62,32 @@ function createWindow() {
   win.once('ready-to-show', () => { win.show(); win.focus(); });
   win.on('closed', () => { win = null; });
 
-  // Open external links in the system browser, not a new Electron window
+  // Open external links in the system browser, not a new Electron window.
+  // url.startsWith(CLOUD_URL) is a substring check, not an origin check — it
+  // would also match "https://acccommand.center.evil.com/phish", silently
+  // treating a lookalike domain as trusted internal content instead of sending
+  // it to the external browser. Compare the actual parsed origin instead.
+  const CLOUD_ORIGIN = new URL(CLOUD_URL).origin;
+  function isCloudOrigin(url) {
+    try { return new URL(url).origin === CLOUD_ORIGIN; } catch { return false; }
+  }
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http') && !url.startsWith(CLOUD_URL)) {
+    if (url.startsWith('http') && !isCloudOrigin(url)) {
       shell.openExternal(url);
       return { action: 'deny' };
     }
     return { action: 'allow' };
+  });
+
+  // Belt-and-suspenders on top of the check above: a top-level navigation
+  // triggered by the loaded page itself (location.href, not window.open) isn't
+  // covered by setWindowOpenHandler at all — block it here if it's leaving the
+  // cloud origin, same as the earlier frontend audit flagged.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isCloudOrigin(url)) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
   });
 
   buildMenu();

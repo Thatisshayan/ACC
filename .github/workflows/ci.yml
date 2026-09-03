@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [master]
 
+# Least privilege: this workflow only checks out code and runs builds/tests, it
+# never needs to write to the repo, issues, PRs, or packages.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend checks

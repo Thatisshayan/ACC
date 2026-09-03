@@ -431,7 +431,10 @@ async function handleMessage(msg) {
     return;
   }
   if (user.state === 'onboarding_name') {
-    var name = text.split(' ')[0].replace(/[^a-zA-Z\u0600-\u06FF\u0041-\u005A]/g,'');
+    // \u0041-\u005A was a redundant duplicate of A-Z, already covered by
+    // a-zA-Z in the same class -- flagged by static analysis as a suspicious
+    // overlapping range; removed with no behavior change (matches the same set).
+    var name = text.split(' ')[0].replace(/[^a-zA-Z\u0600-\u06FF]/g,'');
     if (name.length < 1) { await sendMsg(chatId, '❌ Please enter your name.'); return; }
     users.updateUser(userId, { name: name, state: 'onboarding_lang' });
     await sendButtons(chatId, t(userId, 'ask_language'), langMenu());

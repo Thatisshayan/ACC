@@ -17,9 +17,19 @@
 
 const express = require('express');
 const router  = express.Router();
+const rateLimit = require('express-rate-limit');
 const { log } = require('../utils/logger.js');
 const { saveSubscription, loadSubscriptions } = require('../storage/supabaseMemory.js');
 const { requireOperatorOrAdmin } = require('../middleware/auth.js');
+
+// Dedicated, stricter budget on top of the app-wide limiter in server.js — see
+// the identical comment in cloud/api/phoneRoutes.js.
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 20 : 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function maskEmail(email) {
   const value = String(email || '').trim();
@@ -73,7 +83,7 @@ const PLANS = {
 
 router.use((req, res, next) => {
   if (req.path === '/webhook' || req.path === '/plans') return next();
-  return requireOperatorOrAdmin(req, res, next);
+  return authLimiter(req, res, () => requireOperatorOrAdmin(req, res, next));
 });
 
 function stripe() {

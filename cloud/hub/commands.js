@@ -6,6 +6,7 @@ const axios    = require('axios');
 const registry = require('./registry.js');
 const memory   = require('../memory/store.js');
 const { log }  = require('../utils/logger.js');
+const { assertPublicHttpUrl, agentFor } = require('../utils/ssrfGuard.js');
 
 // ── Send command to a specific app ────────────────────────────────────────────
 
@@ -15,6 +16,16 @@ async function sendCommand(appId, command, payload, opts) {
   if (!app) return { success: false, error: 'App not registered: ' + appId };
   if (app.status !== 'online') return { success: false, error: 'App is offline: ' + appId };
   if (!app.webhookUrl) return { success: false, error: 'App has no webhookUrl: ' + appId };
+
+  // Defense-in-depth: registry.register() already validates webhookUrl at
+  // registration time, but re-check here too, in case a record was persisted
+  // before that check existed, or memory.remember() data was edited directly.
+  var parsedWebhook;
+  try {
+    parsedWebhook = assertPublicHttpUrl(app.webhookUrl, { label: 'hub.sendCommand' });
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 
   var body = {
     from:      'acc',
@@ -27,9 +38,11 @@ async function sendCommand(appId, command, payload, opts) {
   memory.logEvent('hub:commands', 'command_sent', { appId, command, requestId: body.requestId }, 'acc');
 
   try {
-    var r = await axios.post(app.webhookUrl, body, {
+    var r = await axios.post(parsedWebhook.toString(), body, {
       timeout: o.timeout || 10000,
       headers: { 'Content-Type': 'application/json', 'X-ACC-Source': 'acc-hub' },
+      httpAgent:  agentFor(parsedWebhook),
+      httpsAgent: agentFor(parsedWebhook),
     });
     log('[hub] Command', command, '→', appId, '| status:', r.status);
     memory.logEvent('hub:commands', 'command_ack', { appId, command, status: r.status }, appId);

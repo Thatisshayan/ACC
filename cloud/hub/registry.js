@@ -4,6 +4,7 @@
 
 const memory = require('../memory/store.js');
 const { log } = require('../utils/logger.js');
+const { assertPublicHttpUrl } = require('../utils/ssrfGuard.js');
 
 const SCOPE = 'hub:registry';
 
@@ -12,6 +13,12 @@ const SCOPE = 'hub:registry';
 
 function register(app) {
   if (!app || !app.id || !app.name) throw new Error('app.id and app.name are required');
+  // webhookUrl is where sendCommand() (cloud/hub/commands.js) later POSTs — a fully
+  // caller-controlled URL at registration time, with no restriction, is an SSRF
+  // vector (register an app pointing at an internal address, then anything that
+  // sends it a command makes the server request that address). Validate up front
+  // so a bad webhookUrl is rejected here, not discovered the first time it's used.
+  if (app.webhookUrl) assertPublicHttpUrl(app.webhookUrl, { label: 'hub.register' });
   var record = {
     id:           app.id,
     name:         app.name,

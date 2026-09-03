@@ -19,4 +19,14 @@ function info(...args)  { _emit('INFO',  ...args); }
 function warn(...args)  { _emit('WARN',  ...args); }
 function error(...args) { _emit('ERROR', ...args); }
 
-module.exports = { log, debug, info, warn, error };
+// For errors thrown by third-party network clients (IMAP, SMTP, ...) that can
+// legitimately embed connection details — including credentials — in their own
+// error text (some servers echo the failed AUTH exchange back verbatim). Use this
+// instead of forwarding err.message directly to a logger call whenever the error
+// came from a call that was passed a password/token/secret, so a leaky client
+// library can't turn into a leaky log line.
+function safeErrorMessage(err) {
+  return (err && err.code) ? `${err.name || 'Error'} (${err.code})` : (err && err.name) || 'Unknown error';
+}
+
+module.exports = { log, debug, info, warn, error, safeErrorMessage };
