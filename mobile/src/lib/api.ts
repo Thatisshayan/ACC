@@ -1,12 +1,19 @@
 import { getApiBaseUrl } from './config';
+import { getApiKey } from './session';
 
 type Json = Record<string, any>;
+
+function apiAuthHeaders(): Record<string, string> {
+  const key = getApiKey().trim();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
 
 async function request(path: string, init: RequestInit = {}) {
   const baseUrl = getApiBaseUrl();
   const res = await fetch(`${baseUrl}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...apiAuthHeaders(),
       ...(init.headers || {}),
     },
     ...init,
@@ -21,7 +28,10 @@ async function request(path: string, init: RequestInit = {}) {
   }
 
   if (!res.ok) {
-    const message = typeof data === 'string' ? data : data?.error || `Request failed (${res.status})`;
+    let message = typeof data === 'string' ? data : data?.error || `Request failed (${res.status})`;
+    if (res.status === 401 && !getApiKey().trim()) {
+      message = 'No API key configured. Add your operator/admin API key in Settings.';
+    }
     throw new Error(message);
   }
 
@@ -57,6 +67,7 @@ export function executeAssistantPrompt(payload: Json) {
 export function voiceTranscribe(formData: FormData) {
   return fetch(`${getApiBaseUrl()}/api/assistant/transcribe`, {
     method: 'POST',
+    headers: apiAuthHeaders(),
     body: formData,
   }).then(async (res) => {
     const text = await res.text();
@@ -67,7 +78,11 @@ export function voiceTranscribe(formData: FormData) {
       data = text;
     }
     if (!res.ok) {
-      throw new Error(typeof data === 'string' ? data : data?.error || 'Voice request failed');
+      let message = typeof data === 'string' ? data : data?.error || 'Voice request failed';
+      if (res.status === 401 && !getApiKey().trim()) {
+        message = 'No API key configured. Add your operator/admin API key in Settings.';
+      }
+      throw new Error(message);
     }
     return data;
   });

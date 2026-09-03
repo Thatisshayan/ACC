@@ -5,12 +5,13 @@ import { Card, Pill, SectionTitle } from '../../src/components/Ui';
 import { resetSession, useSession } from '../../src/lib/session';
 
 export default function SettingsScreen() {
-  const { session, setApiBaseUrl, setCurrentUserId } = useSession();
+  const { session, setApiBaseUrl, setCurrentUserId, setApiKey } = useSession();
   const [summary, setSummary] = useState<any>(null);
   const [bridge, setBridge] = useState<any>(null);
   const [socialclaw, setSocialclaw] = useState<any>(null);
   const [currentUserInput, setCurrentUserInput] = useState(String(session.currentUserId || '1'));
   const [apiBaseInput, setApiBaseInput] = useState(session.apiBaseUrl || apiBaseUrl());
+  const [apiKeyInput, setApiKeyInput] = useState(session.apiKey);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   async function refresh() {
@@ -31,13 +32,15 @@ export default function SettingsScreen() {
   useEffect(() => {
     setCurrentUserInput(String(session.currentUserId || '1'));
     setApiBaseInput(session.apiBaseUrl || apiBaseUrl());
-  }, [session.currentUserId, session.apiBaseUrl]);
+    setApiKeyInput(session.apiKey);
+  }, [session.currentUserId, session.apiBaseUrl, session.apiKey]);
 
   async function saveSession() {
     setSaveState('saving');
     await Promise.all([
       setCurrentUserId(currentUserInput.trim() || '1'),
       setApiBaseUrl(apiBaseInput.trim()),
+      setApiKey(apiKeyInput.trim()),
     ]);
     setSaveState('saved');
     setTimeout(() => setSaveState('idle'), 1500);
@@ -48,6 +51,7 @@ export default function SettingsScreen() {
     await resetSession();
     setCurrentUserInput('1');
     setApiBaseInput(apiBaseUrl());
+    setApiKeyInput('');
     setSaveState('saved');
     setTimeout(() => setSaveState('idle'), 1500);
   }
@@ -91,8 +95,19 @@ export default function SettingsScreen() {
           autoCorrect={false}
           style={styles.input}
         />
+        <Text style={styles.label}>Operator / Admin API key</Text>
+        <TextInput
+          value={apiKeyInput}
+          onChangeText={setApiKeyInput}
+          placeholder="Paste your ACC operator/admin API key"
+          placeholderTextColor="#6b7280"
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+          style={styles.input}
+        />
         <Text style={styles.helper}>
-          Saved locally with Secure Store. Leave the backend URL blank to use the default local-or-production routing.
+          {'Saved locally with Secure Store. Attached as `Authorization: Bearer <key>` on every backend call. Leave the backend URL blank to use the default local-or-production routing. Without a key, requests surface a clear "add your API key in Settings" message instead of a raw 401.'}
         </Text>
         <View style={styles.actionRow}>
           <Text onPress={() => saveSession().catch(() => {})} style={styles.saveButton}>

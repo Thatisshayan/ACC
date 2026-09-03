@@ -6,14 +6,16 @@ const SESSION_KEY = 'acc.mobile.session.v1';
 export type SessionState = {
   currentUserId: string;
   apiBaseUrl: string;
+  apiKey: string;
   loaded: boolean;
 };
 
-type SessionInput = Partial<Pick<SessionState, 'currentUserId' | 'apiBaseUrl'>>;
+type SessionInput = Partial<Pick<SessionState, 'currentUserId' | 'apiBaseUrl' | 'apiKey'>>;
 
 const DEFAULT_SESSION: SessionState = {
   currentUserId: '1',
   apiBaseUrl: '',
+  apiKey: '',
   loaded: false,
 };
 
@@ -30,6 +32,7 @@ async function persist(next: SessionState) {
     JSON.stringify({
       currentUserId: next.currentUserId,
       apiBaseUrl: next.apiBaseUrl,
+      apiKey: next.apiKey,
     }),
   );
 }
@@ -40,6 +43,10 @@ export function getSessionState() {
 
 export function getCurrentUserId() {
   return sessionState.currentUserId;
+}
+
+export function getApiKey() {
+  return sessionState.apiKey;
 }
 
 export function getApiBaseUrlOverride() {
@@ -54,6 +61,7 @@ export async function initSession() {
       sessionState = {
         currentUserId: String(parsed.currentUserId || DEFAULT_SESSION.currentUserId),
         apiBaseUrl: String(parsed.apiBaseUrl || DEFAULT_SESSION.apiBaseUrl),
+        apiKey: String(parsed.apiKey || DEFAULT_SESSION.apiKey),
         loaded: true,
       };
     } else {
@@ -70,6 +78,7 @@ export async function updateSession(input: SessionInput) {
     ...sessionState,
     currentUserId: String(input.currentUserId ?? sessionState.currentUserId ?? DEFAULT_SESSION.currentUserId),
     apiBaseUrl: String(input.apiBaseUrl ?? sessionState.apiBaseUrl ?? DEFAULT_SESSION.apiBaseUrl),
+    apiKey: String(input.apiKey ?? sessionState.apiKey ?? DEFAULT_SESSION.apiKey),
     loaded: true,
   };
   await persist(sessionState);
@@ -92,6 +101,7 @@ export const SessionContext = React.createContext<{
   ready: boolean;
   setCurrentUserId: (value: string) => Promise<void>;
   setApiBaseUrl: (value: string) => Promise<void>;
+  setApiKey: (value: string) => Promise<void>;
 } | null>(null);
 
 export function useSession() {
@@ -127,6 +137,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
       setApiBaseUrl: async (value: string) => {
         await updateSession({ apiBaseUrl: value });
+      },
+      setApiKey: async (value: string) => {
+        await updateSession({ apiKey: value });
       },
     }),
     [version],
