@@ -2,9 +2,9 @@ name: governance-gate
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
   push:
-    branches-ignore: [main]
+    branches-ignore: [master]
 
 permissions:
   contents: read
