@@ -47,7 +47,12 @@ async function searchRemoteOK(role, limit) {
       timeout: 15000,
     });
     var jobs = (r.data || []).filter(function(j){ return j.position; }).slice(0, limit || 10);
-    return jobs.map(function(j) { return { title: j.position, company: j.company || 'Unknown', location: 'Remote', salary: j.salary || 'Not listed', url: j.url || 'https://remoteok.com', description: (j.description||'').replace(/<[^>]+>/g,'').slice(0,200), source: 'RemoteOK' }; });
+    return jobs.map(function(j) { return { title: j.position, company: j.company || 'Unknown', location: 'Remote', salary: j.salary || 'Not listed', url: j.url || 'https://remoteok.com', // A paired-tag regex like /<[^>]+>/g can leave residual fragments on malformed/
+// nested input (e.g. a ">" inside a quoted attribute ends the match early). Since
+// this is flattened to plain text anyway (not preserving any real markup),
+// stripping every "<"/">" individually is simpler and provably leaves nothing
+// tag-shaped behind, regardless of how adversarial the input is.
+description: (j.description||'').replace(/[<>]/g,'').slice(0,200), source: 'RemoteOK' }; });
   } catch(e) { console.warn('[jobSearch] RemoteOK failed:', e.message); return null; }
 }
 

@@ -257,8 +257,18 @@ function buildContentActionArgs(text) {
   return null;
 }
 
+// Several of the regexes below combine adjacent unbounded quantifiers over
+// overlapping character classes (e.g. "\s*:?\s*" or a lazy ".+?" immediately
+// followed by an optional greedy ".+"), which is the classic shape for
+// catastrophic/polynomial backtracking on pathological input (long runs of
+// whitespace with no matching keyword). Capping input length here bounds
+// worst-case matching time to a small constant regardless of exact regex
+// shape, without having to hand-verify every pattern's safety individually.
+// Telegram's own message cap is 4096 chars — nothing legitimate is truncated.
+const MAX_INTENT_INPUT_LEN = 4000;
+
 function parseAssistantIntent(text) {
-  const input = String(text || '').trim();
+  const input = String(text || '').trim().slice(0, MAX_INTENT_INPUT_LEN);
   const lower = input.toLowerCase();
 
   if (!input) {

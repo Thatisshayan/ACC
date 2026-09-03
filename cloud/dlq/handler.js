@@ -17,7 +17,16 @@ if (!fs.existsSync(DLQ_DIR)) fs.mkdirSync(DLQ_DIR, { recursive: true });
 const VALID_ID_RE = /^dlq_[0-9]+_[a-zA-Z0-9_]+$/;
 function safeDLQPath(id) {
   if (typeof id !== 'string' || !VALID_ID_RE.test(id)) return null;
-  return path.join(DLQ_DIR, `${id}.json`);
+  const filePath = path.join(DLQ_DIR, `${id}.json`);
+  // Belt-and-suspenders on top of the regex above: resolve the final path and
+  // confirm it's still inside DLQ_DIR. The regex already makes escaping the
+  // directory impossible (no "/" or "." survive it), but this resolved-path
+  // containment check is the specific sanitizer shape static analysis tools
+  // recognize for path-injection, so it also documents the guarantee in a form
+  // a reviewer (human or automated) doesn't have to trust the regex to verify.
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(DLQ_DIR) + path.sep)) return null;
+  return resolved;
 }
 
 /**

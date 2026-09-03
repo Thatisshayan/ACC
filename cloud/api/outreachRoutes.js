@@ -8,15 +8,29 @@ const pipeline = require('../workflows/outreachPipeline.js');
 const fs       = require('fs');
 const path     = require('path');
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // GET /api/outreach/unsubscribe?email=... — CASL-compliant opt-out
 router.get('/unsubscribe', async (req, res) => {
   const email = req.query.email;
   if (!email) return res.status(400).send('Missing email parameter.');
   try {
     await pipeline.markUnsubscribed(email);
-    return res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:4rem"><h2>Unsubscribed</h2><p>${email} has been removed from all future outreach.</p></body></html>`);
+    return res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:4rem"><h2>Unsubscribed</h2><p>${escapeHtml(email)} has been removed from all future outreach.</p></body></html>`);
   } catch (e) {
-    return res.status(500).send('Error: ' + e.message);
+    // Don't echo the exception text back as HTML — it can embed the same
+    // unescaped `email` value that reached it (e.g. a validation error message
+    // that quotes the bad input back), which is exactly as exploitable as
+    // reflecting the query param directly. A fixed, generic message can't leak
+    // anything attacker-controlled.
+    return res.status(500).send('Error: could not process the unsubscribe request. Please contact support.');
   }
 });
 

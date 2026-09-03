@@ -5,6 +5,7 @@ const uuid = require('uuid').v4;
 const store = require('../taskbus/store.js');
 const airtable = require('../connectors/airtable.js');
 const clickup = require('../connectors/clickup.js');
+const { assertPublicHttpUrl, agentFor } = require('../utils/ssrfGuard.js');
 
 const LEADS_TABLE = process.env.AIRTABLE_LEADS_TABLE || 'Leads';
 const CLICKUP_LEADS_LIST_ID = process.env.CLICKUP_LEADS_LIST_ID || '';
@@ -120,7 +121,15 @@ async function fetchLeadsFromSheet(sheetCsvUrl) {
   if (!sheetCsvUrl) {
     throw new Error('GOOGLE_SHEETS_LEADS_CSV_URL not configured and no sheetCsvUrl provided');
   }
-  const resp = await axios.get(sheetCsvUrl, { timeout: 20000 });
+  // POST /api/taskbus/workflow/outreach-crm/bootstrap accepts sheetCsvUrl straight
+  // from the request body — an SSRF vector without this check (a service/operator
+  // caller could point it at an internal address instead of an actual sheet).
+  const parsed = assertPublicHttpUrl(sheetCsvUrl, { label: 'outreach-crm' });
+  const resp = await axios.get(parsed.toString(), {
+    timeout: 20000,
+    httpAgent: agentFor(parsed),
+    httpsAgent: agentFor(parsed),
+  });
   const rows = parseCsv(resp.data || '');
   return rows.map(normalizeLead).filter(validLead);
 }

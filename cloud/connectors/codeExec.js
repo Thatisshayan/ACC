@@ -11,12 +11,10 @@
 //   DNS lookup on the request agent, which also closes the DNS-rebinding gap.
 
 const vm      = require('vm');
-const dns     = require('dns');
-const net     = require('net');
-const http    = require('http');
-const https   = require('https');
 const fetch   = require('node-fetch');
 const { log } = require('../utils/logger.js');
+const ssrfGuard = require('../utils/ssrfGuard.js');
+const { isPrivateOrReservedIP, agentFor, assertPublicHttpUrl } = ssrfGuard;
 
 const CODE_TIMEOUT_MS = 5000;
 
@@ -59,83 +57,16 @@ function runJS(code, context = {}) {
 }
 
 // ── SSRF guard ──────────────────────────────────────────────────────────────
-
-function isPrivateOrReservedIP(ip) {
-  if (net.isIP(ip) === 4) {
-    const [a, b] = ip.split('.').map(Number);
-    if (a === 10) return true;                      // 10.0.0.0/8
-    if (a === 127) return true;                      // loopback
-    if (a === 169 && b === 254) return true;          // link-local incl. cloud metadata (169.254.169.254)
-    if (a === 172 && b >= 16 && b <= 31) return true;  // 172.16.0.0/12
-    if (a === 192 && b === 168) return true;           // 192.168.0.0/16
-    if (a === 0) return true;                          // "this network"
-    if (a >= 224) return true;                          // multicast/reserved/broadcast
-    return false;
-  }
-  if (net.isIP(ip) === 6) {
-    const low = ip.toLowerCase();
-    if (low === '::1') return true;                    // loopback
-    if (low.startsWith('fe80:')) return true;           // link-local
-    if (low.startsWith('fc') || low.startsWith('fd')) return true; // unique local
-    if (low.startsWith('::ffff:')) {                    // IPv4-mapped
-      const v4 = low.split(':').pop();
-      if (net.isIP(v4) === 4) return isPrivateOrReservedIP(v4);
-    }
-    return false;
-  }
-  return true; // unresolvable / unknown family — block, don't guess
-}
-
-// Custom dns lookup used by the request agents below: this is the address Node
-// actually connects to, so validating here (not in a separate pre-check) closes
-// DNS-rebinding — a hostname can't resolve to something safe at check-time and
-// something private at connect-time.
-function safeLookup(hostname, options, callback) {
-  dns.lookup(hostname, options, (err, address, family) => {
-    if (err) return callback(err);
-    const entries = Array.isArray(address) ? address : [{ address, family }];
-    for (const entry of entries) {
-      const ip = entry.address || entry;
-      if (isPrivateOrReservedIP(ip)) {
-        return callback(new Error(`codeExec: blocked outbound request to private/internal address (${ip})`));
-      }
-    }
-    callback(null, address, family);
-  });
-}
-
-// Plain http.Agent is intentional, not an oversight: admins using this action need
-// to be able to hit plain-http internal/dev endpoints, not just https ones. Both
-// agents share the same safeLookup SSRF guard above regardless of scheme.
-const safeHttpAgent  = new http.Agent({ lookup: safeLookup });
-const safeHttpsAgent = new https.Agent({ lookup: safeLookup });
+// Shared with cloud/hub/commands.js (webhookUrl SSRF) — see cloud/utils/ssrfGuard.js.
+// Decimal/octal/hex-encoded IP hosts (e.g. "2130706433" or "0x7f000001" for
+// 127.0.0.1) are a well-known SSRF filter-bypass technique elsewhere, but not
+// here: the WHATWG URL parser normalizes all of these to dotted-quad form before
+// the hostname is ever read (verified — `new URL('http://2130706433/').hostname`
+// is already "127.0.0.1"), so they're caught by the private-IP check like any
+// other literal IP. See cloud/connectors/codeExec.test.js.
 
 function assertAllowedUrl(rawUrl) {
-  let parsed;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new Error('codeExec: invalid URL.');
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`codeExec: protocol "${parsed.protocol}" not allowed (http/https only).`);
-  }
-  // A literal IP in the URL (http://169.254.169.254/...) never goes through DNS,
-  // so it never hits safeLookup below — Node connects directly to it. Check it here.
-  const bareHost = parsed.hostname.replace(/^\[|\]$/g, ''); // strip [..] from IPv6 literals
-  if (net.isIP(bareHost) && isPrivateOrReservedIP(bareHost)) {
-    throw new Error(`codeExec: blocked outbound request to private/internal address (${bareHost})`);
-  }
-  // Decimal/octal/hex-encoded IP hosts (e.g. "2130706433" or "0x7f000001" for
-  // 127.0.0.1) are a well-known SSRF filter-bypass technique elsewhere, but not
-  // here: the WHATWG URL parser normalizes all of these to dotted-quad form before
-  // `parsed.hostname` is ever read (verified — `new URL('http://2130706433/').hostname`
-  // is already "127.0.0.1"), so they're caught by the private-IP check above like
-  // any other literal IP. See cloud/connectors/codeExec.test.js.
-  if (HTTP_ALLOWLIST.length && !HTTP_ALLOWLIST.includes(parsed.hostname.toLowerCase())) {
-    throw new Error(`codeExec: host "${parsed.hostname}" is not on the allowlist.`);
-  }
-  return parsed;
+  return assertPublicHttpUrl(rawUrl, { allowlist: HTTP_ALLOWLIST, label: 'codeExec' });
 }
 
 /**
@@ -158,7 +89,7 @@ async function httpRequest(method, url, headers = {}, body) {
   const options = {
     method: (method || 'GET').toUpperCase(),
     headers: { 'Content-Type': 'application/json', ...headers },
-    agent: parsed.protocol === 'https:' ? safeHttpsAgent : safeHttpAgent,
+    agent: agentFor(parsed),
     redirect: 'manual', // don't silently follow a redirect into a private address
   };
   if (body && options.method !== 'GET') {
