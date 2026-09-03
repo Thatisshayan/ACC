@@ -130,3 +130,32 @@ test('rejected snapshots fail the waiting node instead of silently completing it
   const failedState = graphRunner.graphs.get(result.graphId);
   assert.match(failedState.nodes[0].lastError, /Snapshot rejected, expired, or missing/);
 });
+
+test('expandGraph output is capped at MAX_EXPAND_OUTPUT nodes', async () => {
+  // Temporarily override the mock to return more than MAX_EXPAND_OUTPUT nodes
+  const originalLoad = Module._load;
+  Module._load = function(request, parent, isMain) {
+    const resolved = Module._resolveFilename(request, parent, isMain);
+    if (resolved.endsWith(path.join('cloud', 'orchestrator', 'graphExpander.js'))) {
+      return { expandGraph: async () => { return new Array(25).fill({ id: 'gen', agentType: 'test', payload: {}, dependsOn: [], meta: {} }); }; };
+    }
+    return originalLoad.apply(this, arguments);
+  };
+
+  resetSnapshots();
+  const result = await graphRunner.startGraph([
+    { id: 'node-1', type: 'browser', payload: { label: 'first' } },
+  ]);
+
+  await waitFor(() => {
+    const state = graphRunner.graphs.get(result.graphId);
+    return state && state.status === 'completed';
+  });
+
+  const state = graphRunner.graphs.get(result.graphId);
+  const newNodes = state.nodes.filter((n) => n.id !== 'node-1');
+  // Should be capped at MAX_EXPAND_OUTPUT (20), not 25
+  assert.ok(newNodes.length <= 20, `Expected at most 20 new nodes (capped), got ${newNodes.length}`);
+  // Restore original mock
+  Module._load = originalLoad;
+});
