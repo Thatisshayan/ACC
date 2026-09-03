@@ -35,12 +35,25 @@ node scripts/start.js
 
 ---
 
-## 2026-09-03 session (Claude) — comprehensive audit + codeExec RCE/SSRF fix
+## 2026-09-03 session (Claude) — comprehensive audit + codeExec RCE/SSRF fix + 46-alert CodeQL remediation
 
 **Full findings, priorities, and everything still open are tracked in
 [`audits/2026-09-03_Claude_ComprehensiveAudit_and_LaunchReadiness.md`](audits/2026-09-03_Claude_ComprehensiveAudit_and_LaunchReadiness.md)
 — that file is now the canonical "what's left" list; the bullet list below this
 section is historical and increasingly stale. New items go in the audit file, not here.**
+
+**Handed off to opencode**: the next tier of safe-to-fix, no-secrets-needed work
+(migration ordering, mobile auth, CI gaps, dead-code cleanup, two small verified
+bugs) is written up as a ready-to-execute task list in
+[`docs/governance/HANDOFF_2026-09-03_opencode-followup.md`](docs/governance/HANDOFF_2026-09-03_opencode-followup.md).
+That's the doc to read for "what's the next concrete PR," not this file or the raw
+audit doc directly.
+
+PR #22 (RCE/SSRF) and PR #24 (46-alert CodeQL backlog, including a second
+approval-gate-bypass bug in `cloud/hub/events.js` of the same root-cause class as
+the RCE fix) are both **merged to `master`** as of this session — see the audit
+doc §0.1 for full detail on #24; the bullets immediately below predate #24 and
+only describe #22.
 
 Highlights from this session:
 - **Fixed a critical RCE + SSRF pair**: `cloud/connectors/codeExec.js`'s `code.run`
