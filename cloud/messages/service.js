@@ -9,6 +9,13 @@ const workflowRegistry = require('../workflows/registry.js');
 const socialclaw = require('../integrations/socialclaw.js');
 const bridgeService = require('../services/alphonsoBridgeService.js');
 const { getBridgeStatus } = require('../services/alphonsoBridgeService.js');
+const { logNodeRun } = require('../utils/auditLog.js');
+const safeExpr = require('../utils/safeExpr.js');
+
+// code.run / agent.http go through cloud/connectors/codeExec.js, which still uses
+// node:vm and unrestricted outbound fetch under the hood — both admin-only, both
+// off by default (CODEEXEC_ENABLED). See docs/SECURITY_CODEEXEC.md.
+const CODEEXEC_GATED_INTENTS = new Set(['code.run', 'agent.http']);
 
 const TELEGRAM_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
 
@@ -334,13 +341,17 @@ function parseAssistantIntent(text) {
     return { intent: 'browser.search', confidence: 0.88, arguments: { query: q }, needsClarification: false };
   }
 
-  // Run code
-  if (/\b(run code|execute code|run this|eval|calculate|compute)\b/.test(lower)) {
+  // Run code — anchored to the start of the message, not matched anywhere inside it.
+  // These route to admin-gated primitives (see CODEEXEC_GATED_INTENTS below), so this
+  // must be an explicit command ("calculate 12*3"), not a word that happens to appear
+  // in an ordinary sentence ("can you run this by me" should NOT trigger code execution).
+  if (/^\s*(run code|execute code|run this code|eval(?:uate)?|calculate|compute)\b[:\s]?/.test(lower)) {
     return { intent: 'code.run', confidence: 0.85, arguments: { prompt: input }, needsClarification: false };
   }
 
-  // HTTP API call
-  if (/\b(call api|http request|fetch url|get url|post to)\b/.test(lower)) {
+  // HTTP API call — same reasoning: anchored to the start, and still requires an
+  // explicit URL in the message before it's treated as a fetch request at all.
+  if (/^\s*(call api|http request|fetch url|get url|post to)\b/.test(lower)) {
     const urlMatch = input.match(/https?:\/\/[^\s]+/);
     return { intent: 'agent.http', confidence: 0.82, arguments: { url: urlMatch ? urlMatch[0] : null, prompt: input }, needsClarification: !urlMatch };
   }
@@ -626,9 +637,36 @@ async function executeAssistantIntent(payload) {
     return { success: result.success, intent: parsed.intent, url, image: result.image, mimeType: result.mimeType, error: result.error };
   }
 
+  if (CODEEXEC_GATED_INTENTS.has(parsed.intent)) {
+    const actorRole = String(payload.role || '').toLowerCase();
+    if (actorRole !== 'admin') {
+      logNodeRun({
+        nodeId: `chat:${parsed.intent}`,
+        agentType: 'code',
+        actorRole: actorRole || 'unknown',
+        payload: { userId, intent: parsed.intent },
+        result: { success: false, error: 'forbidden' },
+        status: 'rejected',
+      });
+      return { success: false, intent: parsed.intent, error: 'This action requires admin privileges.' };
+    }
+  }
+
   if (parsed.intent === 'code.run') {
-    const { runCodeExecTask } = require('../connectors/codeExec.js');
-    const result = await runCodeExecTask({ action: 'runJS', code: `result = (function(){ ${parsed.arguments.prompt} })()` });
+    // The chat intent only ever needs arithmetic ("calculate 12*(3+4)"). Evaluate
+    // that directly — no vm, no code execution — instead of running raw chat text
+    // as JavaScript. Anything that isn't a plain expression is rejected, not executed.
+    const expression = safeExpr.extractExpression(parsed.arguments.prompt);
+    let result;
+    try {
+      result = { success: true, output: safeExpr.evaluate(expression) };
+    } catch (e) {
+      result = { success: false, error: `Couldn't evaluate that as a math expression: ${e.message}` };
+    }
+    logNodeRun({
+      nodeId: `chat:${parsed.intent}`, agentType: 'code', actorRole: 'admin',
+      payload: { userId, expression }, result, status: result.success ? 'completed' : 'failed',
+    });
     return { success: result.success, intent: parsed.intent, output: result.output, error: result.error };
   }
 
@@ -637,6 +675,10 @@ async function executeAssistantIntent(payload) {
     const url = parsed.arguments.url;
     if (!url) return { success: false, intent: parsed.intent, needsClarification: true, questions: ['What URL should I fetch?'] };
     const result = await runCodeExecTask({ action: 'http', method: 'GET', url });
+    logNodeRun({
+      nodeId: `chat:${parsed.intent}`, agentType: 'code', actorRole: 'admin',
+      payload: { userId, url }, result, status: result.success ? 'completed' : 'failed',
+    });
     return { success: result.success, intent: parsed.intent, url, status: result.status, data: result.data, error: result.error };
   }
   // ─────────────────────────────────────────────────────────────────────────
