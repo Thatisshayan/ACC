@@ -12,6 +12,13 @@ against a 6,234-node/11,698-edge index of the repo, plus a full git/PR/branch au
 No production access was available (Railway is reportedly down as of this session —
 see below); everything here is from static analysis of the repo.
 
+**Looking for the next actionable PR, not the full history?** Go straight to
+[`docs/governance/HANDOFF_2026-09-03_opencode-followup.md`](../docs/governance/HANDOFF_2026-09-03_opencode-followup.md)
+— it's a ready-to-execute task list (migration ordering, mobile auth, CI gaps,
+dead-code cleanup, two verified small bugs) drawn from the still-open items below,
+re-verified against current code after PR #22 and #24 (§0.1) merged, scoped to
+what's safe to do without secrets or Shayan's direct authorization.
+
 ---
 
 ## 0.1 Update — 46-alert CodeQL backlog remediation pass (2026-09-03, same day)
