@@ -9,25 +9,39 @@
 // access, no identifiers beyond the whitelist below, so there is no code-execution
 // surface to escape from.
 
-// Map, not a plain object: `FUNCTIONS['constructor']` or `FUNCTIONS['toString']` on a
-// {}-literal resolves via the inherited Object.prototype chain to a real (if harmless)
-// function instead of undefined, slipping past the `if (!fn)` whitelist check below.
-// Map has no such inherited-property surface — .get(name) returns exactly what was
-// .set(), and nothing else, for any input.
-const FUNCTIONS = new Map(Object.entries({
-  abs:   Math.abs,
-  round: Math.round,
-  floor: Math.floor,
-  ceil:  Math.ceil,
-  sqrt:  Math.sqrt,
-  min:   (...a) => Math.min(...a),
-  max:   (...a) => Math.max(...a),
-  pow:   (a, b) => Math.pow(a, b),
-  log:   Math.log,
-  log10: Math.log10,
-}));
+// Deliberately NOT a name -> function lookup table (object or Map): resolving a
+// function to call via any user-influenced key, even through a validated
+// whitelist, is exactly the "dynamic dispatch on user-controlled name" shape
+// static analysis (CodeQL, Codacy) flags on sight — for good reason, since that
+// shape is what makes a prototype-pollution/whitelist-bypass bug possible in the
+// first place (see git history on this file for a concrete instance). callFunction
+// below is a plain switch: the set of callable functions is fully static in the
+// source text, so there is no dispatch table for a bypass to target at all.
+function callFunction(name, args) {
+  switch (name) {
+    case 'abs':   return Math.abs(args[0]);
+    case 'round': return Math.round(args[0]);
+    case 'floor': return Math.floor(args[0]);
+    case 'ceil':  return Math.ceil(args[0]);
+    case 'sqrt':  return Math.sqrt(args[0]);
+    case 'min':   return Math.min(...args);
+    case 'max':   return Math.max(...args);
+    case 'pow':   return Math.pow(args[0], args[1]);
+    case 'log':   return Math.log(args[0]);
+    case 'log10': return Math.log10(args[0]);
+    default:      return undefined;
+  }
+}
 
-const CONSTANTS = new Map(Object.entries({ pi: Math.PI, e: Math.E }));
+function lookupConstant(name) {
+  switch (name) {
+    case 'pi': return Math.PI;
+    case 'e':  return Math.E;
+    default:   return undefined;
+  }
+}
+
+const CONSTANT_NAMES = new Set(['pi', 'e']);
 
 const TOKEN_RE = /\s*([0-9]+\.?[0-9]*|\.[0-9]+|[A-Za-z_][A-Za-z0-9_]*|\*\*|[()+\-*/%^,])/y;
 
@@ -125,11 +139,11 @@ function parse(tokens) {
           while (peek() === ',') { next(); args.push(parseExpr()); }
         }
         if (next() !== ')') throw new Error('safeExpr: expected ")"');
-        const fn = FUNCTIONS.get(name);
-        if (!fn) throw new Error(`safeExpr: unknown function "${name}"`);
-        return fn(...args);
+        const result = callFunction(name, args);
+        if (result === undefined) throw new Error(`safeExpr: unknown function "${name}"`);
+        return result;
       }
-      if (CONSTANTS.has(name)) return CONSTANTS.get(name);
+      if (CONSTANT_NAMES.has(name)) return lookupConstant(name);
       throw new Error(`safeExpr: unknown identifier "${name}"`);
     }
 
