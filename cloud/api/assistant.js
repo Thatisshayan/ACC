@@ -65,6 +65,7 @@ router.post('/execute', async function(req, res) {
     const parsed = messages.parseAssistantIntent(req.body?.text || req.body?.prompt || '');
     const result = await messages.executeAssistantIntent({
       userId,
+      role: req.auth?.role || '',
       text: req.body?.text || req.body?.prompt || '',
       intent: req.body?.intent || parsed.intent,
       arguments: req.body?.arguments || parsed.arguments || {},

@@ -35,6 +35,50 @@ node scripts/start.js
 
 ---
 
+## 2026-09-03 session (Claude) — comprehensive audit + codeExec RCE/SSRF fix
+
+**Full findings, priorities, and everything still open are tracked in
+[`audits/2026-09-03_Claude_ComprehensiveAudit_and_LaunchReadiness.md`](audits/2026-09-03_Claude_ComprehensiveAudit_and_LaunchReadiness.md)
+— that file is now the canonical "what's left" list; the bullet list below this
+section is historical and increasingly stale. New items go in the audit file, not here.**
+
+Highlights from this session:
+- **Fixed a critical RCE + SSRF pair**: `cloud/connectors/codeExec.js`'s `code.run`
+  and `agent.http` assistant intents were reachable by any operator-role API key
+  (not just admin) through `POST /api/assistant/execute`, and let a caller either
+  escape Node's `vm` sandbox (a documented non-boundary) for full host code
+  execution, or make the server fetch arbitrary internal URLs including cloud
+  metadata endpoints. Fixed: a kill switch (`CODEEXEC_ENABLED`, default off), an
+  admin-only gate on both intents with audit logging, `code.run` now evaluated by a
+  dependency-free arithmetic parser (`cloud/utils/safeExpr.js`) instead of running
+  raw chat text as JS, a real SSRF guard on outbound HTTP (blocks
+  private/loopback/link-local/metadata addresses for both literal IPs and resolved
+  hostnames, closing DNS rebinding), and anchored intent matching so these can't
+  mis-fire from ordinary sentences. Full writeup: `docs/SECURITY_CODEEXEC.md`.
+  Regression tests: `cloud/utils/safeExpr.test.js`, `cloud/connectors/codeExec.test.js`,
+  `cloud/messages/service.test.js`.
+- **Corrected stale entries below**: the `tryAlibaba()` crash bug and the
+  `notifyOperator()` Telegram-stub TODO (both still listed as open further down /
+  in `docs/governance/DEFERRED_WORK.md`-adjacent notes) were re-verified against
+  current code and are **already fixed** — not by this session, by an earlier one
+  that never updated this file. Don't re-fix them; re-verify by reading the code
+  before trusting any "open" item below.
+- **Deploy config drift**: this file's "Last Commits" list below says "Switched to
+  nixpacks, deleted Dockerfile" (commit `466177a9`) — that's no longer true.
+  `railway.json` currently points `"builder": "DOCKERFILE"` at the root
+  `Dockerfile`, which exists and is what Railway actually builds. The two
+  `nixpacks.toml` files (root and `cloud/`) are stale and, worse, disagree with
+  each other (one builds the UI, one doesn't) — if Railway is ever switched back to
+  nixpacks it's ambiguous which wins and the UI likely won't build. Not fixed in
+  this session (deleting/consolidating build config on a repo with production
+  currently down felt like the wrong moment); tracked in the audit file above.
+- **Railway is reportedly down as of this session** (per direct report, not
+  independently confirmed — this session has no working Railway CLI/API access,
+  same limitation noted in earlier sessions below). See the audit file's
+  "Production incident" section for what to check first.
+
+---
+
 ## What's Pending / Not Done Yet
 
 - [x] **Missing dependency found & fixed (2026-07-22)** — `twilio` was `require()`'d in `cloud/api/phoneRoutes.js` but never listed in `package.json`. That's why `safeRequire` was silently disabling the phone module. Ran `npm install twilio --save`; `phoneRoutes.js` now loads clean. Verify on next Railway deploy.
