@@ -12,6 +12,7 @@
 
 const express = require('express');
 const router  = express.Router();
+router.use(express.urlencoded({ extended: true }));
 const rateLimit = require('express-rate-limit');
 const twilio  = require('../connectors/twilio.js');
 const store   = require('../taskbus/store.js');

@@ -1,5 +1,10 @@
+// ⚠️ DEAD CODE (2026-09-03): useProviders is unreachable — no imports reference it
+// across the repo-wide grep. Kept per R14 (do not delete without Shayan approval).
+// See: docs/governance/HANDOFF_2026-09-03_opencode-followup.md §Task D
 import { useState, useEffect } from 'react';
-import { taskbusApi } from '../lib/api';
+
+// taskbusApi import removed; export kept only to avoid breaking module graph
+// during deferred cleanup. Re-add when reactivated.
 
 const DEFAULTS = {
   deepseek:   { name: 'DeepSeek',   status: 'loading', cost_tier: 'low_cost',    is_real_ai: true,  role: 'primary'         },

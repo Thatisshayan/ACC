@@ -37,6 +37,9 @@ const API_BASE = getRuntimeApiBaseUrl();
 const api = axios.create({ baseURL: `${API_BASE ? API_BASE : ''}/api/taskbus`, timeout: 15000 });
 
 export const taskbusApi = {
+  // ⚠️ DEAD CODE (2026-09-03): unreachable — no importer consumes this export
+  // per handoff Task D; kept per R14. Do not delete without Shayan approval.
+  // See: docs/governance/HANDOFF_2026-09-03_opencode-followup.md §Task D
   getStats:     ()          => api.get('/stats'),
   getAgents:    ()          => api.get('/agents'),
   getProviders: ()          => api.get('/providers/status'),

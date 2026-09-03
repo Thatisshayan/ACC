@@ -10,7 +10,7 @@ const { runDeepseekTask } = require("../connectors/deepseek.js");
  *
  * @param {Object} snapshot    - Snapshot instance with .nodes and .outputs
  * @param {string} lastNodeId  - ID of the just-completed node
- * @returns {Promise<Array>}   - Array of new TaskNode objects, or []
+ * @returns {Promise<Array>}   - Array of new TaskNode objects (capped at MAX_EXPAND_OUTPUT), or []
  */
 async function expandGraph(snapshot, lastNodeId) {
   const lastOutput = snapshot.getNodeOutput
@@ -42,6 +42,8 @@ Node format:
 Return ONLY a valid JSON array. No preamble, no markdown.
 `.trim();
 
+  const MAX_EXPAND_OUTPUT = 20;
+
   const res = await runDeepseekTask({ mode: "validate", prompt });
 
   if (!res.success) return [];
@@ -49,7 +51,10 @@ Return ONLY a valid JSON array. No preamble, no markdown.
   try {
     const match = res.output.match(/\[[\s\S]*\]/);
     if (!match) return [];
-    return JSON.parse(match[0]);
+    let parsed = JSON.parse(match[0]);
+    // Cap output size to prevent runaway graph growth
+    parsed = parsed.slice(0, MAX_EXPAND_OUTPUT);
+    return parsed;
   } catch {
     return [];
   }

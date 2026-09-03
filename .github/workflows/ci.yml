@@ -26,6 +26,11 @@ jobs:
       - name: Install root dependencies
         run: npm ci --prefer-offline 2>/dev/null || npm install
 
+      - name: Run test suite
+        run: npm test
+        env:
+          NODE_ENV: test
+
       - name: Syntax check key backend files
         run: |
           node --check cloud/server.js
