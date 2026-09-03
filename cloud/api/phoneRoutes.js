@@ -101,10 +101,11 @@ function buildPhoneTask(body, type) {
   });
 }
 
-router.use((req, res, next) => {
-  if (req.path.startsWith('/webhook/')) return next();
-  return authLimiter(req, res, () => requireOperatorOrAdmin(req, res, next));
-});
+function isPublicPhoneRoute(req) {
+  return req.path.startsWith('/webhook/');
+}
+router.use((req, res, next) => (isPublicPhoneRoute(req) ? next() : authLimiter(req, res, next)));
+router.use((req, res, next) => (isPublicPhoneRoute(req) ? next() : requireOperatorOrAdmin(req, res, next)));
 
 // GET /api/phone/status
 router.get('/status', async (req, res) => {

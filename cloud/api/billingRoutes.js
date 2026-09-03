@@ -81,10 +81,11 @@ const PLANS = {
   },
 };
 
-router.use((req, res, next) => {
-  if (req.path === '/webhook' || req.path === '/plans') return next();
-  return authLimiter(req, res, () => requireOperatorOrAdmin(req, res, next));
-});
+function isPublicBillingRoute(req) {
+  return req.path === '/webhook' || req.path === '/plans';
+}
+router.use((req, res, next) => (isPublicBillingRoute(req) ? next() : authLimiter(req, res, next)));
+router.use((req, res, next) => (isPublicBillingRoute(req) ? next() : requireOperatorOrAdmin(req, res, next)));
 
 function stripe() {
   const key = process.env.STRIPE_API_KEY;

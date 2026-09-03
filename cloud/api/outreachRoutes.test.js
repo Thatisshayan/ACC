@@ -39,7 +39,7 @@ describe('GET /api/outreach/unsubscribe', () => {
     try {
       const res = await request(mount()).get('/api/outreach/unsubscribe').query({ email: 'a@b.com' });
       assert.equal(res.status, 500);
-      assert.doesNotMatch(res.text, /<script>/);
+      assert.doesNotMatch(res.text, /<script>/i);
       assert.doesNotMatch(res.text, /boom/);
     } finally {
       mock.restoreAll();

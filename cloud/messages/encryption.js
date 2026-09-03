@@ -64,7 +64,13 @@ function getKeyMaterialBySource(source) {
     if (raw) return { source, material: raw };
   }
 
-  console.warn(`[encryption] Could not resolve original key source "${source}" — falling back to current key material. Decryption may fail if the wrong key is used.`);
+  // Not interpolating `source` into the log line: this function is now also
+  // reached from the IMAP password decrypt path (cloud/services/emailMonitor.js),
+  // where `source` is a field of an envelope derived from stored credential
+  // data — CodeQL flags any property of that envelope reaching a log call, even
+  // one as benign as a key-source label ("local-file" / "env:NAME", never the
+  // actual secret). The label isn't needed to act on this warning anyway.
+  console.warn('[encryption] Could not resolve the original key source — falling back to current key material. Decryption may fail if the wrong key is used.');
   return getKeyMaterial();
 }
 
